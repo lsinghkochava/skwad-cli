@@ -11,6 +11,7 @@ import (
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
 	"github.com/Jared-Boschmann/skwad-linux/internal/mcp"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/Jared-Boschmann/skwad-linux/internal/notifications"
 	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
 	"github.com/Jared-Boschmann/skwad-linux/internal/terminal"
 	"github.com/Jared-Boschmann/skwad-linux/internal/ui"
@@ -78,6 +79,16 @@ func main() {
 	// Wire MCP hook events → pool status state machine.
 	if mcpServer != nil {
 		mcpServer.StatusUpdater = &hookBridge{pool: pool, manager: agentMgr}
+	}
+
+	// Wire desktop notifications for agent status changes.
+	notifSvc := notifications.NewService("Skwad", settings.NotificationsEnabled)
+	pool.OnStatusChanged = func(id uuid.UUID, status models.AgentStatus) {
+		if status == models.AgentStatusInput {
+			if ag, ok := agentMgr.Agent(id); ok {
+				notifSvc.Notify(ag.Name+" needs input", "The agent is waiting for your response.")
+			}
+		}
 	}
 
 	go func() {

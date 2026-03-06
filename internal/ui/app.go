@@ -105,6 +105,28 @@ func (a *App) buildWindow() {
 	a.sidebar.OnShowHistory = func(id uuid.UUID) {
 		a.openHistoryPanel(id)
 	}
+	a.sidebar.OnAddToBench = func(id uuid.UUID) {
+		ag, ok := a.manager.Agent(id)
+		if !ok {
+			return
+		}
+		bench, _ := a.store.LoadBench()
+		bench = append(bench, models.BenchAgent{
+			ID:           ag.ID,
+			Name:         ag.Name,
+			Avatar:       ag.Avatar,
+			Folder:       ag.Folder,
+			AgentType:    ag.AgentType,
+			ShellCommand: ag.ShellCommand,
+			PersonaID:    ag.PersonaID,
+		})
+		_ = a.store.SaveBench(bench)
+	}
+	a.settingsWindow.window = a.window
+	a.settingsWindow.OnDeployBenchAgent = func(ag *models.Agent) {
+		a.manager.AddAgent(ag, nil)
+		a.pool.Spawn(ag)
+	}
 
 	// Wire manager callbacks (called while manager lock is held — do NOT call
 	// manager methods or pool.Spawn from inside these callbacks).

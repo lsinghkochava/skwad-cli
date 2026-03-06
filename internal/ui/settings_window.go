@@ -5,8 +5,10 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/google/uuid"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
 )
@@ -16,6 +18,9 @@ type SettingsWindow struct {
 	fyneApp fyne.App
 	store   *persistence.Store
 	window  fyne.Window
+
+	// OnDeployBenchAgent is called when the user clicks Deploy on a bench entry.
+	OnDeployBenchAgent func(ag *models.Agent)
 }
 
 // NewSettingsWindow creates but does not show the settings window.
@@ -45,6 +50,8 @@ func (s *SettingsWindow) buildContent() fyne.CanvasObject {
 		container.NewTabItem("MCP Server", s.mcpTab(&settings)),
 		container.NewTabItem("Autopilot", s.autopilotTab(&settings)),
 		container.NewTabItem("Appearance", s.appearanceTab(&settings)),
+		container.NewTabItem("Personas", s.personasTab()),
+		container.NewTabItem("Bench", s.benchTab()),
 	)
 
 	saveBtn := widget.NewButton("Save", func() {
@@ -172,4 +179,154 @@ func (s *SettingsWindow) appearanceTab(settings *models.AppSettings) fyne.Canvas
 		widget.NewLabel("Appearance mode"), modeSelect,
 		widget.NewLabel("Mermaid theme"), mermaidSelect,
 	)
+}
+
+func (s *SettingsWindow) personasTab() fyne.CanvasObject {
+	personas, _ := s.store.LoadPersonas()
+
+	var list *widget.List
+	list = widget.NewList(
+		func() int { return len(personas) },
+		func() fyne.CanvasObject {
+			return container.NewBorder(nil, nil, nil,
+				container.NewHBox(widget.NewButton("Edit", nil), widget.NewButton("Delete", nil)),
+				widget.NewLabel(""),
+			)
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			if id >= len(personas) {
+				return
+			}
+			p := personas[id]
+			row := obj.(*fyne.Container)
+			row.Objects[0].(*widget.Label).SetText(p.Name)
+			btns := row.Objects[1].(*fyne.Container)
+
+			editBtn := btns.Objects[0].(*widget.Button)
+			editBtn.OnTapped = func() { s.editPersonaDialog(&personas[id], func() { list.Refresh() }) }
+			editBtn.Refresh()
+
+			delBtn := btns.Objects[1].(*widget.Button)
+			if p.Type == models.PersonaTypeSystem {
+				delBtn.Disable()
+			} else {
+				delBtn.Enable()
+			}
+			delBtn.OnTapped = func() {
+				personas[id].State = models.PersonaStateDeleted
+				_ = s.store.SavePersonas(personas)
+				personas, _ = s.store.LoadPersonas()
+				list.Refresh()
+			}
+			delBtn.Refresh()
+		},
+	)
+
+	addBtn := widget.NewButton("+ New Persona", func() {
+		p := models.Persona{ID: uuid.New(), Type: models.PersonaTypeUser, State: models.PersonaStateEnabled}
+		s.editPersonaDialog(&p, func() {
+			personas = append(personas, p)
+			_ = s.store.SavePersonas(personas)
+			personas, _ = s.store.LoadPersonas()
+			list.Refresh()
+		})
+	})
+
+	restoreBtn := widget.NewButton("Restore Defaults", func() {
+		defaults := models.DefaultPersonas()
+		// Keep user personas, restore system ones.
+		var user []models.Persona
+		for _, p := range personas {
+			if p.Type == models.PersonaTypeUser {
+				user = append(user, p)
+			}
+		}
+		personas = append(defaults, user...)
+		_ = s.store.SavePersonas(personas)
+		list.Refresh()
+	})
+
+	return container.NewBorder(nil, container.NewHBox(addBtn, restoreBtn), nil, nil, list)
+}
+
+func (s *SettingsWindow) editPersonaDialog(p *models.Persona, onSave func()) {
+	if s.window == nil {
+		return
+	}
+	nameEntry := widget.NewEntry()
+	nameEntry.SetText(p.Name)
+
+	instrEntry := widget.NewMultiLineEntry()
+	instrEntry.SetText(p.Instructions)
+	instrEntry.SetMinRowsVisible(6)
+
+	form := container.NewVBox(
+		widget.NewLabel("Name"), nameEntry,
+		widget.NewLabel("Instructions"), instrEntry,
+	)
+	dialog.ShowCustomConfirm("Persona", "Save", "Cancel", form, func(ok bool) {
+		if !ok {
+			return
+		}
+		p.Name = nameEntry.Text
+		p.Instructions = instrEntry.Text
+		personas, _ := s.store.LoadPersonas()
+		found := false
+		for i := range personas {
+			if personas[i].ID == p.ID {
+				personas[i] = *p
+				found = true
+				break
+			}
+		}
+		if !found {
+			personas = append(personas, *p)
+		}
+		_ = s.store.SavePersonas(personas)
+		if onSave != nil {
+			onSave()
+		}
+	}, s.window)
+}
+
+func (s *SettingsWindow) benchTab() fyne.CanvasObject {
+	bench, _ := s.store.LoadBench()
+
+	var list *widget.List
+	list = widget.NewList(
+		func() int { return len(bench) },
+		func() fyne.CanvasObject {
+			return container.NewBorder(nil, nil, nil,
+				container.NewHBox(widget.NewButton("Deploy", nil), widget.NewButton("Remove", nil)),
+				widget.NewLabel(""),
+			)
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			if id >= len(bench) {
+				return
+			}
+			b := bench[id]
+			row := obj.(*fyne.Container)
+			row.Objects[0].(*widget.Label).SetText(b.Avatar + " " + b.Name)
+
+			btns := row.Objects[1].(*fyne.Container)
+			deployBtn := btns.Objects[0].(*widget.Button)
+			deployBtn.OnTapped = func() {
+				if s.OnDeployBenchAgent != nil {
+					s.OnDeployBenchAgent(bench[id].ToAgent())
+				}
+			}
+			deployBtn.Refresh()
+
+			removeBtn := btns.Objects[1].(*widget.Button)
+			removeBtn.OnTapped = func() {
+				bench = append(bench[:id], bench[id+1:]...)
+				_ = s.store.SaveBench(bench)
+				list.Refresh()
+			}
+			removeBtn.Refresh()
+		},
+	)
+
+	return container.NewBorder(nil, nil, nil, nil, list)
 }

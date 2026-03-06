@@ -37,6 +37,7 @@ type Sidebar struct {
 	OnRestartAgent   func(id uuid.UUID)
 	OnDuplicateAgent func(id uuid.UUID)
 	OnShowHistory    func(id uuid.UUID)
+	OnAddToBench     func(id uuid.UUID)
 }
 
 // NewSidebar creates the agent list sidebar.
@@ -123,6 +124,11 @@ func (s *Sidebar) showContextMenu(agentID uuid.UUID, pos fyne.Position) {
 		fyne.NewMenuItem("Duplicate", func() {
 			if s.OnDuplicateAgent != nil {
 				s.OnDuplicateAgent(agentID)
+			}
+		}),
+		fyne.NewMenuItem("Add to Bench", func() {
+			if s.OnAddToBench != nil {
+				s.OnAddToBench(agentID)
 			}
 		}),
 		fyne.NewMenuItemSeparator(),
