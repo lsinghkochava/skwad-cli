@@ -225,6 +225,7 @@ func (m *Manager) RestartAgent(id uuid.UUID) {
 func (m *Manager) ResumeAgent(id uuid.UUID, sessionID string) {
 	m.UpdateAgent(id, func(a *models.Agent) {
 		a.ResumeSessionID = sessionID
+		a.IsFork = false
 		a.RestartToken++
 		a.SessionID = ""
 		a.IsRegistered = false
@@ -246,6 +247,7 @@ func (m *Manager) ForkAgent(id uuid.UUID, sessionID string) *models.Agent {
 	forked.ID = uuid.New()
 	forked.Name = src.Name + " (fork)"
 	forked.ResumeSessionID = sessionID
+	forked.IsFork = true
 	forked.SessionID = ""
 	forked.IsRegistered = false
 	forked.RestartToken = 0

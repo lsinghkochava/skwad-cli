@@ -76,7 +76,11 @@ func (b *CommandBuilder) claudeCommand(a *models.Agent, persona *models.Persona,
 
 	// Resume / fork
 	if a.ResumeSessionID != "" {
-		sb.WriteString(fmt.Sprintf(" --resume %s", a.ResumeSessionID))
+		if a.IsFork {
+			sb.WriteString(fmt.Sprintf(" --resume %s --fork-session", a.ResumeSessionID))
+		} else {
+			sb.WriteString(fmt.Sprintf(" --resume %s", a.ResumeSessionID))
+		}
 	}
 
 	// System prompt (persona + registration)
@@ -97,7 +101,11 @@ func (b *CommandBuilder) codexCommand(a *models.Agent, persona *models.Persona, 
 	sb.WriteString("codex")
 
 	if a.ResumeSessionID != "" {
-		sb.WriteString(fmt.Sprintf(" resume %s", a.ResumeSessionID))
+		if a.IsFork {
+			sb.WriteString(fmt.Sprintf(" fork %s", a.ResumeSessionID))
+		} else {
+			sb.WriteString(fmt.Sprintf(" resume %s", a.ResumeSessionID))
+		}
 	}
 
 	if persona != nil && persona.Instructions != "" {

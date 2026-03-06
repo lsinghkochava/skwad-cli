@@ -124,13 +124,19 @@ func main() {
 						})
 					}
 				case models.AutopilotActionAsk:
-					if cls != autopilot.ClassificationCompleted && showAutopilotDecision != nil {
-						out := lastOut // capture for goroutine
-						showAutopilotDecision(id, out, func(reply string) {
-							if reply != "" {
-								pool.InjectText(id, reply+"\n")
-							}
+					if cls != autopilot.ClassificationCompleted {
+						// Mark as input so the sidebar shows it needs attention.
+						agentMgr.UpdateAgent(id, func(a *models.Agent) {
+							a.Status = models.AgentStatusInput
 						})
+						if showAutopilotDecision != nil {
+							out := lastOut // capture for goroutine
+							showAutopilotDecision(id, out, func(reply string) {
+								if reply != "" {
+									pool.InjectText(id, reply+"\n")
+								}
+							})
+						}
 					}
 				case models.AutopilotActionContinue:
 					if cls == autopilot.ClassificationBinary {

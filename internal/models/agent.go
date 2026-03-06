@@ -61,6 +61,7 @@ type Agent struct {
 	IsRegistered    bool             `json:"-"`
 	SessionID       string           `json:"-"`
 	ResumeSessionID string           `json:"-"`
+	IsFork          bool             `json:"-"` // when true, use fork flags instead of resume flags
 	RestartToken    int              `json:"-"`
 	TerminalTitle   string           `json:"-"`
 	GitStats        GitStats         `json:"-"`
