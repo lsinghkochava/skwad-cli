@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/google/uuid"
+	"github.com/Jared-Boschmann/skwad-linux/internal/git"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 )
 
@@ -83,7 +84,10 @@ func (s *AgentSheet) Show() {
 	}
 
 	folderRow := container.NewBorder(nil, nil, nil,
-		widget.NewButton("Browse…", s.browseFolder),
+		container.NewHBox(
+			widget.NewButton("Browse…", s.browseFolder),
+			widget.NewButton("New Worktree…", s.createWorktree),
+		),
 		s.folderEntry,
 	)
 
@@ -103,6 +107,36 @@ func (s *AgentSheet) Show() {
 		s.save()
 	}, s.window)
 	d.Show()
+}
+
+// createWorktree shows a dialog to create a new git worktree and sets the folder.
+func (s *AgentSheet) createWorktree() {
+	// The source repo must be set in the folder field already.
+	repoPath := s.folderEntry.Text
+	if repoPath == "" {
+		dialog.ShowInformation("No repo", "Enter or browse to the base repo folder first.", s.window)
+		return
+	}
+
+	branchEntry := widget.NewEntry()
+	branchEntry.SetPlaceHolder("e.g. feature/my-branch")
+
+	form := container.NewVBox(
+		widget.NewLabel("Branch name"), branchEntry,
+	)
+	dialog.ShowCustomConfirm("New Worktree", "Create", "Cancel", form, func(ok bool) {
+		if !ok || branchEntry.Text == "" {
+			return
+		}
+		branch := branchEntry.Text
+		destPath := git.SuggestedPath(repoPath, branch)
+		wm := git.NewWorktreeManager(repoPath)
+		if err := wm.Create(branch, destPath); err != nil {
+			dialog.ShowError(err, s.window)
+			return
+		}
+		s.folderEntry.SetText(destPath)
+	}, s.window)
 }
 
 func (s *AgentSheet) browseFolder() {
