@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/google/uuid"
@@ -60,6 +61,7 @@ func NewApp(mgr *agent.Manager, coord *agent.Coordinator, store *persistence.Sto
 		store:   store,
 		pool:    pool,
 	}
+	a.applyAppearanceMode()
 	a.buildWindow()
 	// Spawn sessions for all agents that were persisted from the last run.
 	// Runs after buildWindow so OnAgentChanged is already registered.
@@ -370,6 +372,18 @@ func (a *App) ShowMarkdownFile(filePath string) {
 // ShowMermaid renders a Mermaid diagram (called by MCP).
 func (a *App) ShowMermaid(source, title string) {
 	a.terminalArea.ShowMermaid(source, title)
+}
+
+// applyAppearanceMode sets the Fyne theme according to the stored appearance setting.
+func (a *App) applyAppearanceMode() {
+	settings := a.store.Settings()
+	switch settings.AppearanceMode {
+	case models.AppearanceModeDark:
+		a.fyneApp.Settings().SetTheme(theme.DarkTheme())
+	case models.AppearanceModeLight:
+		a.fyneApp.Settings().SetTheme(theme.LightTheme())
+	// "auto" and "system" let Fyne follow the OS default — no override needed.
+	}
 }
 
 // selectWorkspaceByIndex switches to the workspace at 0-based index.

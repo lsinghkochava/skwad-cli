@@ -47,6 +47,7 @@ func (s *SettingsWindow) buildContent() fyne.CanvasObject {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("General", s.generalTab(&settings)),
 		container.NewTabItem("Terminal", s.terminalTab(&settings)),
+		container.NewTabItem("Coding", s.codingTab(&settings)),
 		container.NewTabItem("MCP Server", s.mcpTab(&settings)),
 		container.NewTabItem("Autopilot", s.autopilotTab(&settings)),
 		container.NewTabItem("Appearance", s.appearanceTab(&settings)),
@@ -113,6 +114,59 @@ func (s *SettingsWindow) terminalTab(settings *models.AppSettings) fyne.CanvasOb
 		widget.NewLabel("Font size"), sizeEntry,
 		widget.NewLabel("Background color (hex)"), bgEntry,
 		widget.NewLabel("Foreground color (hex)"), fgEntry,
+	)
+}
+
+func (s *SettingsWindow) codingTab(settings *models.AppSettings) fyne.CanvasObject {
+	editorEntry := widget.NewEntry()
+	editorEntry.SetText(settings.DefaultOpenWithApp)
+	editorEntry.SetPlaceHolder("e.g. code, nvim, gedit")
+	editorEntry.OnChanged = func(v string) { settings.DefaultOpenWithApp = v }
+
+	claudeEntry := widget.NewEntry()
+	claudeEntry.SetText(settings.AgentTypeOptions.ClaudeOptions)
+	claudeEntry.OnChanged = func(v string) { settings.AgentTypeOptions.ClaudeOptions = v }
+
+	codexEntry := widget.NewEntry()
+	codexEntry.SetText(settings.AgentTypeOptions.CodexOptions)
+	codexEntry.OnChanged = func(v string) { settings.AgentTypeOptions.CodexOptions = v }
+
+	opencodeEntry := widget.NewEntry()
+	opencodeEntry.SetText(settings.AgentTypeOptions.OpenCodeOptions)
+	opencodeEntry.OnChanged = func(v string) { settings.AgentTypeOptions.OpenCodeOptions = v }
+
+	geminiEntry := widget.NewEntry()
+	geminiEntry.SetText(settings.AgentTypeOptions.GeminiOptions)
+	geminiEntry.OnChanged = func(v string) { settings.AgentTypeOptions.GeminiOptions = v }
+
+	custom1CmdEntry := widget.NewEntry()
+	custom1CmdEntry.SetText(settings.AgentTypeOptions.Custom1Command)
+	custom1CmdEntry.OnChanged = func(v string) { settings.AgentTypeOptions.Custom1Command = v }
+
+	custom1OptEntry := widget.NewEntry()
+	custom1OptEntry.SetText(settings.AgentTypeOptions.Custom1Options)
+	custom1OptEntry.OnChanged = func(v string) { settings.AgentTypeOptions.Custom1Options = v }
+
+	custom2CmdEntry := widget.NewEntry()
+	custom2CmdEntry.SetText(settings.AgentTypeOptions.Custom2Command)
+	custom2CmdEntry.OnChanged = func(v string) { settings.AgentTypeOptions.Custom2Command = v }
+
+	custom2OptEntry := widget.NewEntry()
+	custom2OptEntry.SetText(settings.AgentTypeOptions.Custom2Options)
+	custom2OptEntry.OnChanged = func(v string) { settings.AgentTypeOptions.Custom2Options = v }
+
+	return container.NewVBox(
+		widget.NewLabel("Default editor (Cmd+Shift+O)"), editorEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Claude extra flags"), claudeEntry,
+		widget.NewLabel("Codex extra flags"), codexEntry,
+		widget.NewLabel("OpenCode extra flags"), opencodeEntry,
+		widget.NewLabel("Gemini extra flags"), geminiEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Custom 1 — command"), custom1CmdEntry,
+		widget.NewLabel("Custom 1 — extra flags"), custom1OptEntry,
+		widget.NewLabel("Custom 2 — command"), custom2CmdEntry,
+		widget.NewLabel("Custom 2 — extra flags"), custom2OptEntry,
 	)
 }
 
