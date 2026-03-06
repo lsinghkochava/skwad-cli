@@ -466,6 +466,7 @@ func (a *App) openWithDefaultEditor() {
 }
 
 // openHistoryPanel shows a session history popup for the given agent.
+// Supports Resume, Fork, and Delete per session.
 func (a *App) openHistoryPanel(agentID uuid.UUID) {
 	ag, ok := a.manager.Agent(agentID)
 	if !ok {
@@ -474,41 +475,70 @@ func (a *App) openHistoryPanel(agentID uuid.UUID) {
 	if !a.historySvc.Supports(ag.AgentType) {
 		return
 	}
+
 	sessions, err := a.historySvc.ListSessions(ag.AgentType, ag.Folder)
 	if err != nil || len(sessions) == 0 {
 		return
 	}
 
-	// Build list items: "Title  (N messages  date)"
-	items := make([]string, len(sessions))
-	for i, s := range sessions {
-		date := s.Timestamp.Format("Jan 2 15:04")
-		items[i] = fmt.Sprintf("%s  (%d msgs, %s)", s.Title, s.MessageCount, date)
+	var popup *widget.PopUp
+	dismiss := func() {
+		if popup != nil {
+			popup.Hide()
+			popup = nil
+		}
 	}
 
-	list := widget.NewList(
-		func() int { return len(items) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
+	var list *widget.List
+	list = widget.NewList(
+		func() int { return len(sessions) },
+		func() fyne.CanvasObject {
+			lbl := widget.NewLabel("")
+			resumeBtn := widget.NewButton("Resume", nil)
+			forkBtn := widget.NewButton("Fork", nil)
+			deleteBtn := widget.NewButton("Delete", nil)
+			return container.NewBorder(nil, nil, nil,
+				container.NewHBox(resumeBtn, forkBtn, deleteBtn),
+				lbl,
+			)
+		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			if id < len(items) {
-				obj.(*widget.Label).SetText(items[id])
+			if id >= len(sessions) {
+				return
+			}
+			s := sessions[id]
+			row := obj.(*fyne.Container)
+			date := s.Timestamp.Format("Jan 2 15:04")
+			row.Objects[0].(*widget.Label).SetText(
+				fmt.Sprintf("%s  (%d msgs, %s)", s.Title, s.MessageCount, date),
+			)
+			btns := row.Objects[1].(*fyne.Container)
+
+			sessionID := s.SessionID
+			btns.Objects[0].(*widget.Button).OnTapped = func() {
+				dismiss()
+				a.manager.ResumeAgent(agentID, sessionID)
+				a.pool.Restart(agentID)
+			}
+			btns.Objects[1].(*widget.Button).OnTapped = func() {
+				dismiss()
+				a.manager.ForkAgent(agentID, sessionID)
+				a.pool.Restart(agentID)
+			}
+			btns.Objects[2].(*widget.Button).OnTapped = func() {
+				_ = a.historySvc.DeleteSession(ag.AgentType, sessionID)
+				// Remove from local slice and refresh.
+				sessions = append(sessions[:id], sessions[id+1:]...)
+				list.Refresh()
+			}
+			for _, b := range btns.Objects {
+				b.(*widget.Button).Refresh()
 			}
 		},
 	)
 
-	var popup *widget.PopUp
-	list.OnSelected = func(id widget.ListItemID) {
-		if id >= len(sessions) {
-			return
-		}
-		sessionID := sessions[id].SessionID
-		popup.Hide()
-		a.manager.ResumeAgent(agentID, sessionID)
-		a.pool.Restart(agentID)
-	}
-
 	popup = widget.NewModalPopUp(list, a.window.Canvas())
-	popup.Resize(fyne.NewSize(600, 400))
+	popup.Resize(fyne.NewSize(700, 420))
 	popup.Show()
 }
 
