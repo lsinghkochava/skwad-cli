@@ -2,60 +2,86 @@ package ui
 
 import (
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	"image/color"
 
 	"github.com/google/uuid"
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
+	"github.com/Jared-Boschmann/skwad-linux/internal/terminal"
 )
 
-// TerminalPane is a single pane slot that hosts one agent's terminal.
+// TerminalPane is a single pane slot that hosts one agent's terminal output.
 //
-// The pane renders a placeholder rectangle; the VTE overlay window is
-// positioned to match this rectangle's screen coordinates. When the agent
-// changes, the overlay is swapped to the new agent's VTE window.
+// On Linux with VTE enabled, this pane coordinates an embedded GTK terminal
+// overlay window. Until VTE is wired, it shows the most recent captured
+// terminal output (ANSI-stripped) in a scrollable text view so the user can
+// see what the agent is doing.
 type TerminalPane struct {
 	paneIndex int
 	manager   *agent.Manager
+	pool      *terminal.Pool
 	agentID   uuid.UUID
 
-	placeholder *canvas.Rectangle
-	label       *widget.Label
-	outer       *fyne.Container
+	header  *widget.Label
+	content *widget.RichText
+	outer   *fyne.Container
 }
 
 // NewTerminalPane creates a pane for the given pane index.
-func NewTerminalPane(paneIndex int, mgr *agent.Manager) *TerminalPane {
+func NewTerminalPane(paneIndex int, mgr *agent.Manager, pool *terminal.Pool) *TerminalPane {
 	tp := &TerminalPane{
 		paneIndex: paneIndex,
 		manager:   mgr,
+		pool:      pool,
 	}
 	tp.build()
 	return tp
 }
 
 func (tp *TerminalPane) build() {
-	tp.placeholder = canvas.NewRectangle(color.NRGBA{R: 20, G: 20, B: 20, A: 255})
-	tp.placeholder.SetMinSize(fyne.NewSize(200, 100))
+	tp.header = widget.NewLabelWithStyle("No agent", fyne.TextAlignLeading, fyne.TextStyle{Monospace: true, Bold: true})
+	tp.content = widget.NewRichTextWithText("")
+	tp.content.Wrapping = fyne.TextWrapWord
 
-	tp.label = widget.NewLabel("No agent selected")
-
-	tp.outer = container.NewStack(tp.placeholder, container.NewCenter(tp.label))
+	scroll := container.NewScroll(tp.content)
+	tp.outer = container.NewBorder(tp.header, nil, nil, nil, scroll)
 }
 
-// SetAgentID assigns an agent to this pane and updates the display.
+// SetAgentID assigns an agent to this pane and refreshes the display.
 func (tp *TerminalPane) SetAgentID(id uuid.UUID) {
 	tp.agentID = id
-	a, ok := tp.manager.Agent(id)
-	if ok {
-		tp.label.SetText(a.Name)
-	} else {
-		tp.label.SetText("No agent selected")
+	tp.Refresh()
+}
+
+// Refresh reloads content for the currently assigned agent.
+func (tp *TerminalPane) Refresh() {
+	if tp.agentID == (uuid.UUID{}) {
+		tp.header.SetText("No agent")
+		tp.content.ParseMarkdown("")
+		return
 	}
-	tp.placeholder.Refresh()
-	// TODO: show/hide VTE overlay window for this agent
+	a, ok := tp.manager.Agent(tp.agentID)
+	if !ok {
+		tp.header.SetText("Agent not found")
+		tp.content.ParseMarkdown("")
+		return
+	}
+
+	title := a.Name
+	if a.TerminalTitle != "" {
+		title += "  —  " + a.TerminalTitle
+	}
+	tp.header.SetText(title)
+
+	// Display the last captured output as a code block.
+	if tp.pool != nil {
+		output := tp.pool.LastOutput(tp.agentID)
+		if output != "" {
+			tp.content.ParseMarkdown("```\n" + output + "\n```")
+		} else {
+			tp.content.ParseMarkdown("*Waiting for output…*")
+		}
+	}
 }
 
 // Widget returns the Fyne canvas object for this pane.

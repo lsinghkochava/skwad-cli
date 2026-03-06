@@ -78,7 +78,7 @@ func (a *App) buildWindow() {
 
 	a.workspaceBar = NewWorkspaceBar(a.manager)
 	a.sidebar = NewSidebar(a.manager)
-	a.terminalArea = NewTerminalArea(a.manager)
+	a.terminalArea = NewTerminalArea(a.manager, a.pool)
 	a.settingsWindow = NewSettingsWindow(a.fyneApp, a.store)
 
 	// Wire new-agent creation: manager.AddAgent + pool.Spawn.

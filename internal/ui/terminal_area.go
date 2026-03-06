@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/Jared-Boschmann/skwad-linux/internal/terminal"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 // See internal/terminal/vte.go for the embedding strategy details.
 type TerminalArea struct {
 	manager        *agent.Manager
+	pool           *terminal.Pool
 	container      *fyne.Container // outer (toolbar + panes)
 	panesContainer *fyne.Container // inner (refreshed on layout change)
 
@@ -38,14 +40,22 @@ type TerminalArea struct {
 }
 
 // NewTerminalArea creates the terminal area.
-func NewTerminalArea(mgr *agent.Manager) *TerminalArea {
+func NewTerminalArea(mgr *agent.Manager, pool *terminal.Pool) *TerminalArea {
 	ta := &TerminalArea{
 		manager:       mgr,
+		pool:          pool,
 		gitPanel:      NewGitPanel(mgr),
 		markdownPanel: NewMarkdownPanel(),
 		mermaidPanel:  NewMermaidPanel(),
 	}
 	ta.build()
+
+	// Refresh the pane that shows this agent whenever new output arrives.
+	if pool != nil {
+		pool.OnRawOutput = func(agentID uuid.UUID) {
+			ta.refreshPaneForAgent(agentID)
+		}
+	}
 	return ta
 }
 
@@ -145,7 +155,7 @@ func (ta *TerminalArea) buildLayout(ws *models.Workspace) fyne.CanvasObject {
 }
 
 func (ta *TerminalArea) singlePane(ws *models.Workspace) fyne.CanvasObject {
-	pane := NewTerminalPane(0, ta.manager)
+	pane := NewTerminalPane(0, ta.manager, ta.pool)
 	if len(ws.ActiveAgentIDs) > 0 {
 		pane.SetAgentID(ws.ActiveAgentIDs[0])
 	}
@@ -153,8 +163,8 @@ func (ta *TerminalArea) singlePane(ws *models.Workspace) fyne.CanvasObject {
 }
 
 func (ta *TerminalArea) splitVertical(ws *models.Workspace) fyne.CanvasObject {
-	left := NewTerminalPane(0, ta.manager)
-	right := NewTerminalPane(1, ta.manager)
+	left := NewTerminalPane(0, ta.manager, ta.pool)
+	right := NewTerminalPane(1, ta.manager, ta.pool)
 	if len(ws.ActiveAgentIDs) > 0 {
 		left.SetAgentID(ws.ActiveAgentIDs[0])
 	}
@@ -167,8 +177,8 @@ func (ta *TerminalArea) splitVertical(ws *models.Workspace) fyne.CanvasObject {
 }
 
 func (ta *TerminalArea) splitHorizontal(ws *models.Workspace) fyne.CanvasObject {
-	top := NewTerminalPane(0, ta.manager)
-	bottom := NewTerminalPane(1, ta.manager)
+	top := NewTerminalPane(0, ta.manager, ta.pool)
+	bottom := NewTerminalPane(1, ta.manager, ta.pool)
 	if len(ws.ActiveAgentIDs) > 0 {
 		top.SetAgentID(ws.ActiveAgentIDs[0])
 	}
@@ -181,9 +191,9 @@ func (ta *TerminalArea) splitHorizontal(ws *models.Workspace) fyne.CanvasObject 
 }
 
 func (ta *TerminalArea) threePane(ws *models.Workspace) fyne.CanvasObject {
-	left := NewTerminalPane(0, ta.manager)
-	rightTop := NewTerminalPane(1, ta.manager)
-	rightBottom := NewTerminalPane(2, ta.manager)
+	left := NewTerminalPane(0, ta.manager, ta.pool)
+	rightTop := NewTerminalPane(1, ta.manager, ta.pool)
+	rightBottom := NewTerminalPane(2, ta.manager, ta.pool)
 	if len(ws.ActiveAgentIDs) > 0 {
 		left.SetAgentID(ws.ActiveAgentIDs[0])
 	}
@@ -203,7 +213,7 @@ func (ta *TerminalArea) threePane(ws *models.Workspace) fyne.CanvasObject {
 func (ta *TerminalArea) gridFourPane(ws *models.Workspace) fyne.CanvasObject {
 	panes := make([]*TerminalPane, 4)
 	for i := range panes {
-		panes[i] = NewTerminalPane(i, ta.manager)
+		panes[i] = NewTerminalPane(i, ta.manager, ta.pool)
 		if i < len(ws.ActiveAgentIDs) {
 			panes[i].SetAgentID(ws.ActiveAgentIDs[i])
 		}
@@ -234,6 +244,20 @@ func (ta *TerminalArea) focusedAgentID() (uuid.UUID, bool) {
 func (ta *TerminalArea) Refresh() {
 	ta.panesContainer.Objects = []fyne.CanvasObject{ta.panes()}
 	ta.panesContainer.Refresh()
+}
+
+// refreshPaneForAgent rebuilds the layout if the given agent is currently displayed.
+func (ta *TerminalArea) refreshPaneForAgent(agentID uuid.UUID) {
+	ws := ta.manager.ActiveWorkspace()
+	if ws == nil {
+		return
+	}
+	for _, id := range ws.ActiveAgentIDs {
+		if id == agentID {
+			ta.Refresh()
+			return
+		}
+	}
 }
 
 // Widget returns the terminal area widget.

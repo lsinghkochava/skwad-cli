@@ -18,7 +18,10 @@ const (
 	shellStaggerDelay = 300 * time.Millisecond // delay between subsequent shell agents
 )
 
-const maxOutputBuf = 4096 // bytes of clean terminal output retained per agent
+const (
+	maxOutputBuf    = 4096  // bytes of ANSI-stripped output retained per agent (autopilot use)
+	maxRawOutputBuf = 65536 // bytes of raw output retained per agent (display use)
+)
 
 // Pool owns one Session + ActivityController per agent, wired together.
 // It is the central orchestrator between AgentManager, PTY sessions,
@@ -33,9 +36,16 @@ type Pool struct {
 	mcpURL      string
 	pluginDir   string
 
-	// lastOutput stores the most recent clean terminal output per agent (bounded).
+	// lastOutput stores the most recent ANSI-stripped terminal output per agent (autopilot).
 	lastOutputMu sync.RWMutex
 	lastOutput   map[uuid.UUID][]byte
+
+	// rawOutput stores the most recent raw (with ANSI) terminal output per agent (display).
+	rawOutputMu sync.RWMutex
+	rawOutput   map[uuid.UUID][]byte
+
+	// OnRawOutput is called when new raw output arrives for an agent.
+	OnRawOutput func(agentID uuid.UUID)
 
 	// OnFocusRequest is called when a pane requests keyboard focus.
 	OnFocusRequest func(agentID uuid.UUID)
@@ -54,9 +64,10 @@ type entry struct {
 // NewPool creates a Pool. mcpURL and pluginDir are used by the CommandBuilder.
 func NewPool(mgr *agent.Manager, coord *agent.Coordinator, mcpURL, pluginDir string) *Pool {
 	return &Pool{
-		entries:     make(map[uuid.UUID]*entry),
-		lastOutput:  make(map[uuid.UUID][]byte),
-		manager:     mgr,
+		entries:    make(map[uuid.UUID]*entry),
+		lastOutput: make(map[uuid.UUID][]byte),
+		rawOutput:  make(map[uuid.UUID][]byte),
+		manager:    mgr,
 		coordinator: coord,
 		builder:     &agent.CommandBuilder{MCPServerURL: mcpURL, PluginDir: pluginDir},
 		mcpURL:      mcpURL,
@@ -136,6 +147,8 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 
 	sess.OnOutput = func(data []byte) {
 		ac.OnTerminalOutput()
+
+		// Store ANSI-stripped output for autopilot analysis.
 		cleaned := []byte(StripANSI(string(data)))
 		p.lastOutputMu.Lock()
 		existing := p.lastOutput[agentID]
@@ -145,6 +158,20 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 		}
 		p.lastOutput[agentID] = existing
 		p.lastOutputMu.Unlock()
+
+		// Store raw output for display in the terminal pane.
+		p.rawOutputMu.Lock()
+		raw := p.rawOutput[agentID]
+		raw = append(raw, data...)
+		if len(raw) > maxRawOutputBuf {
+			raw = raw[len(raw)-maxRawOutputBuf:]
+		}
+		p.rawOutput[agentID] = raw
+		p.rawOutputMu.Unlock()
+
+		if p.OnRawOutput != nil {
+			p.OnRawOutput(agentID)
+		}
 	}
 	sess.OnTitleChange = func(title string) {
 		clean := CleanTitle(title)
@@ -175,6 +202,17 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 			}
 		}
 	}()
+}
+
+// RawOutput returns the most recent raw terminal output for the agent (up to 64KB).
+// This includes ANSI escape sequences; intended for display in a terminal renderer.
+func (p *Pool) RawOutput(agentID uuid.UUID) []byte {
+	p.rawOutputMu.RLock()
+	defer p.rawOutputMu.RUnlock()
+	data := p.rawOutput[agentID]
+	result := make([]byte, len(data))
+	copy(result, data)
+	return result
 }
 
 // ForceRegistration re-injects the MCP registration prompt for the given agent.
@@ -213,6 +251,9 @@ func (p *Pool) Kill(agentID uuid.UUID) {
 	p.lastOutputMu.Lock()
 	delete(p.lastOutput, agentID)
 	p.lastOutputMu.Unlock()
+	p.rawOutputMu.Lock()
+	delete(p.rawOutput, agentID)
+	p.rawOutputMu.Unlock()
 }
 
 // Restart kills the existing session and spawns a fresh one.
