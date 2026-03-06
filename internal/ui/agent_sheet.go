@@ -43,7 +43,7 @@ func EditAgentSheet(w fyne.Window, a *models.Agent, personas []models.Persona, o
 	return s
 }
 
-// Show presents the dialog.
+// Show presents the agent sheet in its own resizable window.
 func (s *AgentSheet) Show() {
 	s.nameEntry = widget.NewEntry()
 	s.avatarEntry = widget.NewEntry()
@@ -93,20 +93,36 @@ func (s *AgentSheet) Show() {
 
 	form := container.NewVBox(
 		widget.NewLabel("Name"), s.nameEntry,
-		widget.NewLabel("Avatar (emoji or image)"), s.avatarEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Avatar (emoji)"), s.avatarEntry,
+		widget.NewSeparator(),
 		widget.NewLabel("Folder"), folderRow,
+		widget.NewSeparator(),
 		widget.NewLabel("Agent type"), s.typeSelect,
-		widget.NewLabel("Command (shell only)"), s.cmdEntry,
+		widget.NewLabel("Shell command (shell type only)"), s.cmdEntry,
+		widget.NewSeparator(),
 		widget.NewLabel("Persona"), s.personaSelect,
 	)
 
-	d := dialog.NewCustomConfirm("Agent", "Save", "Cancel", form, func(ok bool) {
-		if !ok {
-			return
-		}
+	title := "New Agent"
+	if s.agent != nil {
+		title = "Edit Agent"
+	}
+	win := fyne.CurrentApp().NewWindow(title)
+	win.Resize(fyne.NewSize(520, 520))
+	win.CenterOnScreen()
+
+	saveBtn := widget.NewButton("Save", func() {
 		s.save()
-	}, s.window)
-	d.Show()
+		win.Close()
+	})
+	cancelBtn := widget.NewButton("Cancel", func() { win.Close() })
+	buttons := container.NewHBox(cancelBtn, saveBtn)
+
+	scroll := container.NewScroll(form)
+	content := container.NewBorder(nil, container.NewPadded(buttons), nil, nil, scroll)
+	win.SetContent(content)
+	win.Show()
 }
 
 // createWorktree shows a dialog to create a new git worktree and sets the folder.

@@ -20,8 +20,8 @@ type Manager struct {
 	activeWS   uuid.UUID
 	store      *persistence.Store
 
-	// Callbacks — set by UI layer.
-	OnAgentChanged    func(id uuid.UUID)
+	// Callbacks — set by UI layer. Called OUTSIDE the manager lock.
+	OnAgentChanged     func(id uuid.UUID)
 	OnWorkspaceChanged func()
 }
 
@@ -81,6 +81,27 @@ func (m *Manager) save() {
 	_ = m.store.SaveActiveWorkspaceID(m.activeWS)
 }
 
+// notifyAgentChanged calls OnAgentChanged outside any lock.
+// Must be called after the lock is released.
+func (m *Manager) notifyAgentChanged(id uuid.UUID) {
+	m.mu.RLock()
+	cb := m.OnAgentChanged
+	m.mu.RUnlock()
+	if cb != nil {
+		cb(id)
+	}
+}
+
+// notifyWorkspaceChanged calls OnWorkspaceChanged outside any lock.
+func (m *Manager) notifyWorkspaceChanged() {
+	m.mu.RLock()
+	cb := m.OnWorkspaceChanged
+	m.mu.RUnlock()
+	if cb != nil {
+		cb()
+	}
+}
+
 // Agents returns a copy of all non-companion agents for the active workspace, in order.
 func (m *Manager) Agents() []*models.Agent {
 	m.mu.RLock()
@@ -128,8 +149,6 @@ func (m *Manager) Agent(id uuid.UUID) (*models.Agent, bool) {
 // AddAgent creates a new agent, optionally inserting it after afterID in the active workspace.
 func (m *Manager) AddAgent(a *models.Agent, afterID *uuid.UUID) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	a.Metadata = make(map[string]string)
 	m.agents[a.ID] = a
 
@@ -150,16 +169,15 @@ func (m *Manager) AddAgent(a *models.Agent, afterID *uuid.UUID) {
 
 saved:
 	m.save()
-	if m.OnAgentChanged != nil {
-		m.OnAgentChanged(a.ID)
-	}
+	agentID := a.ID
+	m.mu.Unlock()
+
+	m.notifyAgentChanged(agentID)
 }
 
 // RemoveAgent removes an agent (and its companions) and updates workspace layout.
 func (m *Manager) RemoveAgent(id uuid.UUID) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	// Remove companions first.
 	for _, a := range m.agents {
 		if a.CreatedBy != nil && *a.CreatedBy == id {
@@ -167,14 +185,12 @@ func (m *Manager) RemoveAgent(id uuid.UUID) {
 			delete(m.agents, a.ID)
 		}
 	}
-
 	m.removeAgentFromWorkspaces(id)
 	delete(m.agents, id)
 	m.save()
+	m.mu.Unlock()
 
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.notifyWorkspaceChanged()
 }
 
 func (m *Manager) removeAgentFromWorkspaces(id uuid.UUID) {
@@ -200,13 +216,15 @@ func (m *Manager) removeAgentFromWorkspaces(id uuid.UUID) {
 // UpdateAgent applies f to the agent and persists.
 func (m *Manager) UpdateAgent(id uuid.UUID, f func(*models.Agent)) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if a, ok := m.agents[id]; ok {
-		f(a)
+	_, ok := m.agents[id]
+	if ok {
+		f(m.agents[id])
 		m.save()
-		if m.OnAgentChanged != nil {
-			m.OnAgentChanged(id)
-		}
+	}
+	m.mu.Unlock()
+
+	if ok {
+		m.notifyAgentChanged(id)
 	}
 }
 
@@ -278,25 +296,24 @@ func (m *Manager) DuplicateAgent(id uuid.UUID) *models.Agent {
 		m.mu.RUnlock()
 		return nil
 	}
-	copy := *src
+	dup := *src
 	m.mu.RUnlock()
 
-	copy.ID = uuid.New()
-	copy.Name = src.Name + " (copy)"
-	copy.IsRegistered = false
-	copy.SessionID = ""
-	copy.ResumeSessionID = ""
-	copy.RestartToken = 0
-	copy.Metadata = make(map[string]string)
+	dup.ID = uuid.New()
+	dup.Name = src.Name + " (copy)"
+	dup.IsRegistered = false
+	dup.SessionID = ""
+	dup.ResumeSessionID = ""
+	dup.RestartToken = 0
+	dup.Metadata = make(map[string]string)
 
-	m.AddAgent(&copy, &id)
-	return &copy
+	m.AddAgent(&dup, &id)
+	return &dup
 }
 
 // MoveAgent moves an agent from its current workspace to targetWorkspace.
 func (m *Manager) MoveAgent(agentID, targetWorkspaceID uuid.UUID) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.removeAgentFromWorkspaces(agentID)
 	for _, ws := range m.workspaces {
 		if ws.ID == targetWorkspaceID {
@@ -305,9 +322,9 @@ func (m *Manager) MoveAgent(agentID, targetWorkspaceID uuid.UUID) {
 		}
 	}
 	m.save()
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.mu.Unlock()
+
+	m.notifyWorkspaceChanged()
 }
 
 // Workspaces returns a snapshot of all workspaces.
@@ -338,32 +355,29 @@ func (m *Manager) activeWorkspace() *models.Workspace {
 	return nil
 }
 
-// SetActiveWorkspace switches to the given workspace, saving current layout first.
+// SetActiveWorkspace switches to the given workspace, saving state first.
 func (m *Manager) SetActiveWorkspace(id uuid.UUID) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.activeWS = id
 	m.save()
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.mu.Unlock()
+
+	m.notifyWorkspaceChanged()
 }
 
 // AddWorkspace creates a new workspace and appends it.
 func (m *Manager) AddWorkspace(ws *models.Workspace) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.workspaces = append(m.workspaces, ws)
 	m.save()
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.mu.Unlock()
+
+	m.notifyWorkspaceChanged()
 }
 
 // RemoveWorkspace deletes a workspace by ID.
 func (m *Manager) RemoveWorkspace(id uuid.UUID) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	filtered := m.workspaces[:0]
 	for _, ws := range m.workspaces {
 		if ws.ID != id {
@@ -375,15 +389,14 @@ func (m *Manager) RemoveWorkspace(id uuid.UUID) {
 		m.activeWS = m.workspaces[0].ID
 	}
 	m.save()
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.mu.Unlock()
+
+	m.notifyWorkspaceChanged()
 }
 
 // UpdateWorkspace applies f to the workspace and persists.
 func (m *Manager) UpdateWorkspace(id uuid.UUID, f func(*models.Workspace)) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	for _, ws := range m.workspaces {
 		if ws.ID == id {
 			f(ws)
@@ -391,9 +404,9 @@ func (m *Manager) UpdateWorkspace(id uuid.UUID, f func(*models.Workspace)) {
 		}
 	}
 	m.save()
-	if m.OnWorkspaceChanged != nil {
-		m.OnWorkspaceChanged()
-	}
+	m.mu.Unlock()
+
+	m.notifyWorkspaceChanged()
 }
 
 func (m *Manager) createDefaultWorkspace() *models.Workspace {
@@ -405,7 +418,6 @@ func (m *Manager) createDefaultWorkspace() *models.Workspace {
 		SplitRatio:          0.5,
 		SplitRatioSecondary: 0.5,
 	}
-	// Populate with all existing agent IDs.
 	for id := range m.agents {
 		ws.AgentIDs = append(ws.AgentIDs, id)
 	}

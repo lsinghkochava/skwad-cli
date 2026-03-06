@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"image/color"
+
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
@@ -9,6 +12,37 @@ import (
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 	"github.com/Jared-Boschmann/skwad-linux/internal/terminal"
+)
+
+// SVG icons for the layout toolbar — white outlines on transparent background.
+var (
+	iconLayoutSingle = fyne.NewStaticResource("layout-single.svg", []byte(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			`<rect x="1" y="1" width="18" height="18" rx="2" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`</svg>`))
+	iconLayoutSplitV = fyne.NewStaticResource("layout-splitv.svg", []byte(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			`<rect x="1" y="1" width="8" height="18" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="11" y="1" width="8" height="18" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`</svg>`))
+	iconLayoutSplitH = fyne.NewStaticResource("layout-splith.svg", []byte(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			`<rect x="1" y="1" width="18" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="1" y="11" width="18" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`</svg>`))
+	iconLayoutThree = fyne.NewStaticResource("layout-three.svg", []byte(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			`<rect x="1" y="1" width="8" height="18" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="11" y="1" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="11" y="11" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`</svg>`))
+	iconLayoutFour = fyne.NewStaticResource("layout-four.svg", []byte(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			`<rect x="1" y="1" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="11" y="1" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="1" y="11" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`<rect x="11" y="11" width="8" height="8" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
+			`</svg>`))
 )
 
 const (
@@ -29,6 +63,7 @@ type TerminalArea struct {
 	pool           *terminal.Pool
 	container      *fyne.Container // outer (toolbar + panes)
 	panesContainer *fyne.Container // inner (refreshed on layout change)
+	toolbarTitle   *canvas.Text    // updated on Refresh
 
 	gitPanel      *GitPanel
 	markdownPanel *MarkdownPanel
@@ -65,23 +100,26 @@ func (ta *TerminalArea) build() {
 	ta.container = container.NewBorder(toolbar, nil, nil, nil, ta.panesContainer)
 }
 
-// buildLayoutToolbar returns a compact row of layout mode buttons.
+// buildLayoutToolbar returns a toolbar with layout-mode icon buttons.
 func (ta *TerminalArea) buildLayoutToolbar() fyne.CanvasObject {
+	ta.toolbarTitle = canvas.NewText(ta.activeAgentTitle(), color.NRGBA{R: 190, G: 195, B: 215, A: 255})
+	ta.toolbarTitle.TextSize = 12
+
 	layouts := []struct {
-		label string
-		mode  models.LayoutMode
+		icon fyne.Resource
+		mode models.LayoutMode
 	}{
-		{"⬜", models.LayoutModeSingle},
-		{"⬛⬜", models.LayoutModeSplitVertical},
-		{"⬛/⬜", models.LayoutModeSplitHorizontal},
-		{"⬛⬛⬜", models.LayoutModeThreePane},
-		{"⬛⬛⬛⬛", models.LayoutModeGridFourPane},
+		{iconLayoutSingle, models.LayoutModeSingle},
+		{iconLayoutSplitV, models.LayoutModeSplitVertical},
+		{iconLayoutSplitH, models.LayoutModeSplitHorizontal},
+		{iconLayoutThree, models.LayoutModeThreePane},
+		{iconLayoutFour, models.LayoutModeGridFourPane},
 	}
 
 	var btns []fyne.CanvasObject
 	for _, l := range layouts {
 		l := l // capture
-		btn := widget.NewButton(l.label, func() {
+		btn := widget.NewButtonWithIcon("", l.icon, func() {
 			ws := ta.manager.ActiveWorkspace()
 			if ws == nil {
 				return
@@ -98,7 +136,28 @@ func (ta *TerminalArea) buildLayoutToolbar() fyne.CanvasObject {
 		})
 		btns = append(btns, btn)
 	}
-	return container.NewHBox(btns...)
+
+	bg := canvas.NewRectangle(color.NRGBA{R: 26, G: 29, B: 46, A: 255})
+	bg.SetMinSize(fyne.NewSize(0, 34))
+	titlePad := container.NewPadded(ta.toolbarTitle)
+	row := container.NewBorder(nil, nil, titlePad, container.NewHBox(btns...), nil)
+	return container.NewStack(bg, row)
+}
+
+// activeAgentTitle returns a display string for the focused agent.
+func (ta *TerminalArea) activeAgentTitle() string {
+	ws := ta.manager.ActiveWorkspace()
+	if ws == nil || len(ws.ActiveAgentIDs) == 0 {
+		return ""
+	}
+	a, ok := ta.manager.Agent(ws.ActiveAgentIDs[0])
+	if !ok {
+		return ""
+	}
+	if a.TerminalTitle != "" {
+		return a.Name + "  →  " + a.TerminalTitle
+	}
+	return a.Name
 }
 
 // panes builds the full content tree: terminal layout optionally wrapped
@@ -154,73 +213,60 @@ func (ta *TerminalArea) buildLayout(ws *models.Workspace) fyne.CanvasObject {
 	}
 }
 
-func (ta *TerminalArea) singlePane(ws *models.Workspace) fyne.CanvasObject {
-	pane := NewTerminalPane(0, ta.manager, ta.pool)
-	if len(ws.ActiveAgentIDs) > 0 {
-		pane.SetAgentID(ws.ActiveAgentIDs[0])
+// makePanes creates n TerminalPane instances wired for focus tracking.
+func (ta *TerminalArea) makePanes(ws *models.Workspace, count int) []*TerminalPane {
+	panes := make([]*TerminalPane, count)
+	for i := 0; i < count; i++ {
+		panes[i] = NewTerminalPane(i, ta.manager, ta.pool)
+		panes[i].SetFocused(i == ws.FocusedPaneIndex)
+		if i < len(ws.ActiveAgentIDs) {
+			panes[i].SetAgentID(ws.ActiveAgentIDs[i])
+		}
+		idx := i // capture for closure
+		wsID := ws.ID
+		panes[i].OnFocus = func(paneIndex int) {
+			_ = idx // suppress lint
+			ta.manager.UpdateWorkspace(wsID, func(w *models.Workspace) {
+				w.FocusedPaneIndex = paneIndex
+			})
+		}
 	}
-	return pane.Widget()
+	return panes
+}
+
+func (ta *TerminalArea) singlePane(ws *models.Workspace) fyne.CanvasObject {
+	p := ta.makePanes(ws, 1)
+	return p[0].Widget()
 }
 
 func (ta *TerminalArea) splitVertical(ws *models.Workspace) fyne.CanvasObject {
-	left := NewTerminalPane(0, ta.manager, ta.pool)
-	right := NewTerminalPane(1, ta.manager, ta.pool)
-	if len(ws.ActiveAgentIDs) > 0 {
-		left.SetAgentID(ws.ActiveAgentIDs[0])
-	}
-	if len(ws.ActiveAgentIDs) > 1 {
-		right.SetAgentID(ws.ActiveAgentIDs[1])
-	}
-	split := container.NewHSplit(left.Widget(), right.Widget())
+	p := ta.makePanes(ws, 2)
+	split := container.NewHSplit(p[0].Widget(), p[1].Widget())
 	split.Offset = ws.SplitRatio
 	return split
 }
 
 func (ta *TerminalArea) splitHorizontal(ws *models.Workspace) fyne.CanvasObject {
-	top := NewTerminalPane(0, ta.manager, ta.pool)
-	bottom := NewTerminalPane(1, ta.manager, ta.pool)
-	if len(ws.ActiveAgentIDs) > 0 {
-		top.SetAgentID(ws.ActiveAgentIDs[0])
-	}
-	if len(ws.ActiveAgentIDs) > 1 {
-		bottom.SetAgentID(ws.ActiveAgentIDs[1])
-	}
-	split := container.NewVSplit(top.Widget(), bottom.Widget())
+	p := ta.makePanes(ws, 2)
+	split := container.NewVSplit(p[0].Widget(), p[1].Widget())
 	split.Offset = ws.SplitRatio
 	return split
 }
 
 func (ta *TerminalArea) threePane(ws *models.Workspace) fyne.CanvasObject {
-	left := NewTerminalPane(0, ta.manager, ta.pool)
-	rightTop := NewTerminalPane(1, ta.manager, ta.pool)
-	rightBottom := NewTerminalPane(2, ta.manager, ta.pool)
-	if len(ws.ActiveAgentIDs) > 0 {
-		left.SetAgentID(ws.ActiveAgentIDs[0])
-	}
-	if len(ws.ActiveAgentIDs) > 1 {
-		rightTop.SetAgentID(ws.ActiveAgentIDs[1])
-	}
-	if len(ws.ActiveAgentIDs) > 2 {
-		rightBottom.SetAgentID(ws.ActiveAgentIDs[2])
-	}
-	rightSplit := container.NewVSplit(rightTop.Widget(), rightBottom.Widget())
+	p := ta.makePanes(ws, 3)
+	rightSplit := container.NewVSplit(p[1].Widget(), p[2].Widget())
 	rightSplit.Offset = ws.SplitRatioSecondary
-	mainSplit := container.NewHSplit(left.Widget(), rightSplit)
+	mainSplit := container.NewHSplit(p[0].Widget(), rightSplit)
 	mainSplit.Offset = ws.SplitRatio
 	return mainSplit
 }
 
 func (ta *TerminalArea) gridFourPane(ws *models.Workspace) fyne.CanvasObject {
-	panes := make([]*TerminalPane, 4)
-	for i := range panes {
-		panes[i] = NewTerminalPane(i, ta.manager, ta.pool)
-		if i < len(ws.ActiveAgentIDs) {
-			panes[i].SetAgentID(ws.ActiveAgentIDs[i])
-		}
-	}
-	topSplit := container.NewHSplit(panes[0].Widget(), panes[1].Widget())
+	p := ta.makePanes(ws, 4)
+	topSplit := container.NewHSplit(p[0].Widget(), p[1].Widget())
 	topSplit.Offset = ws.SplitRatio
-	botSplit := container.NewHSplit(panes[2].Widget(), panes[3].Widget())
+	botSplit := container.NewHSplit(p[2].Widget(), p[3].Widget())
 	botSplit.Offset = ws.SplitRatio
 	mainSplit := container.NewVSplit(topSplit, botSplit)
 	mainSplit.Offset = ws.SplitRatioSecondary
@@ -240,8 +286,12 @@ func (ta *TerminalArea) focusedAgentID() (uuid.UUID, bool) {
 	return ws.ActiveAgentIDs[idx], true
 }
 
-// Refresh rebuilds the pane layout without touching the toolbar.
+// Refresh rebuilds the pane layout and updates the toolbar title.
 func (ta *TerminalArea) Refresh() {
+	if ta.toolbarTitle != nil {
+		ta.toolbarTitle.Text = ta.activeAgentTitle()
+		ta.toolbarTitle.Refresh()
+	}
 	ta.panesContainer.Objects = []fyne.CanvasObject{ta.panes()}
 	ta.panesContainer.Refresh()
 }

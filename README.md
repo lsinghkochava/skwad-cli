@@ -13,10 +13,6 @@ This is a Go port of the [Skwad macOS app](https://skwad.ai), built for X11 and 
 - **Markdown** and **Mermaid** diagram preview panels rendered on demand via MCP tool calls
 - **Fuzzy file finder**, agent personas, conversation history browser, and an autopilot service that uses an LLM to handle agent prompts automatically
 
-## Screenshots
-
-> Coming soon — the app is currently in active development.
-
 ## Getting Started
 
 ### Requirements
@@ -51,7 +47,39 @@ go build -o skwad ./cmd/skwad
 ./skwad
 ```
 
-Configuration is stored in `~/.config/skwad/`. On first launch with no agents configured, you'll see an empty workspace — use **Ctrl+N** (or **Cmd+N** on macOS) to create your first agent.
+Configuration is stored in `~/.config/skwad/`. On first launch use **Ctrl+N** (or **Cmd+N** on macOS) to create your first agent.
+
+## UI Overview
+
+### Workspace Bar (far left)
+Circular colored badges — one per workspace. Click to switch workspaces. Right-click to rename or delete. The **+** button creates a new workspace. The **gear icon** opens Settings.
+
+### Sidebar
+Lists agents in the active workspace. Click an agent to assign it to the focused pane. Right-click for the full context menu (restart, duplicate, fork session, history, move to workspace, etc.). **+ New Agent** opens the agent creation window.
+
+### Terminal Area
+Shows agent output in one or more panes. Use the **layout buttons** in the top toolbar to switch between single, vertical split, horizontal split, 3-pane, and 4-pane grid layouts.
+
+**Assigning agents to split panes:**
+1. Switch to a split layout using the toolbar icons
+2. Click a pane's header to focus it — the header turns **blue**
+3. Click an agent in the sidebar — it is assigned to the blue (focused) pane
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+N | New agent |
+| Ctrl+, | Settings |
+| Ctrl+G | Toggle git panel |
+| Ctrl+\ | Toggle sidebar |
+| Ctrl+P | Fuzzy file finder |
+| Ctrl+] / Ctrl+[ | Next / previous agent |
+| Ctrl+1–9 | Select agent by index |
+| Ctrl+Shift+] / [ | Next / previous workspace |
+| Ctrl+Shift+O | Open agent folder in editor |
+
+> On macOS, replace Ctrl with Cmd.
 
 ## Architecture
 
@@ -66,15 +94,13 @@ internal/
   persistence/       JSON file storage (~/.config/skwad/)
   search/            Fuzzy file path scorer
   ui/                Fyne v2 GUI components
-  autopilot/         LLM-based autopilot (stub)
+  autopilot/         LLM-based autopilot (OpenAI / Anthropic / Gemini)
   notifications/     Desktop notifications via notify-send
   voice/             Push-to-talk voice input (stub)
 plugin/
   claude/notify.sh   Hook script for Claude Code lifecycle events
   codex/notify.sh    Hook script for Codex lifecycle events
 ```
-
-See [`DEVPLAN.md`](DEVPLAN.md) for the full phased build plan and [`AGENTS.md`](AGENTS.md) for the developer guide.
 
 ## Tech Stack
 
@@ -91,7 +117,7 @@ See [`DEVPLAN.md`](DEVPLAN.md) for the full phased build plan and [`AGENTS.md`](
 
 ## MCP Server
 
-Skwad exposes an MCP server at `http://127.0.0.1:8766/mcp` (port configurable in settings). AI agents that support MCP can use the following tools:
+Skwad exposes an MCP server at `http://127.0.0.1:8766/mcp` (port configurable in Settings). AI agents that support MCP can use the following tools:
 
 | Tool | Description |
 |---|---|
@@ -110,29 +136,26 @@ Skwad exposes an MCP server at `http://127.0.0.1:8766/mcp` (port configurable in
 
 Hook scripts in `plugin/claude/` and `plugin/codex/` post lifecycle events to `/hook` so Skwad can track agent status (running / idle / blocked).
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| Ctrl+N | New agent |
-| Ctrl+G | Toggle git panel |
-| Ctrl+\ | Toggle sidebar |
-| Ctrl+P | Fuzzy file finder |
-| Ctrl+] | Next agent |
-| Ctrl+[ | Previous agent |
-
-> On macOS, replace Ctrl with Cmd.
-
 ## Development Status
 
-| Phase | Status |
+| Area | Status |
 |---|---|
-| Phase 1 — Data layer (models, persistence, manager) | ✅ Complete |
-| Phase 2 — Git + file services | ✅ Complete |
-| Phase 3 — Terminal + MCP server (headless) | ✅ Complete |
-| Phase 4 — UI shell | 🔄 In progress |
-| Phase 5 — Feature panels (git, markdown, mermaid, file finder) | Planned |
-| Phase 6 — Autopilot, voice, notifications, polish | Planned |
+| Data layer (models, persistence, manager) | ✅ Complete |
+| Git + file services | ✅ Complete |
+| Terminal + MCP server (headless) | ✅ Complete |
+| UI shell — workspaces, sidebar, split panes | ✅ Complete |
+| UI visual design — dark theme, circular badges, SVG toolbar icons | ✅ Complete |
+| Pane focus + agent assignment UX | ✅ Complete |
+| Session history browser (Claude + Codex) | ✅ Complete |
+| Fork / resume agent sessions | ✅ Complete |
+| Autopilot service (OpenAI / Anthropic / Gemini) | ✅ Complete |
+| Settings window (all tabs) | ✅ Complete |
+| Agent personas + bench | ✅ Complete |
+| File finder, git panel, markdown/mermaid panels | ✅ Complete |
+| VTE native terminal embedding (Linux) | 🔄 In progress |
+| Voice STT backend | Planned |
+| Agent drag-to-reorder | Planned |
+| Split ratio persistence on drag | Planned |
 
 ## Testing
 

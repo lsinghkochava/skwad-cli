@@ -97,6 +97,7 @@ func (a *App) buildWindow() {
 	a.sidebar.window = a.window
 	a.sidebar.store = a.store
 	a.workspaceBar.window = a.window
+	a.workspaceBar.OnSettings = func() { a.settingsWindow.Show() }
 
 	a.sidebar.OnDuplicateAgent = func(id uuid.UUID) {
 		dup := a.manager.DuplicateAgent(id)
@@ -342,11 +343,7 @@ func (a *App) selectAdjacentAgent(delta int) {
 	next := (idx + delta + len(agents)) % len(agents)
 	nextID := agents[next].ID
 	a.manager.UpdateWorkspace(ws.ID, func(w *models.Workspace) {
-		if len(w.ActiveAgentIDs) == 0 {
-			w.ActiveAgentIDs = []uuid.UUID{nextID}
-		} else {
-			w.ActiveAgentIDs[w.FocusedPaneIndex] = nextID
-		}
+		setFocusedAgent(w, nextID)
 	})
 }
 
@@ -362,12 +359,21 @@ func (a *App) selectAgentByIndex(idx int) {
 	}
 	nextID := agents[idx].ID
 	a.manager.UpdateWorkspace(ws.ID, func(w *models.Workspace) {
-		if len(w.ActiveAgentIDs) == 0 {
-			w.ActiveAgentIDs = []uuid.UUID{nextID}
-		} else {
-			w.ActiveAgentIDs[w.FocusedPaneIndex] = nextID
-		}
+		setFocusedAgent(w, nextID)
 	})
+}
+
+// setFocusedAgent assigns id to the focused pane slot, growing the slice if needed.
+func setFocusedAgent(w *models.Workspace, id uuid.UUID) {
+	fi := w.FocusedPaneIndex
+	if len(w.ActiveAgentIDs) == 0 {
+		w.ActiveAgentIDs = []uuid.UUID{id}
+		return
+	}
+	for len(w.ActiveAgentIDs) <= fi {
+		w.ActiveAgentIDs = append(w.ActiveAgentIDs, uuid.Nil)
+	}
+	w.ActiveAgentIDs[fi] = id
 }
 
 // selectAdjacentWorkspace switches to the next or previous workspace.

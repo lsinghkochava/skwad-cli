@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/google/uuid"
@@ -16,13 +17,19 @@ import (
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 )
 
-const workspaceBarWidth float32 = 48
+const (
+	workspaceBarWidth float32 = 52
+	wsBadgeSize       float32 = 32
+	wsDotSize         float32 = 8
+)
 
 // WorkspaceBar is the vertical strip on the far left showing workspace badges.
 type WorkspaceBar struct {
-	manager   *agent.Manager
-	window    fyne.Window // set by App after construction
-	container *fyne.Container
+	manager    *agent.Manager
+	window     fyne.Window
+	vbox       *fyne.Container
+	container  *fyne.Container
+	OnSettings func() // called when the settings gear is tapped
 }
 
 // NewWorkspaceBar creates the workspace bar.
@@ -33,7 +40,10 @@ func NewWorkspaceBar(mgr *agent.Manager) *WorkspaceBar {
 }
 
 func (wb *WorkspaceBar) build() {
-	wb.container = container.NewVBox(wb.items()...)
+	bg := canvas.NewRectangle(color.NRGBA{R: 20, G: 22, B: 35, A: 255})
+	bg.SetMinSize(fyne.NewSize(workspaceBarWidth, 1)) // forces the Border layout to allocate full bar width
+	wb.vbox = container.NewVBox(wb.items()...)
+	wb.container = container.NewStack(bg, wb.vbox)
 }
 
 func (wb *WorkspaceBar) items() []fyne.CanvasObject {
@@ -46,20 +56,23 @@ func (wb *WorkspaceBar) items() []fyne.CanvasObject {
 		active := activeWS != nil && ws.ID == activeWS.ID
 		agents := wb.wsAgents(ws)
 		badge := newWorkspaceBadge(ws, active, agents,
-			func(id uuid.UUID) {
-				wb.manager.SetActiveWorkspace(id)
-			},
-			func(id uuid.UUID, pos fyne.Position) {
-				wb.showContextMenu(id, pos)
-			},
+			func(id uuid.UUID) { wb.manager.SetActiveWorkspace(id) },
+			func(id uuid.UUID, pos fyne.Position) { wb.showContextMenu(id, pos) },
 		)
 		items = append(items, badge)
 	}
 
-	addBtn := widget.NewButton("+", func() {
-		wb.showNewWorkspaceDialog()
+	items = append(items, newAddWorkspaceButton(func() { wb.showNewWorkspaceDialog() }))
+
+	// Settings gear at the very bottom, pinned via a spacer.
+	spacer := canvas.NewRectangle(color.Transparent)
+	spacer.SetMinSize(fyne.NewSize(1, 8))
+	settingsBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		if wb.OnSettings != nil {
+			wb.OnSettings()
+		}
 	})
-	items = append(items, addBtn)
+	items = append(items, spacer, settingsBtn)
 	return items
 }
 
@@ -95,13 +108,9 @@ func (wb *WorkspaceBar) showContextMenu(wsID uuid.UUID, pos fyne.Position) {
 		return
 	}
 	items := []*fyne.MenuItem{
-		fyne.NewMenuItem("Rename…", func() {
-			wb.showRenameDialog(wsID)
-		}),
+		fyne.NewMenuItem("Rename…", func() { wb.showRenameDialog(wsID) }),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Delete", func() {
-			wb.confirmDelete(wsID)
-		}),
+		fyne.NewMenuItem("Delete", func() { wb.confirmDelete(wsID) }),
 	}
 	menu := fyne.NewMenu("", items...)
 	widget.ShowPopUpMenuAtPosition(menu, wb.window.Canvas(), pos)
@@ -111,9 +120,8 @@ func (wb *WorkspaceBar) showRenameDialog(wsID uuid.UUID) {
 	if wb.window == nil {
 		return
 	}
-	workspaces := wb.manager.Workspaces()
 	var current string
-	for _, ws := range workspaces {
+	for _, ws := range wb.manager.Workspaces() {
 		if ws.ID == wsID {
 			current = ws.Name
 			break
@@ -162,8 +170,8 @@ func (wb *WorkspaceBar) wsAgents(ws *models.Workspace) []*models.Agent {
 
 // Refresh rebuilds the workspace bar to reflect current state.
 func (wb *WorkspaceBar) Refresh() {
-	wb.container.Objects = wb.items()
-	wb.container.Refresh()
+	wb.vbox.Objects = wb.items()
+	wb.vbox.Refresh()
 }
 
 // Widget returns the Fyne widget for embedding in the layout.
@@ -171,10 +179,9 @@ func (wb *WorkspaceBar) Widget() fyne.CanvasObject {
 	return wb.container
 }
 
-// --- workspaceBadge custom widget ---
+// --- workspaceBadge ---
 
-// workspaceBadge is a tappable badge widget for one workspace entry.
-// SecondaryTapped opens the rename/delete context menu.
+// workspaceBadge is a circular tappable badge for one workspace.
 type workspaceBadge struct {
 	widget.BaseWidget
 
@@ -183,10 +190,6 @@ type workspaceBadge struct {
 	colorHex string
 	active   bool
 	agents   []*models.Agent
-
-	bg    *canvas.Rectangle
-	label *canvas.Text
-	dot   *canvas.Circle
 
 	onTap  func(uuid.UUID)
 	onMenu func(uuid.UUID, fyne.Position)
@@ -199,37 +202,21 @@ func newWorkspaceBadge(
 	onTap func(uuid.UUID),
 	onMenu func(uuid.UUID, fyne.Position),
 ) *workspaceBadge {
-	bgColor := parseHexColor(ws.ColorHex)
-	if !active {
-		bgColor = color.NRGBA{R: 70, G: 70, B: 70, A: 255}
-	}
-
-	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(workspaceBarWidth-8, workspaceBarWidth-8))
-	bg.CornerRadius = 6
-
-	lbl := canvas.NewText(initials(ws.Name), color.White)
-	lbl.TextSize = 13
-	lbl.TextStyle = fyne.TextStyle{Bold: true}
-	lbl.Alignment = fyne.TextAlignCenter
-
-	dot := canvas.NewCircle(workspaceStatusColor(agents))
-	dot.Resize(fyne.NewSize(6, 6))
-
 	b := &workspaceBadge{
 		wsID:     ws.ID,
 		name:     ws.Name,
 		colorHex: ws.ColorHex,
 		active:   active,
 		agents:   agents,
-		bg:       bg,
-		label:    lbl,
-		dot:      dot,
 		onTap:    onTap,
 		onMenu:   onMenu,
 	}
 	b.ExtendBaseWidget(b)
 	return b
+}
+
+func (b *workspaceBadge) MinSize() fyne.Size {
+	return fyne.NewSize(workspaceBarWidth, workspaceBarWidth)
 }
 
 func (b *workspaceBadge) Tapped(_ *fyne.PointEvent) {
@@ -245,10 +232,123 @@ func (b *workspaceBadge) SecondaryTapped(ev *fyne.PointEvent) {
 }
 
 func (b *workspaceBadge) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(
-		container.NewStack(b.bg, container.NewCenter(b.label)),
-	)
+	bgColor := parseHexColor(b.colorHex)
+	if !b.active {
+		bgColor = color.NRGBA{R: 132, G: 140, B: 175, A: 255} // #848CAF
+	}
+
+	circle := canvas.NewCircle(bgColor)
+
+	lbl := canvas.NewText(initials(b.name), color.White)
+	lbl.TextSize = 14
+	lbl.TextStyle = fyne.TextStyle{Bold: true}
+	lbl.Alignment = fyne.TextAlignCenter
+
+	dot := canvas.NewCircle(workspaceStatusColor(b.agents))
+
+	return &workspaceBadgeRenderer{badge: b, circle: circle, label: lbl, dot: dot}
 }
+
+type workspaceBadgeRenderer struct {
+	badge  *workspaceBadge
+	circle *canvas.Circle
+	label  *canvas.Text
+	dot    *canvas.Circle
+}
+
+func (r *workspaceBadgeRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.circle, r.label, r.dot}
+}
+
+func (r *workspaceBadgeRenderer) Layout(size fyne.Size) {
+	cx := (size.Width - wsBadgeSize) / 2
+	cy := (size.Height - wsBadgeSize) / 2
+
+	r.circle.Move(fyne.NewPos(cx, cy))
+	r.circle.Resize(fyne.NewSize(wsBadgeSize, wsBadgeSize))
+
+	r.label.Move(fyne.NewPos(cx, cy))
+	r.label.Resize(fyne.NewSize(wsBadgeSize, wsBadgeSize))
+
+	// Status dot at bottom-right of the circle, offset outward by 2px
+	r.dot.Move(fyne.NewPos(cx+wsBadgeSize-wsDotSize+2, cy+wsBadgeSize-wsDotSize+2))
+	r.dot.Resize(fyne.NewSize(wsDotSize, wsDotSize))
+}
+
+func (r *workspaceBadgeRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(workspaceBarWidth, workspaceBarWidth)
+}
+
+func (r *workspaceBadgeRenderer) Refresh() {
+	bgColor := parseHexColor(r.badge.colorHex)
+	if !r.badge.active {
+		bgColor = color.NRGBA{R: 132, G: 140, B: 175, A: 255}
+	}
+	r.circle.FillColor = bgColor
+	r.label.Text = initials(r.badge.name)
+	r.dot.FillColor = workspaceStatusColor(r.badge.agents)
+	r.circle.Refresh()
+	r.label.Refresh()
+	r.dot.Refresh()
+}
+
+func (r *workspaceBadgeRenderer) Destroy() {}
+
+// --- addWorkspaceButton ---
+
+type addWorkspaceButton struct {
+	widget.BaseWidget
+	onTap func()
+}
+
+func newAddWorkspaceButton(onTap func()) *addWorkspaceButton {
+	b := &addWorkspaceButton{onTap: onTap}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *addWorkspaceButton) MinSize() fyne.Size {
+	return fyne.NewSize(workspaceBarWidth, workspaceBarWidth)
+}
+
+func (b *addWorkspaceButton) Tapped(_ *fyne.PointEvent) {
+	if b.onTap != nil {
+		b.onTap()
+	}
+}
+
+func (b *addWorkspaceButton) CreateRenderer() fyne.WidgetRenderer {
+	circle := canvas.NewCircle(color.NRGBA{R: 50, G: 55, B: 75, A: 180})
+	lbl := canvas.NewText("+", color.NRGBA{R: 180, G: 185, B: 210, A: 255})
+	lbl.TextSize = 20
+	lbl.Alignment = fyne.TextAlignCenter
+	return &addBtnRenderer{circle: circle, label: lbl}
+}
+
+type addBtnRenderer struct {
+	circle *canvas.Circle
+	label  *canvas.Text
+}
+
+func (r *addBtnRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.circle, r.label}
+}
+
+func (r *addBtnRenderer) Layout(size fyne.Size) {
+	cx := (size.Width - wsBadgeSize) / 2
+	cy := (size.Height - wsBadgeSize) / 2
+	r.circle.Move(fyne.NewPos(cx, cy))
+	r.circle.Resize(fyne.NewSize(wsBadgeSize, wsBadgeSize))
+	r.label.Move(fyne.NewPos(cx, cy))
+	r.label.Resize(fyne.NewSize(wsBadgeSize, wsBadgeSize))
+}
+
+func (r *addBtnRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(workspaceBarWidth, workspaceBarWidth)
+}
+
+func (r *addBtnRenderer) Refresh() {}
+func (r *addBtnRenderer) Destroy() {}
 
 // --- helpers ---
 
@@ -261,7 +361,6 @@ func initials(name string) string {
 }
 
 // parseHexColor converts an "#RRGGBB" string to color.NRGBA.
-// Returns a fallback blue if the string is malformed.
 func parseHexColor(hex string) color.NRGBA {
 	hex = strings.TrimPrefix(hex, "#")
 	if len(hex) != 6 {
@@ -279,7 +378,7 @@ func parseHexColor(hex string) color.NRGBA {
 	}
 }
 
-// workspaceStatusColor returns the dot color for the worst agent status.
+// workspaceStatusColor returns the status dot color for the worst agent status.
 func workspaceStatusColor(agents []*models.Agent) color.NRGBA {
 	switch models.WorstStatus(agents) {
 	case models.AgentStatusRunning:
@@ -289,6 +388,6 @@ func workspaceStatusColor(agents []*models.Agent) color.NRGBA {
 	case models.AgentStatusError:
 		return color.NRGBA{R: 255, G: 59, B: 48, A: 255}
 	default:
-		return color.NRGBA{R: 100, G: 210, B: 80, A: 180}
+		return color.NRGBA{R: 100, G: 210, B: 80, A: 200}
 	}
 }
