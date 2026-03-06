@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
+	"github.com/Jared-Boschmann/skwad-linux/internal/autopilot"
 	"github.com/Jared-Boschmann/skwad-linux/internal/mcp"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 	"github.com/Jared-Boschmann/skwad-linux/internal/notifications"
@@ -81,13 +82,60 @@ func main() {
 		mcpServer.StatusUpdater = &hookBridge{pool: pool, manager: agentMgr}
 	}
 
-	// Wire desktop notifications for agent status changes.
+	// Wire desktop notifications and autopilot for agent status changes.
 	notifSvc := notifications.NewService("Skwad", settings.NotificationsEnabled)
 	pool.OnStatusChanged = func(id uuid.UUID, status models.AgentStatus) {
+		// Desktop notification when agent needs input.
 		if status == models.AgentStatusInput {
 			if ag, ok := agentMgr.Agent(id); ok {
 				notifSvc.Notify(ag.Name+" needs input", "The agent is waiting for your response.")
 			}
+		}
+
+		// Autopilot: analyze last output when a hook-managed agent goes idle.
+		if status == models.AgentStatusIdle {
+			ag, ok := agentMgr.Agent(id)
+			if !ok || !ag.SupportsHooks() {
+				return
+			}
+			s := store.Settings()
+			if !s.Autopilot.Enabled {
+				return
+			}
+			lastOut := pool.LastOutput(id)
+			if lastOut == "" {
+				return
+			}
+			go func() {
+				svc := autopilot.NewService(&s.Autopilot)
+				cls, err := svc.Analyze(lastOut)
+				if err != nil {
+					return
+				}
+				switch s.Autopilot.Action {
+				case models.AutopilotActionMark:
+					if cls != autopilot.ClassificationCompleted {
+						agentMgr.UpdateAgent(id, func(a *models.Agent) {
+							a.Status = models.AgentStatusInput
+						})
+					}
+				case models.AutopilotActionContinue:
+					if cls == autopilot.ClassificationBinary {
+						pool.InjectText(id, "yes, continue\n")
+					} else if cls == autopilot.ClassificationOpen {
+						agentMgr.UpdateAgent(id, func(a *models.Agent) {
+							a.Status = models.AgentStatusInput
+						})
+					}
+				case models.AutopilotActionCustom:
+					if cls != autopilot.ClassificationCompleted {
+						resp, err := svc.CustomResponse(lastOut)
+						if err == nil && resp != "" {
+							pool.InjectText(id, resp+"\n")
+						}
+					}
+				}
+			}()
 		}
 	}
 

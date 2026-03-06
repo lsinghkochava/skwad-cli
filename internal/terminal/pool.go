@@ -18,6 +18,8 @@ const (
 	shellStaggerDelay = 300 * time.Millisecond // delay between subsequent shell agents
 )
 
+const maxOutputBuf = 4096 // bytes of clean terminal output retained per agent
+
 // Pool owns one Session + ActivityController per agent, wired together.
 // It is the central orchestrator between AgentManager, PTY sessions,
 // ActivityControllers, and the AgentCoordinator.
@@ -30,6 +32,10 @@ type Pool struct {
 	builder     *agent.CommandBuilder
 	mcpURL      string
 	pluginDir   string
+
+	// lastOutput stores the most recent clean terminal output per agent (bounded).
+	lastOutputMu sync.RWMutex
+	lastOutput   map[uuid.UUID][]byte
 
 	// OnFocusRequest is called when a pane requests keyboard focus.
 	OnFocusRequest func(agentID uuid.UUID)
@@ -49,6 +55,7 @@ type entry struct {
 func NewPool(mgr *agent.Manager, coord *agent.Coordinator, mcpURL, pluginDir string) *Pool {
 	return &Pool{
 		entries:     make(map[uuid.UUID]*entry),
+		lastOutput:  make(map[uuid.UUID][]byte),
 		manager:     mgr,
 		coordinator: coord,
 		builder:     &agent.CommandBuilder{MCPServerURL: mcpURL, PluginDir: pluginDir},
@@ -129,6 +136,15 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 
 	sess.OnOutput = func(data []byte) {
 		ac.OnTerminalOutput()
+		cleaned := []byte(StripANSI(string(data)))
+		p.lastOutputMu.Lock()
+		existing := p.lastOutput[agentID]
+		existing = append(existing, cleaned...)
+		if len(existing) > maxOutputBuf {
+			existing = existing[len(existing)-maxOutputBuf:]
+		}
+		p.lastOutput[agentID] = existing
+		p.lastOutputMu.Unlock()
 	}
 	sess.OnTitleChange = func(title string) {
 		clean := CleanTitle(title)
@@ -161,6 +177,13 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 	}()
 }
 
+// LastOutput returns the most recent clean terminal output for the agent (up to 4KB).
+func (p *Pool) LastOutput(agentID uuid.UUID) string {
+	p.lastOutputMu.RLock()
+	defer p.lastOutputMu.RUnlock()
+	return string(p.lastOutput[agentID])
+}
+
 // Kill stops the session for the given agent and removes it from the pool.
 func (p *Pool) Kill(agentID uuid.UUID) {
 	p.mu.Lock()
@@ -170,6 +193,9 @@ func (p *Pool) Kill(agentID uuid.UUID) {
 		delete(p.entries, agentID)
 	}
 	p.coordinator.UnregisterAgent(agentID)
+	p.lastOutputMu.Lock()
+	delete(p.lastOutput, agentID)
+	p.lastOutputMu.Unlock()
 }
 
 // Restart kills the existing session and spawns a fresh one.
