@@ -53,6 +53,8 @@ type Sidebar struct {
 	OnMoveToWorkspace   func(agentID, workspaceID uuid.UUID)
 	OnRegisterAgent     func(id uuid.UUID)
 	OnAddShellCompanion func(id uuid.UUID)
+	OnMoveAgentUp       func(id uuid.UUID)
+	OnMoveAgentDown     func(id uuid.UUID)
 }
 
 // NewSidebar creates the agent list sidebar.
@@ -150,6 +152,17 @@ func (s *Sidebar) showContextMenu(agentID uuid.UUID, pos fyne.Position) {
 	}
 
 	items := []*fyne.MenuItem{
+		fyne.NewMenuItem("Move Up", func() {
+			if s.OnMoveAgentUp != nil {
+				s.OnMoveAgentUp(agentID)
+			}
+		}),
+		fyne.NewMenuItem("Move Down", func() {
+			if s.OnMoveAgentDown != nil {
+				s.OnMoveAgentDown(agentID)
+			}
+		}),
+		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Edit…", func() {
 			if s.OnEditAgent != nil {
 				s.OnEditAgent(agentID)

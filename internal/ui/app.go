@@ -156,6 +156,12 @@ func (a *App) buildWindow() {
 	a.sidebar.OnMoveToWorkspace = func(agentID, workspaceID uuid.UUID) {
 		a.manager.MoveAgent(agentID, workspaceID)
 	}
+	a.sidebar.OnMoveAgentUp = func(id uuid.UUID) {
+		a.manager.ReorderAgent(id, -1)
+	}
+	a.sidebar.OnMoveAgentDown = func(id uuid.UUID) {
+		a.manager.ReorderAgent(id, 1)
+	}
 	a.sidebar.OnRegisterAgent = func(id uuid.UUID) {
 		a.pool.ForceRegistration(id)
 	}

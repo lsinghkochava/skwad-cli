@@ -65,6 +65,10 @@ type TerminalArea struct {
 	panesContainer *fyne.Container // inner (refreshed on layout change)
 	toolbarTitle   *canvas.Text    // updated on Refresh
 
+	// Current split containers — read before Refresh to persist ratios.
+	mainSplit      *container.Split
+	secondarySplit *container.Split
+
 	gitPanel      *GitPanel
 	markdownPanel *MarkdownPanel
 	mermaidPanel  *MermaidPanel
@@ -235,6 +239,8 @@ func (ta *TerminalArea) makePanes(ws *models.Workspace, count int) []*TerminalPa
 }
 
 func (ta *TerminalArea) singlePane(ws *models.Workspace) fyne.CanvasObject {
+	ta.mainSplit = nil
+	ta.secondarySplit = nil
 	p := ta.makePanes(ws, 1)
 	return p[0].Widget()
 }
@@ -243,6 +249,8 @@ func (ta *TerminalArea) splitVertical(ws *models.Workspace) fyne.CanvasObject {
 	p := ta.makePanes(ws, 2)
 	split := container.NewHSplit(p[0].Widget(), p[1].Widget())
 	split.Offset = ws.SplitRatio
+	ta.mainSplit = split
+	ta.secondarySplit = nil
 	return split
 }
 
@@ -250,6 +258,8 @@ func (ta *TerminalArea) splitHorizontal(ws *models.Workspace) fyne.CanvasObject 
 	p := ta.makePanes(ws, 2)
 	split := container.NewVSplit(p[0].Widget(), p[1].Widget())
 	split.Offset = ws.SplitRatio
+	ta.mainSplit = split
+	ta.secondarySplit = nil
 	return split
 }
 
@@ -259,6 +269,8 @@ func (ta *TerminalArea) threePane(ws *models.Workspace) fyne.CanvasObject {
 	rightSplit.Offset = ws.SplitRatioSecondary
 	mainSplit := container.NewHSplit(p[0].Widget(), rightSplit)
 	mainSplit.Offset = ws.SplitRatio
+	ta.mainSplit = mainSplit
+	ta.secondarySplit = rightSplit
 	return mainSplit
 }
 
@@ -270,6 +282,8 @@ func (ta *TerminalArea) gridFourPane(ws *models.Workspace) fyne.CanvasObject {
 	botSplit.Offset = ws.SplitRatio
 	mainSplit := container.NewVSplit(topSplit, botSplit)
 	mainSplit.Offset = ws.SplitRatioSecondary
+	ta.mainSplit = mainSplit
+	ta.secondarySplit = topSplit // save the primary horizontal ratio via topSplit
 	return mainSplit
 }
 
@@ -287,13 +301,40 @@ func (ta *TerminalArea) focusedAgentID() (uuid.UUID, bool) {
 }
 
 // Refresh rebuilds the pane layout and updates the toolbar title.
+// It reads the current split offsets first so user-adjusted ratios are preserved.
 func (ta *TerminalArea) Refresh() {
+	ta.saveSplitRatios()
+
 	if ta.toolbarTitle != nil {
 		ta.toolbarTitle.Text = ta.activeAgentTitle()
 		ta.toolbarTitle.Refresh()
 	}
 	ta.panesContainer.Objects = []fyne.CanvasObject{ta.panes()}
 	ta.panesContainer.Refresh()
+}
+
+// saveSplitRatios reads the current split container offsets and persists them
+// to the workspace model so they survive the next rebuild.
+func (ta *TerminalArea) saveSplitRatios() {
+	if ta.mainSplit == nil {
+		return
+	}
+	ws := ta.manager.ActiveWorkspace()
+	if ws == nil {
+		return
+	}
+	main := ta.mainSplit.Offset
+	secondary := ws.SplitRatioSecondary
+	if ta.secondarySplit != nil {
+		secondary = ta.secondarySplit.Offset
+	}
+	if main == ws.SplitRatio && secondary == ws.SplitRatioSecondary {
+		return // nothing changed, skip the write
+	}
+	ta.manager.UpdateWorkspace(ws.ID, func(w *models.Workspace) {
+		w.SplitRatio = main
+		w.SplitRatioSecondary = secondary
+	})
 }
 
 // refreshPaneForAgent rebuilds the layout if the given agent is currently displayed.

@@ -311,6 +311,28 @@ func (m *Manager) DuplicateAgent(id uuid.UUID) *models.Agent {
 	return &dup
 }
 
+// ReorderAgent shifts agentID by delta (-1 = up, +1 = down) in the active workspace's list.
+func (m *Manager) ReorderAgent(agentID uuid.UUID, delta int) {
+	m.mu.Lock()
+	ws := m.activeWorkspace()
+	if ws != nil {
+		ids := ws.AgentIDs
+		for i, id := range ids {
+			if id == agentID {
+				j := i + delta
+				if j >= 0 && j < len(ids) {
+					ids[i], ids[j] = ids[j], ids[i]
+					ws.AgentIDs = ids
+					m.save()
+				}
+				break
+			}
+		}
+	}
+	m.mu.Unlock()
+	m.notifyWorkspaceChanged()
+}
+
 // MoveAgent moves an agent from its current workspace to targetWorkspace.
 func (m *Manager) MoveAgent(agentID, targetWorkspaceID uuid.UUID) {
 	m.mu.Lock()
