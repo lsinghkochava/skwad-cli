@@ -12,6 +12,7 @@ import (
 const (
 	gitPanelSplitOffset      = 0.65 // 65% terminal, 35% git panel
 	markdownPanelSplitOffset = 0.60 // 60% terminal, 40% markdown panel
+	mermaidPanelSplitOffset  = 0.60 // 60% terminal, 40% mermaid panel
 )
 
 // TerminalArea manages the main content area with split-pane layout.
@@ -27,9 +28,11 @@ type TerminalArea struct {
 
 	gitPanel      *GitPanel
 	markdownPanel *MarkdownPanel
+	mermaidPanel  *MermaidPanel
 
-	showGit      bool
+	showGit     bool
 	showMarkdown bool
+	showMermaid  bool
 }
 
 // NewTerminalArea creates the terminal area.
@@ -38,6 +41,7 @@ func NewTerminalArea(mgr *agent.Manager) *TerminalArea {
 		manager:       mgr,
 		gitPanel:      NewGitPanel(mgr),
 		markdownPanel: NewMarkdownPanel(),
+		mermaidPanel:  NewMermaidPanel(),
 	}
 	ta.build()
 	return ta
@@ -48,7 +52,7 @@ func (ta *TerminalArea) build() {
 }
 
 // panes builds the full content tree: terminal layout optionally wrapped
-// with the git panel (below) or markdown panel (right).
+// with the git panel (below), markdown panel (right), and/or mermaid panel (right).
 func (ta *TerminalArea) panes() fyne.CanvasObject {
 	ws := ta.manager.ActiveWorkspace()
 	if ws == nil {
@@ -57,24 +61,31 @@ func (ta *TerminalArea) panes() fyne.CanvasObject {
 
 	terminals := ta.buildLayout(ws)
 
-	if ta.showGit && ta.showMarkdown {
-		gitSplit := container.NewVSplit(terminals, ta.gitPanel.Widget())
-		gitSplit.Offset = gitPanelSplitOffset
-		mdSplit := container.NewHSplit(gitSplit, ta.markdownPanel.Widget())
-		mdSplit.Offset = markdownPanelSplitOffset
-		return mdSplit
+	// Build right-side panel column: markdown and/or mermaid stacked vertically.
+	var rightPanel fyne.CanvasObject
+	if ta.showMarkdown && ta.showMermaid {
+		rightPanel = container.NewVSplit(ta.markdownPanel.Widget(), ta.mermaidPanel.Widget())
+	} else if ta.showMarkdown {
+		rightPanel = ta.markdownPanel.Widget()
+	} else if ta.showMermaid {
+		rightPanel = ta.mermaidPanel.Widget()
 	}
-	if ta.showGit {
-		split := container.NewVSplit(terminals, ta.gitPanel.Widget())
-		split.Offset = gitPanelSplitOffset
-		return split
-	}
-	if ta.showMarkdown {
-		split := container.NewHSplit(terminals, ta.markdownPanel.Widget())
+
+	var content fyne.CanvasObject
+	if rightPanel != nil {
+		split := container.NewHSplit(terminals, rightPanel)
 		split.Offset = markdownPanelSplitOffset
-		return split
+		content = split
+	} else {
+		content = terminals
 	}
-	return terminals
+
+	if ta.showGit {
+		gitSplit := container.NewVSplit(content, ta.gitPanel.Widget())
+		gitSplit.Offset = gitPanelSplitOffset
+		return gitSplit
+	}
+	return content
 }
 
 // buildLayout returns the terminal pane layout for the given workspace.
@@ -214,10 +225,15 @@ func (ta *TerminalArea) ShowMarkdownFile(path string) {
 	ta.Refresh()
 }
 
-// ShowMermaid renders a Mermaid diagram source via the markdown panel (stub).
+// ShowMermaid renders a Mermaid diagram in the dedicated mermaid panel.
 func (ta *TerminalArea) ShowMermaid(source, title string) {
-	// TODO: implement dedicated MermaidPanel with embedded WebView.
-	ta.showMarkdown = true
-	ta.markdownPanel.ShowMermaidSource(source, title)
+	ta.showMermaid = true
+	ta.mermaidPanel.Show(source, title)
+	ta.Refresh()
+}
+
+// ToggleMermaidPanel shows or hides the mermaid panel.
+func (ta *TerminalArea) ToggleMermaidPanel() {
+	ta.showMermaid = !ta.showMermaid
 	ta.Refresh()
 }

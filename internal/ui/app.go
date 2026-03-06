@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"fyne.io/fyne/v2"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
+	"github.com/Jared-Boschmann/skwad-linux/internal/history"
 	"github.com/Jared-Boschmann/skwad-linux/internal/models"
 	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
 	"github.com/Jared-Boschmann/skwad-linux/internal/terminal"
@@ -33,24 +35,26 @@ const (
 
 // App is the top-level Fyne application wrapper.
 type App struct {
-	fyneApp fyne.App
-	window  fyne.Window
-	manager *agent.Manager
-	coord   *agent.Coordinator
-	store   *persistence.Store
-	pool    *terminal.Pool
+	fyneApp    fyne.App
+	window     fyne.Window
+	manager    *agent.Manager
+	coord      *agent.Coordinator
+	store      *persistence.Store
+	pool       *terminal.Pool
+	historySvc *history.Service
 
-	workspaceBar    *WorkspaceBar
-	sidebar         *Sidebar
-	terminalArea    *TerminalArea
-	settingsWindow  *SettingsWindow
-	mainSplit       *container.Split
+	workspaceBar   *WorkspaceBar
+	sidebar        *Sidebar
+	terminalArea   *TerminalArea
+	settingsWindow *SettingsWindow
+	mainSplit      *container.Split
 }
 
 // NewApp creates and configures the Fyne app.
 func NewApp(mgr *agent.Manager, coord *agent.Coordinator, store *persistence.Store, pool *terminal.Pool) *App {
 	a := &App{
-		fyneApp: app.NewWithID(appID),
+		fyneApp:    app.NewWithID(appID),
+		historySvc: history.New(),
 		manager: mgr,
 		coord:   coord,
 		store:   store,
@@ -90,6 +94,17 @@ func (a *App) buildWindow() {
 	}
 	a.sidebar.window = a.window
 	a.sidebar.store = a.store
+	a.workspaceBar.window = a.window
+
+	a.sidebar.OnDuplicateAgent = func(id uuid.UUID) {
+		dup := a.manager.DuplicateAgent(id)
+		if dup != nil {
+			a.pool.Spawn(dup)
+		}
+	}
+	a.sidebar.OnShowHistory = func(id uuid.UUID) {
+		a.openHistoryPanel(id)
+	}
 
 	// Wire manager callbacks (called while manager lock is held — do NOT call
 	// manager methods or pool.Spawn from inside these callbacks).
@@ -316,6 +331,53 @@ func (a *App) ShowMarkdownFile(filePath string) {
 // ShowMermaid renders a Mermaid diagram (called by MCP).
 func (a *App) ShowMermaid(source, title string) {
 	a.terminalArea.ShowMermaid(source, title)
+}
+
+// openHistoryPanel shows a session history popup for the given agent.
+func (a *App) openHistoryPanel(agentID uuid.UUID) {
+	ag, ok := a.manager.Agent(agentID)
+	if !ok {
+		return
+	}
+	if !a.historySvc.Supports(ag.AgentType) {
+		return
+	}
+	sessions, err := a.historySvc.ListSessions(ag.AgentType, ag.Folder)
+	if err != nil || len(sessions) == 0 {
+		return
+	}
+
+	// Build list items: "Title  (N messages  date)"
+	items := make([]string, len(sessions))
+	for i, s := range sessions {
+		date := s.Timestamp.Format("Jan 2 15:04")
+		items[i] = fmt.Sprintf("%s  (%d msgs, %s)", s.Title, s.MessageCount, date)
+	}
+
+	list := widget.NewList(
+		func() int { return len(items) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			if id < len(items) {
+				obj.(*widget.Label).SetText(items[id])
+			}
+		},
+	)
+
+	var popup *widget.PopUp
+	list.OnSelected = func(id widget.ListItemID) {
+		if id >= len(sessions) {
+			return
+		}
+		sessionID := sessions[id].SessionID
+		popup.Hide()
+		a.manager.ResumeAgent(agentID, sessionID)
+		a.pool.Restart(agentID)
+	}
+
+	popup = widget.NewModalPopUp(list, a.window.Canvas())
+	popup.Resize(fyne.NewSize(600, 400))
+	popup.Show()
 }
 
 // Run starts the Fyne event loop (blocks until window is closed).

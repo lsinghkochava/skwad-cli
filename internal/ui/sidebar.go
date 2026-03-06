@@ -32,9 +32,11 @@ type Sidebar struct {
 	store  *persistence.Store
 
 	// Callbacks — set by App before the window is shown.
-	OnAddAgent     func(a *models.Agent)
-	OnRemoveAgent  func(id uuid.UUID)
-	OnRestartAgent func(id uuid.UUID)
+	OnAddAgent       func(a *models.Agent)
+	OnRemoveAgent    func(id uuid.UUID)
+	OnRestartAgent   func(id uuid.UUID)
+	OnDuplicateAgent func(id uuid.UUID)
+	OnShowHistory    func(id uuid.UUID)
 }
 
 // NewSidebar creates the agent list sidebar.
@@ -116,6 +118,17 @@ func (s *Sidebar) showContextMenu(agentID uuid.UUID, pos fyne.Position) {
 		fyne.NewMenuItem("Restart", func() {
 			if s.OnRestartAgent != nil {
 				s.OnRestartAgent(agentID)
+			}
+		}),
+		fyne.NewMenuItem("Duplicate", func() {
+			if s.OnDuplicateAgent != nil {
+				s.OnDuplicateAgent(agentID)
+			}
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("History…", func() {
+			if s.OnShowHistory != nil {
+				s.OnShowHistory(agentID)
 			}
 		}),
 		fyne.NewMenuItemSeparator(),
