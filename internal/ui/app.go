@@ -147,8 +147,10 @@ func (a *App) buildWindow() {
 		if !ok || ag.SessionID == "" {
 			return
 		}
-		a.manager.ForkAgent(id, ag.SessionID)
-		a.pool.Restart(id)
+		forked := a.manager.ForkAgent(id, ag.SessionID)
+		if forked != nil {
+			a.pool.Spawn(forked)
+		}
 	}
 	a.sidebar.OnMoveToWorkspace = func(agentID, workspaceID uuid.UUID) {
 		a.manager.MoveAgent(agentID, workspaceID)
@@ -540,8 +542,10 @@ func (a *App) openHistoryPanel(agentID uuid.UUID) {
 			}
 			btns.Objects[1].(*widget.Button).OnTapped = func() {
 				dismiss()
-				a.manager.ForkAgent(agentID, sessionID)
-				a.pool.Restart(agentID)
+				forked := a.manager.ForkAgent(agentID, sessionID)
+				if forked != nil {
+					a.pool.Spawn(forked)
+				}
 			}
 			btns.Objects[2].(*widget.Button).OnTapped = func() {
 				_ = a.historySvc.DeleteSession(ag.AgentType, sessionID)
