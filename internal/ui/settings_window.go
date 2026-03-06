@@ -210,11 +210,18 @@ func (s *SettingsWindow) autopilotTab(settings *models.AppSettings) fyne.CanvasO
 	})
 	actionSelect.SetSelected(string(settings.Autopilot.Action))
 
+	customPromptEntry := widget.NewMultiLineEntry()
+	customPromptEntry.SetText(settings.Autopilot.CustomPrompt)
+	customPromptEntry.SetPlaceHolder("System prompt for the 'custom' action…")
+	customPromptEntry.SetMinRowsVisible(4)
+	customPromptEntry.OnChanged = func(v string) { settings.Autopilot.CustomPrompt = v }
+
 	return container.NewVBox(
 		enableCheck,
 		widget.NewLabel("Provider"), providerSelect,
 		widget.NewLabel("API key"), apiKeyEntry,
 		widget.NewLabel("Action"), actionSelect,
+		widget.NewLabel("Custom prompt (used with 'custom' action)"), customPromptEntry,
 	)
 }
 

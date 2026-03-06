@@ -32,12 +32,14 @@ type Service struct {
 	providers map[models.AgentType]Provider
 }
 
-// New creates a Service with built-in providers for claude and codex.
+// New creates a Service with built-in providers for all supported agent types.
 func New() *Service {
 	return &Service{
 		providers: map[models.AgentType]Provider{
-			models.AgentTypeClaude: &ClaudeProvider{},
-			models.AgentTypeCodex:  &CodexProvider{},
+			models.AgentTypeClaude:  &ClaudeProvider{},
+			models.AgentTypeCodex:   &CodexProvider{},
+			models.AgentTypeGemini:  &GeminiProvider{},
+			models.AgentTypeCopilot: &CopilotProvider{},
 		},
 	}
 }

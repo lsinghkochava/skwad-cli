@@ -125,8 +125,32 @@ func (s *Service) callOpenAI(prompt string) (string, error) {
 }
 
 func (s *Service) callGoogle(prompt string) (string, error) {
-	// TODO: implement Gemini API call
-	return "", fmt.Errorf("google provider not yet implemented")
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=" + s.settings.APIKey
+	body := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{"parts": []map[string]string{{"text": prompt}}},
+		},
+		"generationConfig": map[string]interface{}{"maxOutputTokens": 64},
+	}
+	return s.post(url, body, func(data []byte) (string, error) {
+		var resp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+		if err := json.Unmarshal(data, &resp); err != nil || len(resp.Candidates) == 0 {
+			return "", fmt.Errorf("parse google response: %w", err)
+		}
+		parts := resp.Candidates[0].Content.Parts
+		if len(parts) == 0 {
+			return "", fmt.Errorf("empty google response")
+		}
+		return parts[0].Text, nil
+	}, nil)
 }
 
 func (s *Service) post(url string, body interface{}, parse func([]byte) (string, error), headers map[string]string) (string, error) {

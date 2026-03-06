@@ -82,6 +82,10 @@ func main() {
 		mcpServer.StatusUpdater = &hookBridge{pool: pool, manager: agentMgr}
 	}
 
+	// showAutopilotDecision is set after skwadApp is created so the UI can display
+	// the decision sheet. We use an indirect pointer to avoid a forward reference.
+	var showAutopilotDecision func(uuid.UUID, string, func(string))
+
 	// Wire desktop notifications and autopilot for agent status changes.
 	notifSvc := notifications.NewService("Skwad", settings.NotificationsEnabled)
 	pool.OnStatusChanged = func(id uuid.UUID, status models.AgentStatus) {
@@ -119,6 +123,15 @@ func main() {
 							a.Status = models.AgentStatusInput
 						})
 					}
+				case models.AutopilotActionAsk:
+					if cls != autopilot.ClassificationCompleted && showAutopilotDecision != nil {
+						out := lastOut // capture for goroutine
+						showAutopilotDecision(id, out, func(reply string) {
+							if reply != "" {
+								pool.InjectText(id, reply+"\n")
+							}
+						})
+					}
 				case models.AutopilotActionContinue:
 					if cls == autopilot.ClassificationBinary {
 						pool.InjectText(id, "yes, continue\n")
@@ -149,6 +162,9 @@ func main() {
 	}()
 
 	skwadApp := ui.NewApp(agentMgr, coordinator, store, pool)
+
+	// Wire autopilot decision sheet to the UI layer.
+	showAutopilotDecision = skwadApp.ShowAutopilotDecision
 
 	// Wire MCP display callbacks to the UI layer.
 	if mcpServer != nil {
