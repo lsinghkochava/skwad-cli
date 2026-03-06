@@ -156,6 +156,24 @@ func (a *App) buildWindow() {
 	a.sidebar.OnRegisterAgent = func(id uuid.UUID) {
 		a.pool.ForceRegistration(id)
 	}
+	a.sidebar.OnAddShellCompanion = func(creatorID uuid.UUID) {
+		creator, ok := a.manager.Agent(creatorID)
+		if !ok {
+			return
+		}
+		companion := &models.Agent{
+			ID:          uuid.New(),
+			Name:        creator.Name + " shell",
+			Avatar:      "🐚",
+			Folder:      creator.Folder,
+			AgentType:   models.AgentTypeShell,
+			IsCompanion: true,
+			CreatedBy:   &creatorID,
+		}
+		companion.Metadata = make(map[string]string)
+		a.manager.AddAgent(companion, &creatorID)
+		a.pool.Spawn(companion)
+	}
 
 	a.settingsWindow.window = a.window
 	a.settingsWindow.OnDeployBenchAgent = func(ag *models.Agent) {

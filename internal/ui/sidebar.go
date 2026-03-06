@@ -33,16 +33,17 @@ type Sidebar struct {
 	store  *persistence.Store
 
 	// Callbacks — set by App before the window is shown.
-	OnAddAgent         func(a *models.Agent)
-	OnRemoveAgent      func(id uuid.UUID)
-	OnRestartAgent     func(id uuid.UUID)
-	OnDuplicateAgent   func(id uuid.UUID)
-	OnShowHistory      func(id uuid.UUID)
-	OnAddToBench       func(id uuid.UUID)
-	OnEditAgent        func(id uuid.UUID)
-	OnForkSession      func(id uuid.UUID)
-	OnMoveToWorkspace  func(agentID, workspaceID uuid.UUID)
-	OnRegisterAgent    func(id uuid.UUID)
+	OnAddAgent            func(a *models.Agent)
+	OnRemoveAgent         func(id uuid.UUID)
+	OnRestartAgent        func(id uuid.UUID)
+	OnDuplicateAgent      func(id uuid.UUID)
+	OnShowHistory         func(id uuid.UUID)
+	OnAddToBench          func(id uuid.UUID)
+	OnEditAgent           func(id uuid.UUID)
+	OnForkSession         func(id uuid.UUID)
+	OnMoveToWorkspace     func(agentID, workspaceID uuid.UUID)
+	OnRegisterAgent       func(id uuid.UUID)
+	OnAddShellCompanion   func(id uuid.UUID)
 }
 
 // NewSidebar creates the agent list sidebar.
@@ -135,6 +136,11 @@ func (s *Sidebar) showContextMenu(agentID uuid.UUID, pos fyne.Position) {
 		fyne.NewMenuItem("Duplicate", func() {
 			if s.OnDuplicateAgent != nil {
 				s.OnDuplicateAgent(agentID)
+			}
+		}),
+		fyne.NewMenuItem("Add Shell Companion", func() {
+			if s.OnAddShellCompanion != nil {
+				s.OnAddShellCompanion(agentID)
 			}
 		}),
 		fyne.NewMenuItem("Add to Bench", func() {
