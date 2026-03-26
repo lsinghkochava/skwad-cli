@@ -246,12 +246,20 @@ Go MCP server is API-compatible with Swift. Same plugin scripts work with both s
 
 ## Status
 
-- [ ] 1.1 — Expand Agent model + AgentInfo + AgentStatusUpdater
-- [ ] 1.2 — Add `GET /health` endpoint
-- [ ] 1.3 — Add Swift-format request/response types
-- [ ] 1.4 — Add `POST /api/v1/agent/register` endpoint
-- [ ] 1.5 — Refactor status dispatch + Add `POST /api/v1/agent/status` endpoint
-- [ ] 1.6 — Add `GET /` debug endpoint
-- [ ] 1.7 — Add `set-status` MCP tool (#13)
-- [ ] 1.8 — Update plugin scripts to Swift format
-- [ ] 1.9 — Integration tests for all new endpoints + tool
+- [x] 1.1 — Expand Agent model + AgentInfo + AgentStatusUpdater
+- [x] 1.2 — Add `GET /health` endpoint
+- [x] 1.3 — Add Swift-format request/response types
+- [x] 1.4 — Add `POST /api/v1/agent/register` endpoint
+- [x] 1.5 — Refactor status dispatch + Add `POST /api/v1/agent/status` endpoint
+- [x] 1.6 — Add `GET /` debug endpoint
+- [x] 1.7 — Add `set-status` MCP tool (#13)
+- [x] 1.8 — Update plugin scripts to Swift format
+- [x] 1.9 — Integration tests for all new endpoints + tool
+
+## Key Learnings
+
+- **Tolerant reader pattern pays off**: Accepting both `agent_id` and `agentId` via raw JSON map parsing avoids breaking either convention. Worth the slight complexity over strict struct deserialization.
+- **Shared dispatch extraction before adding new callers**: Refactoring `dispatchStatus()` out of the existing `/hook` handler *before* adding `/api/v1/agent/status` prevented logic divergence. Always refactor first, then extend.
+- **`AgentInfoResponse` avoids import cycles**: Using a local response struct in the `mcp` package instead of importing `agent.AgentInfo` directly keeps package boundaries clean in Go.
+- **Review caught real gaps**: The plan review identified `category` param (3 vs 2 params), `AgentInfo.IsRegistered` field, and resume/fork logic — all would have caused issues if missed. Plan reviews are worth the time on multi-file changes.
+- **Agent existence check matters for tool trust**: Tools that silently succeed on invalid input erode agent confidence. Always validate before reporting success.
