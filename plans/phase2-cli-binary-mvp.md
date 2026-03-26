@@ -322,14 +322,33 @@ Fully functional CLI. `skwad start --config team.json` spawns agents. `skwad sta
 
 ## Status
 
-- [ ] 2.1 — Create `internal/daemon/` package
-- [ ] 2.2 — Add Cobra + scaffold CLI binary
-- [ ] 2.3 — Team config schema + loader
-- [ ] 2.4 — `skwad start` command
-- [ ] 2.5 — Add REST endpoints for send/broadcast
-- [ ] 2.6 — `skwad status` + `skwad list` commands
-- [ ] 2.7 — `skwad send` + `skwad broadcast` commands
-- [ ] 2.8 — Output streaming + `skwad start --watch`
-- [ ] 2.9 — `skwad stop` command
-- [ ] 2.10 — `skwad run` — one-shot mode
-- [ ] 2.11 — Integration tests
+- [x] 2.1 — Create `internal/daemon/` package
+- [x] 2.2 — Add Cobra + scaffold CLI binary
+- [x] 2.3 — Team config schema + loader
+- [x] 2.4 — `skwad start` command
+- [x] 2.5 — Add REST endpoints for send/broadcast
+- [x] 2.6 — `skwad status` + `skwad list` commands
+- [x] 2.7 — `skwad send` + `skwad broadcast` commands
+- [x] 2.8 — Output streaming + `skwad start --watch`
+- [x] 2.9 — `skwad stop` command
+- [x] 2.10 — `skwad run` — one-shot mode
+- [x] 2.11 — Integration tests
+
+## Additional Changes (not in original plan)
+
+- **GUI removed** — `internal/ui/` (12 files) and `cmd/skwad/` deleted. Fyne dependency removed. CLI-only repo.
+- **Module renamed** — `github.com/Jared-Boschmann/skwad-linux` → `github.com/lsinghkochava/skwad-cli`
+
+## Known Gaps (Phase 3 TODOs)
+
+- **Exit code capture** — Pool doesn't expose real per-session exit codes. `skwad run` reports `exit_code: 0` for all agents. Need `Pool.ExitCode(agentID)` method.
+- **Per-agent prompts** — `AgentConfig.Prompt` not yet wired in `skwad run`. Global `--prompt` works.
+- **Remote `skwad watch`** — Only available as `skwad start --watch` (in-process). Standalone `watch` needs SSE streaming endpoint.
+- **Pre-existing data race** — `internal/terminal/session.go` has races in readLoop/waitLoop goroutines (not from Phase 2).
+
+## Key Learnings
+
+- **Clean package separation pays off** — Only `internal/ui/` imported Fyne. Deleting 12 files and the entire dependency tree was a single commit with zero fallout. Good architecture.
+- **Daemon abstraction was the right call over hookBridge extraction** — The Reviewer's plan review feedback to create `internal/daemon/` instead of just extracting hookBridge saved us from a too-small abstraction. The Daemon owns the full lifecycle and both binaries can use it.
+- **REST > JSON-RPC for CLI client commands** — Client commands talking to the daemon via REST (`GET /`, `POST /api/v1/agent/send`) is much simpler than wrapping JSON-RPC tool calls. The MCP JSON-RPC layer is for AI agents, not CLI tools.
+- **Parallel agent dispatch accelerates delivery** — Running Coder + Tester in parallel on independent tasks cut wall-clock time roughly in half. The key is identifying truly independent tasks (different files, no shared state).
