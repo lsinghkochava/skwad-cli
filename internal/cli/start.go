@@ -1,0 +1,195 @@
+package cli
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"sync"
+	"syscall"
+
+	"github.com/google/uuid"
+	"github.com/spf13/cobra"
+	"github.com/lsinghkochava/skwad-cli/internal/config"
+	"github.com/lsinghkochava/skwad-cli/internal/daemon"
+)
+
+var (
+	startFlagWatch   bool
+	startFlagDataDir string
+)
+
+var startCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Start the Skwad daemon with agents from a team config",
+	Long:  "Starts the MCP server, spawns agents defined in the team config, and blocks until SIGINT/SIGTERM.",
+	RunE:  runStart,
+}
+
+func init() {
+	startCmd.Flags().StringVar(&flagConfig, "config", "", "path to team config file (required)")
+	startCmd.Flags().BoolVar(&startFlagWatch, "watch", false, "stream agent output to stdout")
+	startCmd.Flags().StringVar(&startFlagDataDir, "data-dir", "", "data directory (default ~/.config/skwad/)")
+	_ = startCmd.MarkFlagRequired("config")
+	rootCmd.AddCommand(startCmd)
+}
+
+func runStart(cmd *cobra.Command, args []string) error {
+	// 1. Load team config.
+	tc, err := config.LoadTeamConfig(flagConfig)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// 2. Initialize daemon.
+	cfg := daemon.Config{
+		MCPPort:   flagPort,
+		DataDir:   startFlagDataDir,
+		PluginDir: findPluginDir(),
+	}
+	d, err := daemon.New(cfg)
+	if err != nil {
+		return fmt.Errorf("initialize daemon: %w", err)
+	}
+
+	// 3. Create agents from team config.
+	agents := createAgentsFromConfig(d, tc)
+
+	// 4. Start daemon (MCP server + pool).
+	if err := d.Start(); err != nil {
+		return fmt.Errorf("start daemon: %w", err)
+	}
+
+	// 5. Wire --watch output subscriber.
+	if startFlagWatch {
+		watcher := newWatchOutput(os.Stdout)
+		d.Pool.OutputSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
+			watcher.write(agentName, data)
+		}
+	}
+
+	// 6. Spawn all agents.
+	for _, a := range agents {
+		d.Pool.Spawn(a)
+	}
+
+	// 7. Write PID file.
+	dataDir := startFlagDataDir
+	if dataDir == "" {
+		dataDir = d.Store.Dir()
+	}
+	pidFile, err := daemon.WritePIDFile(dataDir)
+	if err != nil {
+		// Non-fatal — warn and continue.
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+
+	// 8. Print startup banner.
+	fmt.Printf("skwad started on port %d\n", flagPort)
+	fmt.Printf("Agents: %d\n", len(agents))
+	for _, a := range agents {
+		fmt.Printf("  - %s (%s)\n", a.Name, a.AgentType)
+	}
+
+	// 9. Block on signals.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+
+	// 10. Graceful shutdown.
+	fmt.Println("\nShutting down...")
+	d.Stop()
+	if pidFile != nil {
+		pidFile.Close()
+	}
+	daemon.RemovePIDFile(dataDir)
+	return nil
+}
+
+// --- watch output ---
+
+var watchColors = []string{
+	"\033[36m", // cyan
+	"\033[33m", // yellow
+	"\033[32m", // green
+	"\033[35m", // magenta
+	"\033[34m", // blue
+	"\033[91m", // bright red
+}
+
+const watchReset = "\033[0m"
+
+// watchOutput manages per-agent line-buffered output for --watch mode.
+type watchOutput struct {
+	mu      sync.Mutex
+	out     io.Writer
+	writers map[string]*lineWriter
+	nextIdx int
+}
+
+func newWatchOutput(out io.Writer) *watchOutput {
+	return &watchOutput{
+		out:     out,
+		writers: make(map[string]*lineWriter),
+	}
+}
+
+func (w *watchOutput) write(agentName string, data []byte) {
+	w.mu.Lock()
+	lw, ok := w.writers[agentName]
+	if !ok {
+		color := watchColors[w.nextIdx%len(watchColors)]
+		w.nextIdx++
+		lw = &lineWriter{
+			prefix: agentName,
+			color:  color,
+			out:    w.out,
+		}
+		w.writers[agentName] = lw
+	}
+	w.mu.Unlock()
+	lw.write(data)
+}
+
+// lineWriter buffers partial lines and emits complete lines with a colored prefix.
+type lineWriter struct {
+	mu     sync.Mutex
+	prefix string
+	color  string
+	buf    []byte
+	out    io.Writer
+}
+
+func (lw *lineWriter) write(data []byte) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+
+	lw.buf = append(lw.buf, data...)
+	for {
+		idx := bytes.IndexByte(lw.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := lw.buf[:idx]
+		lw.buf = lw.buf[idx+1:]
+		fmt.Fprintf(lw.out, "%s[%s]%s %s\n", lw.color, lw.prefix, watchReset, line)
+	}
+}
+
+// findPluginDir locates the plugin/ directory.
+func findPluginDir() string {
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "plugin")
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	wd, _ := os.Getwd()
+	dir := filepath.Join(wd, "plugin")
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		return dir
+	}
+	return ""
+}
