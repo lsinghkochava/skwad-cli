@@ -30,16 +30,15 @@ var startCmd = &cobra.Command{
 }
 
 func init() {
-	startCmd.Flags().StringVar(&flagConfig, "config", "", "path to team config file (required)")
 	startCmd.Flags().BoolVar(&startFlagWatch, "watch", false, "stream agent output to stdout")
 	startCmd.Flags().StringVar(&startFlagDataDir, "data-dir", "", "data directory (default ~/.config/skwad/)")
-	_ = startCmd.MarkFlagRequired("config")
 	rootCmd.AddCommand(startCmd)
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	// 1. Load team config.
-	tc, err := config.LoadTeamConfig(flagConfig)
+	// 1. Load team config (from file or template).
+	vars := config.ParseSetFlags(flagSet)
+	tc, err := config.LoadConfigOrTemplate(flagConfig, flagTeam, vars)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

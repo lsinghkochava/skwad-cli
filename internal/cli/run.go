@@ -30,18 +30,17 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().StringVar(&flagConfig, "config", "", "path to team config file (required)")
 	runCmd.Flags().StringVar(&runFlagPrompt, "prompt", "", "initial prompt to send to all agents")
 	runCmd.Flags().StringVar(&runFlagPromptFile, "prompt-file", "", "file containing initial prompt")
 	runCmd.Flags().StringVar(&runFlagTimeout, "timeout", "10m", "maximum time to wait for agents")
 	runCmd.Flags().StringVar(&runFlagOutputFormat, "output-format", "markdown", "output format: markdown or json")
-	_ = runCmd.MarkFlagRequired("config")
 	rootCmd.AddCommand(runCmd)
 }
 
 func executeRun(cmd *cobra.Command, args []string) error {
-	// 1. Load team config.
-	tc, err := config.LoadTeamConfig(flagConfig)
+	// 1. Load team config (from file or template).
+	vars := config.ParseSetFlags(flagSet)
+	tc, err := config.LoadConfigOrTemplate(flagConfig, flagTeam, vars)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -137,14 +136,18 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// 11. Send prompt to each agent.
-	if prompt != "" {
-		// Brief delay to let agents initialize.
-		time.Sleep(2 * time.Second)
-		for _, a := range agents {
-			d.Pool.QueueText(a.ID, prompt+"\n")
+	// 11. Send prompt to each agent (per-agent > --prompt > team prompt).
+	time.Sleep(2 * time.Second)
+	promptsSent := 0
+	for i, a := range agents {
+		agentPrompt := resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
+		if agentPrompt != "" {
+			d.Pool.QueueText(a.ID, agentPrompt+"\n")
+			promptsSent++
 		}
-		fmt.Fprintf(os.Stderr, "Prompt sent to %d agents\n", len(agents))
+	}
+	if promptsSent > 0 {
+		fmt.Fprintf(os.Stderr, "Prompt sent to %d agents\n", promptsSent)
 	}
 
 	// 12. Wait loop: check every 2s if all sessions have exited.
@@ -206,6 +209,18 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	exitMu.Unlock()
 
 	return nil
+}
+
+// resolveAgentPrompt returns the prompt for a specific agent, following priority:
+// per-agent config > --prompt/--prompt-file flag > team-level prompt.
+func resolveAgentPrompt(ac config.AgentConfig, flagPrompt, teamPrompt string) string {
+	if ac.Prompt != "" {
+		return ac.Prompt
+	}
+	if flagPrompt != "" {
+		return flagPrompt
+	}
+	return teamPrompt
 }
 
 func resolvePrompt(tc *config.TeamConfig) (string, error) {
