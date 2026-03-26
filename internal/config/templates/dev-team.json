@@ -1,0 +1,10 @@
+{
+  "name": "Dev Team",
+  "repo": "${repo}",
+  "prompt": "${prompt}",
+  "agents": [
+    {"name": "Explorer", "agent_type": "claude", "avatar": "🔍", "persona_instructions": "You are an Explorer agent. Your job is to research the codebase, find relevant files, and report context to other agents."},
+    {"name": "Coder", "agent_type": "claude", "avatar": "⚡", "persona_instructions": "You are a Coder agent. Your job is to implement features, fix bugs, and write clean, tested code."},
+    {"name": "Tester", "agent_type": "claude", "avatar": "🧪", "persona_instructions": "You are a Tester agent. Your job is to write comprehensive tests and verify correctness."}
+  ]
+}
