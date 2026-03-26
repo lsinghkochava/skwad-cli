@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -85,24 +86,31 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	pidFile, err := daemon.WritePIDFile(dataDir)
 	if err != nil {
-		// Non-fatal — warn and continue.
-		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		slog.Warn("failed to write PID file", "error", err)
 	}
 
 	// 8. Print startup banner.
+	slog.Info("daemon started", "port", flagPort, "agents", len(agents))
 	fmt.Printf("skwad started on port %d\n", flagPort)
 	fmt.Printf("Agents: %d\n", len(agents))
 	for _, a := range agents {
+		slog.Debug("spawning agent", "name", a.Name, "type", a.AgentType)
 		fmt.Printf("  - %s (%s)\n", a.Name, a.AgentType)
 	}
 
-	// 9. Block on signals.
+	// 9. Block on signals — double signal = force kill.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	// 10. Graceful shutdown.
+	// 10. Graceful shutdown — second signal forces exit.
+	slog.Info("shutting down...")
 	fmt.Println("\nShutting down...")
+	go func() {
+		<-sig
+		slog.Warn("force killing...")
+		os.Exit(1)
+	}()
 	d.Stop()
 	if pidFile != nil {
 		pidFile.Close()

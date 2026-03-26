@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"syscall"
 	"time"
@@ -57,6 +58,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// 4. Send SIGTERM.
+	slog.Debug("sending SIGTERM", "pid", pid)
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		return fmt.Errorf("send SIGTERM: %w", err)
 	}
@@ -66,7 +68,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 	for time.Now().Before(deadline) {
 		time.Sleep(250 * time.Millisecond)
 		if err := proc.Signal(syscall.Signal(0)); err != nil {
-			// Process has exited.
+			slog.Info("daemon stopped", "pid", pid)
 			fmt.Println("Daemon stopped")
 			daemon.RemovePIDFile(dataDir)
 			return nil
@@ -74,6 +76,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// 6. Force kill if still alive.
+	slog.Warn("force killing daemon", "pid", pid)
 	_ = proc.Signal(syscall.SIGKILL)
 	fmt.Println("Daemon force killed")
 	daemon.RemovePIDFile(dataDir)
