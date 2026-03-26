@@ -1,0 +1,48 @@
+{
+  "name": "Code Reviews",
+  "repo": "/Users/lsingh/Documents/projects/docs",
+  "agents": [
+    {
+      "name": "Performance Analyst",
+      "agent_type": "claude",
+      "persona": "Performance Analyst",
+      "prompt": ""
+    },
+    {
+      "name": "Consistency Checker",
+      "agent_type": "claude",
+      "persona": "Consistency Checker",
+      "prompt": ""
+    },
+    {
+      "name": "Bug Hunter",
+      "agent_type": "claude",
+      "persona": "Bug Hunter",
+      "prompt": ""
+    },
+    {
+      "name": "Architecture Reviewer",
+      "agent_type": "claude",
+      "persona": "Architecture Reviewer",
+      "prompt": ""
+    },
+    {
+      "name": "Security Sentinel",
+      "agent_type": "claude",
+      "persona": "Security Sentinel",
+      "prompt": ""
+    },
+    {
+      "name": "Test Analyst",
+      "agent_type": "claude",
+      "persona": "Test Analyst",
+      "prompt": ""
+    },
+    {
+      "name": "Review Coordinator",
+      "agent_type": "claude",
+      "persona": "Review Coordinator",
+      "prompt": ""
+    }
+  ]
+}
