@@ -222,10 +222,17 @@ Persona-aware agents. macOS workspace export import. Built-in review-team templa
 
 ## Status
 
-- [ ] 3.1 — Wire persona injection when spawning
-- [ ] 3.2 — Expand team config schema
-- [ ] 3.3 — `skwad convert` command
-- [ ] 3.4 — Built-in templates with variable substitution
-- [ ] 3.5 — Per-agent prompts in `skwad run`
-- [ ] 3.6 — `skwad report` command
-- [ ] 3.7 — Tests
+- [x] 3.1 — Wire persona injection when spawning
+- [x] 3.2 — Expand team config schema
+- [x] 3.3 — `skwad convert` command
+- [x] 3.4 — Built-in templates with variable substitution
+- [x] 3.5 — Per-agent prompts in `skwad run`
+- [x] 3.6 — `skwad report` command
+- [x] 3.7 — Tests
+
+## Key Learnings
+
+- **Transient personas should be in-memory only** — persisting session-scoped personas to disk causes accumulation across runs. `Manager.RegisterTransientPersona()` keeps them session-scoped.
+- **macOS export format auto-detection via `LoadOrConvert`** — separate functions with clear contracts (`LoadTeamConfig`, `ConvertMacOSExport`, `LoadOrConvert`) are cleaner than auto-detection inside a single function.
+- **`${var}` over `{{var}}` for template substitution** — avoids Go template syntax confusion. Simple `strings.ReplaceAll` is sufficient.
+- **Embedding real user personas in templates** — the review-team template ships with the actual persona instructions from the user's macOS export, making it immediately useful out of the box.
