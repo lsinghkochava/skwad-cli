@@ -12,9 +12,9 @@ func TestSession_SpawnAndExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
+	s.Start()
 	defer s.Kill()
 
-	// Wait for natural exit.
 	deadline := time.After(3 * time.Second)
 	for {
 		select {
@@ -45,6 +45,7 @@ func TestSession_OnExitCallback(t *testing.T) {
 		called = true
 		mu.Unlock()
 	}
+	s.Start()
 	defer s.Kill()
 
 	deadline := time.After(3 * time.Second)
@@ -81,6 +82,7 @@ func TestSession_OutputCallback(t *testing.T) {
 		out.Write(data)
 		mu.Unlock()
 	}
+	s.Start()
 	defer s.Kill()
 
 	deadline := time.After(3 * time.Second)
@@ -105,7 +107,6 @@ func TestSession_InjectText(t *testing.T) {
 		out strings.Builder
 	)
 
-	// Start a shell that just reads input and echoes it.
 	s, err := NewSession("cat", nil)
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
@@ -115,6 +116,7 @@ func TestSession_InjectText(t *testing.T) {
 		out.Write(data)
 		mu.Unlock()
 	}
+	s.Start()
 	defer s.Kill()
 
 	time.Sleep(100 * time.Millisecond)
@@ -141,6 +143,7 @@ func TestSession_Kill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
+	s.Start()
 
 	if !s.IsRunning() {
 		t.Fatal("process should be running")
@@ -158,8 +161,34 @@ func TestSession_Resize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
+	s.Start()
 	defer s.Kill()
 
 	// Should not panic.
 	s.Resize(120, 40)
+}
+
+func TestSession_ExitCode(t *testing.T) {
+	s, err := NewSession("exit 7", nil)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	s.Start()
+	defer s.Kill()
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("process did not exit within 3s")
+		case <-time.After(50 * time.Millisecond):
+			if !s.IsRunning() {
+				code := s.ExitCode()
+				if code != 7 {
+					t.Errorf("exit code: got %d, want 7", code)
+				}
+				return
+			}
+		}
+	}
 }

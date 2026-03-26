@@ -201,6 +201,9 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 		})
 	}
 
+	// Start session goroutines AFTER all callbacks are set.
+	sess.Start()
+
 	e := &entry{session: sess, activity: ac, agentID: agentID}
 	p.entries[agentID] = e
 
@@ -363,6 +366,17 @@ func (p *Pool) IsRunning(agentID uuid.UUID) bool {
 	defer p.mu.RUnlock()
 	e, ok := p.entries[agentID]
 	return ok && e.session.IsRunning()
+}
+
+// ExitCode returns the exit code for an agent's session.
+// Returns -1 if the agent is not found or the session hasn't exited.
+func (p *Pool) ExitCode(agentID uuid.UUID) int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if e, ok := p.entries[agentID]; ok {
+		return e.session.ExitCode()
+	}
+	return -1
 }
 
 // StopAll kills every session in the pool.

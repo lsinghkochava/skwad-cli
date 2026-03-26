@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unicode/utf8"
 
@@ -15,17 +16,20 @@ import (
 // Session manages a single PTY process (one per agent).
 // It is safe for concurrent use.
 type Session struct {
-	mu      sync.Mutex
-	ptmx    *os.File // PTY master
-	cmd     *exec.Cmd
-	stopped bool
+	mu       sync.Mutex
+	ptmx     *os.File  // PTY master — guarded by mu for write/resize/close
+	cmd      *exec.Cmd // set once in constructor, read-only after
+	stopped  atomic.Bool
+	exitCode atomic.Int32 // exit code from the process (-1 = unknown)
 
+	// Callbacks — set once before goroutines start, never modified after.
 	OnOutput      func(data []byte)
 	OnTitleChange func(title string)
 	OnExit        func(exitCode int)
 }
 
-// NewSession spawns a shell command in a PTY and returns the running session.
+// NewSession spawns a shell command in a PTY and returns the session.
+// Callbacks (OnOutput, OnTitleChange, OnExit) must be set before calling Start().
 // command is the full shell command string (passed to $SHELL -c).
 // env is extra environment variables merged with the current environment.
 func NewSession(command string, env []string) (*Session, error) {
@@ -46,18 +50,22 @@ func NewSession(command string, env []string) (*Session, error) {
 		ptmx: ptmx,
 		cmd:  cmd,
 	}
-
-	go s.readLoop()
-	go s.waitLoop()
+	s.exitCode.Store(-1)
 
 	return s, nil
+}
+
+// Start begins the read and wait goroutines. Must be called after setting callbacks.
+func (s *Session) Start() {
+	go s.readLoop()
+	go s.waitLoop()
 }
 
 // SendText writes text to the PTY input without a newline.
 func (s *Session) SendText(text string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stopped {
+	if s.stopped.Load() {
 		return
 	}
 	_, _ = io.WriteString(s.ptmx, text)
@@ -78,7 +86,7 @@ func (s *Session) InjectText(text string) {
 func (s *Session) Resize(cols, rows uint16) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stopped || s.ptmx == nil {
+	if s.stopped.Load() || s.ptmx == nil {
 		return
 	}
 	_ = pty.Setsize(s.ptmx, &pty.Winsize{Cols: cols, Rows: rows})
@@ -88,7 +96,9 @@ func (s *Session) Resize(cols, rows uint16) {
 func (s *Session) Kill() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.stopped = true
+	if s.stopped.Swap(true) {
+		return // already stopped
+	}
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Signal(syscall.SIGTERM)
 	}
@@ -100,20 +110,35 @@ func (s *Session) Kill() {
 
 // IsRunning reports whether the underlying process is still alive.
 func (s *Session) IsRunning() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return !s.stopped
+	return !s.stopped.Load()
+}
+
+// ExitCode returns the exit code of the process.
+// Returns -1 if the process has not exited yet.
+func (s *Session) ExitCode() int {
+	return int(s.exitCode.Load())
 }
 
 func (s *Session) readLoop() {
 	buf := make([]byte, 4096)
 	for {
-		n, err := s.ptmx.Read(buf)
+		// Read from the PTY master fd. This is safe to call concurrently with
+		// Kill() — when Kill() closes ptmx, this read returns an error.
+		// We hold a local reference via the struct field (never nil during read
+		// because readLoop starts before any Kill can occur, and the read
+		// itself will error out when the fd is closed).
+		s.mu.Lock()
+		f := s.ptmx
+		s.mu.Unlock()
+		if f == nil {
+			return
+		}
+
+		n, err := f.Read(buf)
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
 
-			// Check for OSC title sequence before calling OnOutput.
 			if title, ok := extractTitle(chunk); ok && s.OnTitleChange != nil {
 				s.OnTitleChange(title)
 			}
@@ -128,17 +153,16 @@ func (s *Session) readLoop() {
 }
 
 func (s *Session) waitLoop() {
-	code := 0
+	var code int
 	if err := s.cmd.Wait(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				code = status.ExitStatus()
-			}
+			code = exitErr.ExitCode()
+		} else {
+			code = -1
 		}
 	}
-	s.mu.Lock()
-	s.stopped = true
-	s.mu.Unlock()
+	s.exitCode.Store(int32(code))
+	s.stopped.Store(true)
 
 	if s.OnExit != nil {
 		s.OnExit(code)
@@ -164,7 +188,6 @@ func extractTitle(data []byte) (string, bool) {
 		}
 		end := bytes.IndexByte(data[i+4:], bel)
 		if end < 0 {
-			// Also accept ST (ESC \) terminator.
 			end = bytes.Index(data[i+4:], []byte{esc, '\\'})
 		}
 		if end < 0 {
