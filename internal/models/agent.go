@@ -58,6 +58,8 @@ type Agent struct {
 
 	// Runtime state — not persisted.
 	Status          AgentStatus      `json:"-"`
+	StatusText      string           `json:"-"`
+	StatusCategory  string           `json:"-"`
 	IsRegistered    bool             `json:"-"`
 	SessionID       string           `json:"-"`
 	ResumeSessionID string           `json:"-"`

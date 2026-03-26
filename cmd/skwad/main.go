@@ -46,6 +46,12 @@ func (h *hookBridge) SetMetadata(id uuid.UUID, key, value string) {
 func (h *hookBridge) SetSessionID(id uuid.UUID, sessionID string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.SessionID = sessionID })
 }
+func (h *hookBridge) SetStatusText(id uuid.UUID, status, category string) {
+	h.manager.UpdateAgent(id, func(a *models.Agent) {
+		a.StatusText = status
+		a.StatusCategory = category
+	})
+}
 
 func main() {
 	store, err := persistence.NewStore()

@@ -45,6 +45,7 @@ type AgentStatusUpdater interface {
 	SetError(agentID uuid.UUID)
 	SetMetadata(agentID uuid.UUID, key, value string)
 	SetSessionID(agentID uuid.UUID, sessionID string)
+	SetStatusText(agentID uuid.UUID, status, category string)
 }
 
 // hookHandler processes POST /hook requests from claude/codex plugin scripts.
@@ -83,18 +84,21 @@ func (h *hookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hookHandler) dispatch(agentID uuid.UUID, event HookEvent) {
-	// Store metadata regardless of event type.
-	if event.SessionID != "" {
-		h.updater.SetSessionID(agentID, event.SessionID)
-	}
+	// Build metadata from HookEvent fields.
+	metadata := make(map[string]string)
 	if event.CWD != "" {
-		h.updater.SetMetadata(agentID, "cwd", event.CWD)
+		metadata["cwd"] = event.CWD
 	}
 	if event.Model != "" {
-		h.updater.SetMetadata(agentID, "model", event.Model)
+		metadata["model"] = event.Model
 	}
 	if event.TranscriptPath != "" {
-		h.updater.SetMetadata(agentID, "transcript_path", event.TranscriptPath)
+		metadata["transcript_path"] = event.TranscriptPath
+	}
+
+	// Store session ID.
+	if event.SessionID != "" {
+		h.updater.SetSessionID(agentID, event.SessionID)
 	}
 
 	// Normalise event type (Claude uses hook_event_name field).
@@ -103,14 +107,39 @@ func (h *hookHandler) dispatch(agentID uuid.UUID, event HookEvent) {
 		eventType = HookEventType(event.HookEventName)
 	}
 
+	// Map event type to status string.
+	var status string
 	switch eventType {
 	case HookEventPreToolUse, HookEventStart, HookEventCodexStart:
-		h.updater.SetRunning(agentID)
+		status = "running"
 	case HookEventPostToolUse, HookEventStop, HookEventCodexStop:
-		h.updater.SetIdle(agentID)
+		status = "idle"
 	case HookEventNotify, HookEventCodexAsk:
-		h.updater.SetBlocked(agentID)
+		status = "input"
 	case HookEventCodexError:
+		status = "error"
+	}
+
+	h.dispatchStatus(agentID, status, metadata)
+}
+
+// dispatchStatus is the shared dispatch function used by both /hook and /api/v1/agent/status.
+// It applies metadata and maps a status string to the appropriate AgentStatusUpdater calls.
+func (h *hookHandler) dispatchStatus(agentID uuid.UUID, status string, metadata map[string]string) {
+	// Apply metadata.
+	for k, v := range metadata {
+		h.updater.SetMetadata(agentID, k, v)
+	}
+
+	// Apply status.
+	switch status {
+	case "running":
+		h.updater.SetRunning(agentID)
+	case "idle":
+		h.updater.SetIdle(agentID)
+	case "input":
+		h.updater.SetBlocked(agentID)
+	case "error":
 		h.updater.SetError(agentID)
 	}
 }

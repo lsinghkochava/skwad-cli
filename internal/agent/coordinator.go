@@ -22,10 +22,11 @@ type Message struct {
 
 // AgentInfo is the public view of an agent exposed to MCP callers.
 type AgentInfo struct {
-	ID     uuid.UUID
-	Name   string
-	Folder string
-	Status models.AgentStatus
+	ID           uuid.UUID
+	Name         string
+	Folder       string
+	Status       models.AgentStatus
+	IsRegistered bool
 }
 
 // Coordinator is a goroutine-safe message queue and agent registry for MCP.
@@ -66,7 +67,7 @@ func (c *Coordinator) RegisterAgent(id uuid.UUID, name, folder string, sessionID
 		ra = &registeredAgent{}
 		c.registered[id] = ra
 	}
-	ra.info = AgentInfo{ID: id, Name: name, Folder: folder}
+	ra.info = AgentInfo{ID: id, Name: name, Folder: folder, IsRegistered: true}
 
 	// Update session ID on the Manager side.
 	c.manager.UpdateAgent(id, func(a *models.Agent) {
@@ -85,6 +86,16 @@ func (c *Coordinator) RegisterAgent(id uuid.UUID, name, folder string, sessionID
 	return c.memberList(), unread, nil
 }
 
+// Agent returns an agent by ID from the underlying manager.
+func (c *Coordinator) Agent(id uuid.UUID) (*models.Agent, bool) {
+	return c.manager.Agent(id)
+}
+
+// AllAgents returns every agent from the underlying manager.
+func (c *Coordinator) AllAgents() []*models.Agent {
+	return c.manager.AllAgents()
+}
+
 // ListAgents returns all currently registered agents.
 func (c *Coordinator) ListAgents() []AgentInfo {
 	c.mu.Lock()
@@ -98,6 +109,7 @@ func (c *Coordinator) memberList() []AgentInfo {
 		// Refresh status from Manager.
 		if a, ok := c.manager.Agent(ra.info.ID); ok {
 			ra.info.Status = a.Status
+			ra.info.IsRegistered = a.IsRegistered
 		}
 		list = append(list, ra.info)
 	}
@@ -208,6 +220,14 @@ func (c *Coordinator) NotifyIdleAgent(agentID uuid.UUID) {
 			return
 		}
 	}
+}
+
+// SetStatusText sets a human-readable status text and category on an agent.
+func (c *Coordinator) SetStatusText(agentID uuid.UUID, status, category string) {
+	c.manager.UpdateAgent(agentID, func(a *models.Agent) {
+		a.StatusText = status
+		a.StatusCategory = category
+	})
 }
 
 // UnregisterAgent removes an agent from the registry (e.g., on close).

@@ -46,6 +46,7 @@ const (
 	ToolCreateWorktree = "create-worktree"
 	ToolDisplayMD      = "display-markdown"
 	ToolViewMermaid    = "view-mermaid"
+	ToolSetStatus      = "set-status"
 )
 
 // ToolCallParams is the params block for a tools/call request.
@@ -71,4 +72,42 @@ func textResult(text string) ToolResult {
 
 func errorResult(msg string) ToolResult {
 	return ToolResult{Content: []ContentBlock{{Type: "text", Text: "Error: " + msg}}}
+}
+
+// --- Swift-compatible HTTP API types ---
+
+// AgentInfoResponse is the JSON representation of an agent in API responses.
+// It mirrors agent.AgentInfo but lives in the mcp package to avoid import cycles.
+type AgentInfoResponse struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Folder       string `json:"folder"`
+	Status       string `json:"status"`
+	IsRegistered bool   `json:"isRegistered"`
+}
+
+// RegisterHookRequest is the payload for POST /api/v1/agent/register.
+type RegisterHookRequest struct {
+	AgentID   string                 `json:"agent_id"`
+	Agent     string                 `json:"agent"`
+	Source    string                 `json:"source"`
+	SessionID string                `json:"session_id"`
+	Payload   map[string]interface{} `json:"payload"`
+}
+
+// RegisterHookResponse is the response for POST /api/v1/agent/register.
+type RegisterHookResponse struct {
+	Success            bool                `json:"success"`
+	Message            string              `json:"message"`
+	UnreadMessageCount int                 `json:"unreadMessageCount"`
+	SkwadMembers       []AgentInfoResponse `json:"skwadMembers"`
+}
+
+// StatusHookRequest is the payload for POST /api/v1/agent/status.
+type StatusHookRequest struct {
+	AgentID string                 `json:"agent_id"`
+	Agent   string                 `json:"agent"`
+	Hook    string                 `json:"hook"`
+	Status  string                 `json:"status"`
+	Payload map[string]interface{} `json:"payload"`
 }
