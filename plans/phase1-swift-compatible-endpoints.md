@@ -22,6 +22,7 @@ The Swift MCP server (Hummingbird, port 8766) has 6 HTTP endpoints and 13 MCP to
 
 ### Design Decisions
 
+- **skwad-cli is strictly CLI-only — no GUI, no Fyne dependency.** The CLI binary (`cmd/skwad-cli/`) shares `internal/` packages but excludes `internal/ui/` via build tags. No OpenGL/GLFW/Fyne transitive deps. Must run on headless servers and CI runners.
 - **Keep existing `/hook` endpoint** alongside new `/api/v1/*` routes (backward compat)
 - **Accept both `agent_id` (snake) and `agentId` (camel)** in new endpoints (tolerant reader)
 - **Extract shared `dispatchStatus()` function** — both `/hook` and `/api/v1/agent/status` call into it
