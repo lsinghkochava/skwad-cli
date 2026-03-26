@@ -1,6 +1,7 @@
 # Compiled binaries
 bin/
 /skwad
+/skwad-cli
 *.o
 *.a
 *.so
