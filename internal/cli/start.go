@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
+	"github.com/lsinghkochava/skwad-cli/internal/terminal"
 )
 
 var (
@@ -66,7 +67,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if startFlagWatch {
 		watcher := newWatchOutput(os.Stdout)
 		d.Pool.OutputSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
-			watcher.write(agentName, data)
+			cleaned := terminal.CleanOutput(data)
+			if len(cleaned) > 0 {
+				watcher.write(agentName, cleaned)
+			}
 		}
 	}
 

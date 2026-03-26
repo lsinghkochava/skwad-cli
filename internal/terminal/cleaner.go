@@ -39,3 +39,32 @@ func CleanTitle(title string) string {
 
 	return title
 }
+
+// CleanOutput strips ANSI escape sequences, carriage-return overwrites, and
+// non-printable control characters from raw terminal output. The result is
+// clean, loggable text suitable for display in --watch mode.
+func CleanOutput(data []byte) []byte {
+	s := StripANSI(string(data))
+
+	// Handle \r without \n (TUI line overwrites): keep only the last
+	// segment after each \r that isn't followed by \n.
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		if idx := strings.LastIndex(line, "\r"); idx >= 0 {
+			line = line[idx+1:]
+		}
+		lines = append(lines, line)
+	}
+	s = strings.Join(lines, "\n")
+
+	// Strip remaining non-printable control chars (except \n and \t).
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\n' || r == '\t' || r >= 32 {
+			b.WriteRune(r)
+		}
+	}
+
+	return []byte(b.String())
+}
