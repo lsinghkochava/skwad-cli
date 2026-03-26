@@ -227,3 +227,138 @@ func TestLoadTeamConfig_InvalidJSON(t *testing.T) {
 		t.Errorf("expected parse error, got %v", err)
 	}
 }
+
+func TestValidate_PersonaInstructions(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Test",
+		"repo": "`+repo+`",
+		"agents": [{
+			"name": "Bot",
+			"agent_type": "claude",
+			"persona_instructions": "You are an expert code reviewer."
+		}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Agents[0].PersonaInstructions != "You are an expert code reviewer." {
+		t.Errorf("expected persona_instructions, got %q", tc.Agents[0].PersonaInstructions)
+	}
+}
+
+func TestValidate_PersonaID_Valid(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name: "Test",
+		Repo: repo,
+		Agents: []AgentConfig{{
+			Name:      "Bot",
+			AgentType: "claude",
+			PersonaID: "a1000001-0000-0000-0000-000000000001",
+		}},
+	}
+	if err := tc.Validate(); err != nil {
+		t.Errorf("expected valid, got error: %v", err)
+	}
+}
+
+func TestValidate_PersonaID_Invalid(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name: "Test",
+		Repo: repo,
+		Agents: []AgentConfig{{
+			Name:      "Bot",
+			AgentType: "claude",
+			PersonaID: "not-a-uuid",
+		}},
+	}
+	err := tc.Validate()
+	if err == nil || !strings.Contains(err.Error(), "invalid UUID") {
+		t.Errorf("expected 'invalid UUID' error, got %v", err)
+	}
+}
+
+func TestValidate_InlinePersonas_Valid(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name: "Test",
+		Repo: repo,
+		Agents: []AgentConfig{{Name: "Bot", AgentType: "claude"}},
+		Personas: []PersonaConfig{
+			{Name: "Reviewer", Instructions: "Review code carefully."},
+			{Name: "Coder", Instructions: "Write clean code."},
+		},
+	}
+	if err := tc.Validate(); err != nil {
+		t.Errorf("expected valid, got error: %v", err)
+	}
+}
+
+func TestValidate_InlinePersonas_DuplicateNames(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name: "Test",
+		Repo: repo,
+		Agents: []AgentConfig{{Name: "Bot", AgentType: "claude"}},
+		Personas: []PersonaConfig{
+			{Name: "Reviewer", Instructions: "Review code."},
+			{Name: "Reviewer", Instructions: "Different instructions."},
+		},
+	}
+	err := tc.Validate()
+	if err == nil || !strings.Contains(err.Error(), "duplicate persona name") {
+		t.Errorf("expected 'duplicate persona name' error, got %v", err)
+	}
+}
+
+func TestValidate_InlinePersonas_MissingInstructions(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name: "Test",
+		Repo: repo,
+		Agents: []AgentConfig{{Name: "Bot", AgentType: "claude"}},
+		Personas: []PersonaConfig{
+			{Name: "Reviewer"},
+		},
+	}
+	err := tc.Validate()
+	if err == nil || !strings.Contains(err.Error(), "instructions is required") {
+		t.Errorf("expected 'instructions is required' error, got %v", err)
+	}
+}
+
+func TestLoadTeamConfig_TeamPrompt(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Test",
+		"repo": "`+repo+`",
+		"prompt": "Focus on security.",
+		"agents": [{"name": "Bot", "agent_type": "claude"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Prompt != "Focus on security." {
+		t.Errorf("expected team prompt, got %q", tc.Prompt)
+	}
+}
+
+func TestValidate_AvatarField(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Test",
+		"repo": "`+repo+`",
+		"agents": [{"name": "Bot", "agent_type": "claude", "avatar": "🦊"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Agents[0].Avatar != "🦊" {
+		t.Errorf("expected avatar '🦊', got %q", tc.Agents[0].Avatar)
+	}
+}

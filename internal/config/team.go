@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 // validAgentTypes are the agent types accepted in team config files.
@@ -19,19 +21,31 @@ var validAgentTypes = map[string]bool{
 
 // TeamConfig defines a team of agents to spawn together.
 type TeamConfig struct {
-	Name   string        `json:"name"`
-	Repo   string        `json:"repo"`
-	Agents []AgentConfig `json:"agents"`
+	Name     string          `json:"name"`
+	Repo     string          `json:"repo"`
+	Prompt   string          `json:"prompt,omitempty"`
+	Agents   []AgentConfig   `json:"agents"`
+	Personas []PersonaConfig `json:"personas,omitempty"`
+}
+
+// PersonaConfig defines an inline persona within a team config.
+type PersonaConfig struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Instructions string `json:"instructions"`
 }
 
 // AgentConfig defines a single agent within a team.
 type AgentConfig struct {
-	Name         string   `json:"name"`
-	AgentType    string   `json:"agent_type"`
-	Persona      string   `json:"persona,omitempty"`
-	Command      string   `json:"command,omitempty"`
-	AllowedTools []string `json:"allowed_tools,omitempty"`
-	Prompt       string   `json:"prompt,omitempty"`
+	Name                string   `json:"name"`
+	AgentType           string   `json:"agent_type"`
+	Persona             string   `json:"persona,omitempty"`
+	PersonaInstructions string   `json:"persona_instructions,omitempty"`
+	PersonaID           string   `json:"persona_id,omitempty"`
+	Avatar              string   `json:"avatar,omitempty"`
+	Command             string   `json:"command,omitempty"`
+	AllowedTools        []string `json:"allowed_tools,omitempty"`
+	Prompt              string   `json:"prompt,omitempty"`
 }
 
 // LoadTeamConfig reads a JSON file and returns a validated TeamConfig.
@@ -82,6 +96,27 @@ func (tc *TeamConfig) Validate() error {
 			return fmt.Errorf("duplicate agent name: '%s'", a.Name)
 		}
 		seen[a.Name] = true
+
+		if a.PersonaID != "" {
+			if _, err := uuid.Parse(a.PersonaID); err != nil {
+				return fmt.Errorf("agent[%d].persona_id: invalid UUID '%s'", i, a.PersonaID)
+			}
+		}
+	}
+
+	// Validate inline personas.
+	seenPersona := make(map[string]bool)
+	for i, p := range tc.Personas {
+		if p.Name == "" {
+			return fmt.Errorf("personas[%d].name is required", i)
+		}
+		if p.Instructions == "" {
+			return fmt.Errorf("personas[%d].instructions is required", i)
+		}
+		if seenPersona[p.Name] {
+			return fmt.Errorf("duplicate persona name: '%s'", p.Name)
+		}
+		seenPersona[p.Name] = true
 	}
 
 	return nil

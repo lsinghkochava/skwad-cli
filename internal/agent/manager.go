@@ -20,6 +20,10 @@ type Manager struct {
 	activeWS   uuid.UUID
 	store      *persistence.Store
 
+	// transientPersonas holds in-memory personas that are NOT persisted to disk.
+	// Used by CLI mode for inline persona_instructions from team configs.
+	transientPersonas map[uuid.UUID]models.Persona
+
 	// Callbacks — set by UI layer. Called OUTSIDE the manager lock.
 	OnAgentChanged     func(id uuid.UUID)
 	OnWorkspaceChanged func()
@@ -454,8 +458,29 @@ func (m *Manager) ActiveSettings() *models.AppSettings {
 	return &s
 }
 
+// RegisterTransientPersona stores a persona in-memory only (not persisted to disk).
+// Used by CLI mode for inline persona instructions from team configs.
+func (m *Manager) RegisterTransientPersona(p models.Persona) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.transientPersonas == nil {
+		m.transientPersonas = make(map[uuid.UUID]models.Persona)
+	}
+	m.transientPersonas[p.ID] = p
+}
+
 // Persona returns the persona with the given ID, or nil if not found.
+// Checks transient (in-memory) personas first, then the persistence store.
 func (m *Manager) Persona(id uuid.UUID) *models.Persona {
+	m.mu.RLock()
+	if m.transientPersonas != nil {
+		if p, ok := m.transientPersonas[id]; ok {
+			m.mu.RUnlock()
+			return &p
+		}
+	}
+	m.mu.RUnlock()
+
 	personas, _ := m.store.LoadPersonas()
 	for i := range personas {
 		if personas[i].ID == id && personas[i].State != models.PersonaStateDeleted {
