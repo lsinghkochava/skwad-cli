@@ -13,8 +13,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
-	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
+	"github.com/lsinghkochava/skwad-cli/internal/agent"
+	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 )
 
 // Server is the in-process MCP HTTP server (JSON-RPC 2.0).
@@ -69,6 +69,8 @@ func (s *Server) Start() error {
 	mux.Handle("/hook", s.hookHandler)
 	mux.HandleFunc("/api/v1/agent/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/agent/status", s.handleStatus)
+	mux.HandleFunc("/api/v1/agent/send", s.handleSend)
+	mux.HandleFunc("/api/v1/agent/broadcast", s.handleBroadcast)
 	mux.HandleFunc("/", s.handleDebug)
 
 	s.httpServer = &http.Server{
@@ -359,6 +361,109 @@ func extractMetadata(raw map[string]interface{}) map[string]string {
 		}
 	}
 	return meta
+}
+
+// resolveAgentID finds a registered agent by UUID string or name and returns its UUID.
+func (s *Server) resolveAgentID(nameOrID string) (uuid.UUID, bool) {
+	// Try parsing as UUID first.
+	if id, err := uuid.Parse(nameOrID); err == nil {
+		if _, ok := s.coordinator.Agent(id); ok {
+			return id, true
+		}
+	}
+	// Fall back to name lookup via registered agents.
+	for _, a := range s.coordinator.ListAgents() {
+		if a.Name == nameOrID {
+			return a.ID, true
+		}
+	}
+	return uuid.UUID{}, false
+}
+
+func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SendMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if req.From == "" || req.To == "" || req.Content == "" {
+		writeJSON(w, http.StatusBadRequest, MessageResponse{
+			Success: false,
+			Message: "from, to, and content are required",
+		})
+		return
+	}
+
+	fromID, ok := s.resolveAgentID(req.From)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, MessageResponse{
+			Success: false,
+			Message: fmt.Sprintf("sender not found: %s", req.From),
+		})
+		return
+	}
+
+	if err := s.coordinator.SendMessage(fromID, req.To, req.Content); err != nil {
+		writeJSON(w, http.StatusNotFound, MessageResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, MessageResponse{
+		Success: true,
+		Message: "Message sent",
+	})
+}
+
+func (s *Server) handleBroadcast(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req BroadcastMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if req.From == "" || req.Content == "" {
+		writeJSON(w, http.StatusBadRequest, MessageResponse{
+			Success: false,
+			Message: "from and content are required",
+		})
+		return
+	}
+
+	fromID, ok := s.resolveAgentID(req.From)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, MessageResponse{
+			Success: false,
+			Message: fmt.Sprintf("sender not found: %s", req.From),
+		})
+		return
+	}
+
+	s.coordinator.BroadcastMessage(fromID, req.Content)
+
+	writeJSON(w, http.StatusOK, MessageResponse{
+		Success: true,
+		Message: "Message broadcast",
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {

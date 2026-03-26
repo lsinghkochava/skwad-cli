@@ -111,3 +111,24 @@ type StatusHookRequest struct {
 	Status  string                 `json:"status"`
 	Payload map[string]interface{} `json:"payload"`
 }
+
+// --- REST API types for CLI client commands ---
+
+// SendMessageRequest is the payload for POST /api/v1/agent/send.
+type SendMessageRequest struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Content string `json:"content"`
+}
+
+// BroadcastMessageRequest is the payload for POST /api/v1/agent/broadcast.
+type BroadcastMessageRequest struct {
+	From    string `json:"from"`
+	Content string `json:"content"`
+}
+
+// MessageResponse is the response for send/broadcast REST endpoints.
+type MessageResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
