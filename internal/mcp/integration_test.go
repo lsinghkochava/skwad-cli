@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
-	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
+	"github.com/lsinghkochava/skwad-cli/internal/agent"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 )
 
 // mockStatusUpdater records all status updates for assertions.
@@ -152,6 +152,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	mux.Handle("/hook", srv.hookHandler)
 	mux.HandleFunc("/api/v1/agent/register", srv.handleRegister)
 	mux.HandleFunc("/api/v1/agent/status", srv.handleStatus)
+	mux.HandleFunc("/api/v1/agent/send", srv.handleSend)
+	mux.HandleFunc("/api/v1/agent/broadcast", srv.handleBroadcast)
 	mux.HandleFunc("/", srv.handleDebug)
 
 	ts := httptest.NewServer(mux)
@@ -169,6 +171,22 @@ func (e *testEnv) addManagedAgent(t *testing.T, id uuid.UUID, name, folder strin
 		AgentType: agentType,
 	}
 	e.mgr.AddAgent(a, nil)
+}
+
+// registerAgent is a convenience that adds a managed agent AND registers it via MCP
+// so it's visible to both HTTP endpoints and the coordinator.
+func (e *testEnv) registerAgent(t *testing.T, id uuid.UUID, name, folder string, agentType models.AgentType) {
+	t.Helper()
+	e.addManagedAgent(t, id, name, folder, agentType)
+	sess := uuid.NewString()
+	resp := toolCall(t, e.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": id.String(),
+		"name":    name,
+		"folder":  folder,
+	})
+	if resp.Error != nil {
+		t.Fatalf("register-agent failed for %s: %v", name, resp.Error)
+	}
 }
 
 // postJSON sends a POST with JSON body and returns status code + body bytes.
@@ -831,5 +849,183 @@ func TestSetStatusToolInToolsList(t *testing.T) {
 	}
 	if !requiredSet["agentId"] || !requiredSet["status"] {
 		t.Errorf("expected agentId and status as required, got %v", required)
+	}
+}
+
+// --- Phase 2: REST Send/Broadcast Endpoint Tests ---
+
+func TestSendEndpoint(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	bob := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+	env.registerAgent(t, bob, "Bob", "/tmp/b", models.AgentTypeClaude)
+
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    "Alice",
+		To:      "Bob",
+		Content: "hello from Alice",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("expected success=true, got message: %s", resp.Message)
+	}
+	if resp.Message != "Message sent" {
+		t.Errorf("expected 'Message sent', got %q", resp.Message)
+	}
+
+	// Verify Bob received the message via MCP check-messages.
+	sessB := uuid.NewString()
+	// Need to re-register Bob in a session to check messages via toolCall.
+	toolCall(t, env.ts, sessB, ToolRegisterAgent, map[string]interface{}{
+		"agentId": bob.String(), "name": "Bob", "folder": "/tmp/b",
+	})
+	checkResp := toolCall(t, env.ts, sessB, ToolCheckMessages, map[string]interface{}{"markRead": true})
+	if checkResp.Error != nil {
+		t.Fatalf("check-messages error: %v", checkResp.Error)
+	}
+	result := checkResp.Result.(map[string]interface{})
+	text := result["content"].([]interface{})[0].(map[string]interface{})["text"].(string)
+	if !strings.Contains(text, "hello from Alice") {
+		t.Errorf("expected Bob to receive message, got: %s", text)
+	}
+}
+
+func TestSendEndpoint_ByID(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	bob := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+	env.registerAgent(t, bob, "Bob", "/tmp/b", models.AgentTypeClaude)
+
+	// Send using UUIDs instead of names.
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    alice.String(),
+		To:      bob.String(),
+		Content: "hello by ID",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Success {
+		t.Error("expected success=true for ID-based send")
+	}
+}
+
+func TestSendEndpoint_UnknownRecipient(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    "Alice",
+		To:      "NonExistent",
+		Content: "hello?",
+	})
+	if code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown recipient, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Success {
+		t.Error("expected success=false for unknown recipient")
+	}
+}
+
+func TestSendEndpoint_MissingFields(t *testing.T) {
+	env := newTestEnv(t)
+
+	tests := []struct {
+		name    string
+		payload SendMessageRequest
+	}{
+		{"missing from", SendMessageRequest{To: "Bob", Content: "hi"}},
+		{"missing to", SendMessageRequest{From: "Alice", Content: "hi"}},
+		{"missing content", SendMessageRequest{From: "Alice", To: "Bob"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", tt.payload)
+			if code != http.StatusBadRequest {
+				t.Errorf("expected 400 for %s, got %d: %s", tt.name, code, body)
+			}
+		})
+	}
+}
+
+func TestBroadcastEndpoint(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	bob := uuid.New()
+	charlie := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+	env.registerAgent(t, bob, "Bob", "/tmp/b", models.AgentTypeClaude)
+	env.registerAgent(t, charlie, "Charlie", "/tmp/c", models.AgentTypeClaude)
+
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/broadcast", BroadcastMessageRequest{
+		From:    "Alice",
+		Content: "team update",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("expected success=true, got message: %s", resp.Message)
+	}
+	if resp.Message != "Message broadcast" {
+		t.Errorf("expected 'Message broadcast', got %q", resp.Message)
+	}
+}
+
+func TestBroadcastEndpoint_MissingFields(t *testing.T) {
+	env := newTestEnv(t)
+
+	t.Run("missing from", func(t *testing.T) {
+		code, _ := postJSON(t, env.ts.URL+"/api/v1/agent/broadcast", BroadcastMessageRequest{
+			Content: "hello",
+		})
+		if code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", code)
+		}
+	})
+
+	t.Run("missing content", func(t *testing.T) {
+		code, _ := postJSON(t, env.ts.URL+"/api/v1/agent/broadcast", BroadcastMessageRequest{
+			From: "Alice",
+		})
+		if code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", code)
+		}
+	})
+}
+
+func TestBroadcastEndpoint_UnknownSender(t *testing.T) {
+	env := newTestEnv(t)
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/broadcast", BroadcastMessageRequest{
+		From:    "Ghost",
+		Content: "boo",
+	})
+	if code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown sender, got %d: %s", code, body)
 	}
 }
