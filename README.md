@@ -1,176 +1,146 @@
-# Skwad Linux
+# skwad-cli
 
-A native Linux desktop application for running multiple AI coding agents simultaneously — each in its own embedded terminal, coordinated via a built-in MCP (Model Context Protocol) server.
+Multi-agent CLI orchestrator for AI coding agents.
 
-This is a Go port of the [Skwad macOS app](https://skwad.ai), built for X11 and Wayland desktops.
+Runs multiple AI agents (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, or custom commands) in parallel, coordinates them via a built-in MCP server, and works headless on servers and in CI pipelines.
 
-## What It Does
-
-- Runs multiple AI coding agents in parallel (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, or custom shell commands), each in a persistent embedded terminal
-- Organizes agents into named, color-coded **workspaces** with 1, 2, 3, and 4-pane split layouts
-- Built-in **MCP HTTP server** (JSON-RPC 2.0) so agents can register, message each other, query worktrees, and spawn new agents programmatically
-- **Git integration**: diff viewer, per-file staging, commit dialog, worktree creation, live git stats in the sidebar
-- **Markdown** and **Mermaid** diagram preview panels rendered on demand via MCP tool calls
-- **Fuzzy file finder**, agent personas, conversation history browser, and an autopilot service that uses an LLM to handle agent prompts automatically
-
-## Getting Started
-
-### Requirements
-
-**Linux (for full functionality):**
-```
-sudo apt install libvte-2.91-dev libgtk-3-dev pkg-config
-```
-
-**macOS (for development/testing — VTE not available):**
-```
-brew install go
-```
-
-### Build
+## Installation
 
 ```bash
-git clone https://github.com/Jared-Boschmann/skwad-linux
-cd skwad-linux
+go install github.com/lsinghkochava/skwad-cli/cmd/skwad-cli@latest
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/lsinghkochava/skwad-cli
+cd skwad-cli
 make build
 ```
 
-Or with `go` directly:
-```bash
-go build -o skwad ./cmd/skwad
-./skwad
-```
-
-### Run
+## Quick Start
 
 ```bash
-./skwad
+# Start a review team on your project
+skwad-cli start --team review-team --set repo=. --watch
+
+# Or use a custom config
+skwad-cli start --config team.json
+
+# From another terminal
+skwad-cli status
+skwad-cli send --from "Coordinator" --to "Coder" "Implement the auth module"
+skwad-cli stop
 ```
 
-Configuration is stored in `~/.config/skwad/`. On first launch use **Ctrl+N** (or **Cmd+N** on macOS) to create your first agent.
+## Commands
 
-## UI Overview
+| Command | Description |
+|---------|-------------|
+| `start` | Start daemon with agents from config or template |
+| `stop` | Stop running daemon |
+| `status` | Show agent states as formatted table |
+| `list` | List agents with IDs |
+| `send` | Send message between agents |
+| `broadcast` | Broadcast message to all agents |
+| `run` | One-shot mode for CI (start, prompt, wait, report, exit) |
+| `report` | Format output as markdown, JSON, or GitHub PR comment |
+| `convert` | Convert macOS Skwad workspace export to CLI config |
 
-### Workspace Bar (far left)
-Circular colored badges — one per workspace. Click to switch workspaces. Right-click to rename or delete. The **+** button creates a new workspace. The **gear icon** opens Settings.
+## Team Configuration
 
-### Sidebar
-Lists agents in the active workspace. Click an agent to assign it to the focused pane. Right-click for the full context menu (restart, duplicate, fork session, history, move to workspace, etc.). **+ New Agent** opens the agent creation window.
-
-### Terminal Area
-Shows agent output in one or more panes. Use the **layout buttons** in the top toolbar to switch between single, vertical split, horizontal split, 3-pane, and 4-pane grid layouts.
-
-**Assigning agents to split panes:**
-1. Switch to a split layout using the toolbar icons
-2. Click a pane's header to focus it — the header turns **blue**
-3. Click an agent in the sidebar — it is assigned to the blue (focused) pane
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| Ctrl+N | New agent |
-| Ctrl+, | Settings |
-| Ctrl+G | Toggle git panel |
-| Ctrl+\ | Toggle sidebar |
-| Ctrl+P | Fuzzy file finder |
-| Ctrl+] / Ctrl+[ | Next / previous agent |
-| Ctrl+1–9 | Select agent by index |
-| Ctrl+Shift+] / [ | Next / previous workspace |
-| Ctrl+Shift+O | Open agent folder in editor |
-
-> On macOS, replace Ctrl with Cmd.
-
-## Architecture
-
-```
-cmd/skwad/           Entry point
-internal/
-  models/            Pure data types (Agent, Workspace, Settings, Persona)
-  agent/             Business logic: Manager, Coordinator, ActivityController
-  mcp/               MCP HTTP server (JSON-RPC 2.0) + hook event handler
-  terminal/          PTY session management (creack/pty) + Pool orchestrator
-  git/               Git CLI wrapper: status, diff, stage, commit, worktrees
-  persistence/       JSON file storage (~/.config/skwad/)
-  search/            Fuzzy file path scorer
-  ui/                Fyne v2 GUI components
-  autopilot/         LLM-based autopilot (OpenAI / Anthropic / Gemini)
-  notifications/     Desktop notifications via notify-send
-  voice/             Push-to-talk voice input (stub)
-plugin/
-  claude/notify.sh   Hook script for Claude Code lifecycle events
-  codex/notify.sh    Hook script for Codex lifecycle events
+```json
+{
+  "name": "My Team",
+  "repo": "/path/to/repo",
+  "prompt": "Review the latest changes",
+  "agents": [
+    {
+      "name": "Reviewer",
+      "agent_type": "claude",
+      "persona_instructions": "You are a code reviewer focused on correctness.",
+      "avatar": "🔍"
+    },
+    {
+      "name": "Tester",
+      "agent_type": "claude",
+      "persona": "Bug Hunter",
+      "prompt": "Write tests for the auth module"
+    }
+  ],
+  "personas": [
+    {
+      "name": "Bug Hunter",
+      "instructions": "Find correctness bugs. Report file, line, and how to trigger."
+    }
+  ]
+}
 ```
 
-## Tech Stack
+**Agent fields:** `name` (required), `agent_type` (required: claude, codex, gemini, copilot, opencode, custom), `persona` (name match), `persona_instructions` (inline), `persona_id` (UUID), `avatar`, `command` (custom shell), `allowed_tools`, `prompt` (per-agent).
 
-| Concern | Choice |
-|---|---|
-| Language | Go 1.22+ |
-| GUI | [Fyne v2](https://fyne.io/) — OpenGL, X11 + Wayland |
-| Terminal widget | VTE (libvte-2.91) via CGo on Linux |
-| PTY sessions | [creack/pty](https://github.com/creack/pty) |
-| MCP server | `net/http` stdlib, JSON-RPC 2.0 |
-| File watching | [fsnotify](https://github.com/fsnotify/fsnotify) |
-| Markdown | [goldmark](https://github.com/yuin/goldmark) |
-| Persistence | JSON in `~/.config/skwad/` |
+**Persona resolution priority:** `persona_instructions` > `persona_id` > `persona` name > team-level `personas[]` matching agent name.
+
+## Built-in Templates
+
+| Template | Agents | Description |
+|----------|--------|-------------|
+| `review-team` | 7 | Specialized code review: Performance, Consistency, Bug Hunter, Architecture, Security, Test Analyst, Coordinator |
+| `dev-team` | 3 | Explorer, Coder, Tester |
+
+```bash
+skwad-cli run --team review-team --set repo=/path --prompt "Review PR #42"
+```
+
+Variable substitution: `${repo}`, `${prompt}`, custom via `--set key=value`.
+
+## macOS Export Conversion
+
+```bash
+# Convert explicitly
+skwad-cli convert --input workspace-export.json --output team.json
+
+# Or use directly (auto-detected)
+skwad-cli start --config workspace-export.json
+```
+
+Companions are excluded. Persona instructions are inlined from the export's persona list.
+
+## CI Usage
+
+```yaml
+# GitHub Actions example
+- name: AI Code Review
+  run: |
+    skwad-cli run \
+      --team review-team \
+      --set repo=. \
+      --prompt "Review this PR" \
+      --timeout 10m \
+      --output-format json | \
+    skwad-cli report --format github-pr-comment --pr ${{ github.event.pull_request.number }}
+```
+
+Exit codes: `0` = all agents exited cleanly, `1` = timeout or infra error, `2` = any agent exited non-zero.
 
 ## MCP Server
 
-Skwad exposes an MCP server at `http://127.0.0.1:8766/mcp` (port configurable in Settings). AI agents that support MCP can use the following tools:
+Built-in MCP server on port 8766 (configurable via `--port`). Agents coordinate via JSON-RPC 2.0 at `/mcp`. Compatible with the Swift Skwad app's plugin scripts.
 
-| Tool | Description |
-|---|---|
-| `register-agent` | Register with the Skwad session |
-| `list-agents` | List all registered agents |
-| `send-message` | Send a message to another agent |
-| `check-messages` | Read messages in your inbox |
-| `broadcast-message` | Send to all registered agents |
-| `list-repos` | List recently used git repos |
-| `list-worktrees` | List worktrees for a repo |
-| `create-worktree` | Create a new git worktree |
-| `display-markdown` | Open a markdown file in the preview panel |
-| `view-mermaid` | Render a Mermaid diagram |
-| `create-agent` | Spawn a new agent |
-| `close-agent` | Close an agent |
+**Tools:** `register-agent`, `list-agents`, `send-message`, `check-messages`, `broadcast-message`, `set-status`, `list-repos`, `list-worktrees`, `create-worktree`, `create-agent`, `close-agent`, `display-markdown`, `view-mermaid`.
 
-Hook scripts in `plugin/claude/` and `plugin/codex/` post lifecycle events to `/hook` so Skwad can track agent status (running / idle / blocked).
+**REST endpoints:** `GET /health`, `GET /` (agent list), `POST /api/v1/agent/register`, `POST /api/v1/agent/status`, `POST /api/v1/agent/send`, `POST /api/v1/agent/broadcast`.
 
-## Development Status
-
-| Area | Status |
-|---|---|
-| Data layer (models, persistence, manager) | ✅ Complete |
-| Git + file services | ✅ Complete |
-| Terminal + MCP server (headless) | ✅ Complete |
-| UI shell — workspaces, sidebar, split panes | ✅ Complete |
-| UI visual design — dark theme, circular badges, SVG toolbar icons | ✅ Complete |
-| Pane focus + agent assignment UX | ✅ Complete |
-| Session history browser (Claude + Codex) | ✅ Complete |
-| Fork / resume agent sessions | ✅ Complete |
-| Autopilot service (OpenAI / Anthropic / Gemini) | ✅ Complete |
-| Settings window (all tabs) | ✅ Complete |
-| Agent personas + bench | ✅ Complete |
-| File finder, git panel, markdown/mermaid panels | ✅ Complete |
-| VTE native terminal embedding (Linux) | 🔄 In progress |
-| Voice STT backend | Planned |
-| Agent drag-to-reorder | Planned |
-| Split ratio persistence on drag | Planned |
-
-## Testing
+## Development
 
 ```bash
-make test
-# or
-go test ./...
+make build      # Build binary
+make test       # Run tests
+make test-race  # Run tests with race detector
+make lint       # Run linters
+make help       # Show all targets
 ```
-
-All packages through Phase 3 have unit tests. The `ui` package is manually verified.
 
 ## License
 
 MIT
-
-## Contributing
-
-Issues and pull requests welcome. See [`DEVPLAN.md`](DEVPLAN.md) for the build plan and coding rules before contributing.
