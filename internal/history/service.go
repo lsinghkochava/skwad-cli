@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // SessionSummary holds display metadata for a single past session.

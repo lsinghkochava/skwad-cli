@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // newTempStore creates a Store backed by a temporary directory.

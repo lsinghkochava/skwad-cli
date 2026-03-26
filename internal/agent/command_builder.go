@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // CommandBuilder constructs the shell command string to launch an agent terminal.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // RegistrationPrompt returns the text to inject into a terminal after startup

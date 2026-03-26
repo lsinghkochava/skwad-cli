@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
-	"github.com/Jared-Boschmann/skwad-linux/internal/persistence"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 )
 
 // Manager is the central, thread-safe owner of all agent and workspace state.

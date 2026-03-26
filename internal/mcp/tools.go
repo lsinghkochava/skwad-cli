@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/git"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/git"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // CreateAgentRequest is the argument schema for the create-agent tool.

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/Jared-Boschmann/skwad-linux/internal/agent"
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/agent"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 const (
@@ -53,6 +53,9 @@ type Pool struct {
 	OnTitleChanged func(agentID uuid.UUID, title string)
 	// OnStatusChanged is called when an agent's status changes.
 	OnStatusChanged func(agentID uuid.UUID, status models.AgentStatus)
+	// OutputSubscriber is called when new output arrives from an agent's terminal.
+	// The callback receives the agent ID, display name, and raw output bytes.
+	OutputSubscriber func(agentID uuid.UUID, agentName string, data []byte)
 }
 
 type entry struct {
@@ -171,6 +174,15 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 
 		if p.OnRawOutput != nil {
 			p.OnRawOutput(agentID)
+		}
+
+		// Notify output subscriber (used by --watch mode).
+		if p.OutputSubscriber != nil {
+			name := ""
+			if ag, ok := p.manager.Agent(agentID); ok {
+				name = ag.Name
+			}
+			p.OutputSubscriber(agentID, name, data)
 		}
 	}
 	sess.OnTitleChange = func(title string) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jared-Boschmann/skwad-linux/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 // --- helpers ---
