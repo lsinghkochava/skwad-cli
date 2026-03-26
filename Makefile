@@ -1,53 +1,39 @@
-APP      := skwad
-MODULE   := github.com/Jared-Boschmann/skwad-linux
-BIN      := ./bin/$(APP)
-CMD      := ./cmd/$(APP)
+BINARY   := skwad-cli
+MODULE   := github.com/lsinghkochava/skwad-cli
 VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS  := -ldflags "-s -w -X main.version=$(VERSION)"
+LDFLAGS  := -ldflags "-X main.version=$(VERSION)"
 
-PKG_DEPS := vte-2.91 gtk+-3.0
+.PHONY: build install test test-race lint clean tidy fmt vet help
 
-.PHONY: all build run test clean deps install
+build: ## Build the CLI binary
+	go build $(LDFLAGS) -o $(BINARY) ./cmd/skwad-cli/
 
-all: build
+install: ## Install to $GOPATH/bin
+	go install $(LDFLAGS) ./cmd/skwad-cli/
 
-## build: compile the application
-build:
-	go build $(LDFLAGS) -o $(BIN) $(CMD)
-
-## run: run without building a binary
-run:
-	go run $(LDFLAGS) $(CMD)
-
-## install: build and install to /usr/local/bin
-install: build
-	install -m 755 $(BIN) /usr/local/bin/$(APP)
-
-## test: run all tests
-test:
+test: ## Run tests
 	go test ./...
 
-## clean: remove build artifacts
-clean:
-	rm -rf ./bin
+test-race: ## Run tests with race detector
+	go test -race ./...
 
-## deps: verify CGo pkg-config dependencies are available
-deps:
-	@pkg-config --exists $(PKG_DEPS) || \
-		(echo "ERROR: missing pkg-config deps: $(PKG_DEPS). Install libvte-2.91-dev and libgtk-3-dev" && exit 1)
+lint: ## Run go vet (and golangci-lint if available)
+	go vet ./...
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run || true
 
-## tidy: tidy Go modules
-tidy:
+tidy: ## Tidy Go modules
 	go mod tidy
 
-## fmt: format Go source
-fmt:
+fmt: ## Format Go source
 	gofmt -w -s .
 
-## vet: run go vet
-vet:
+vet: ## Run go vet
 	go vet ./...
 
-## lint: run golangci-lint if available
-lint:
-	@which golangci-lint > /dev/null && golangci-lint run || echo "golangci-lint not installed"
+clean: ## Remove built binary
+	rm -f $(BINARY)
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help
