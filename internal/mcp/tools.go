@@ -126,6 +126,15 @@ func (h *toolHandler) list() []toolDefinition {
 				"title":  propString("Optional diagram title"),
 			}, "source"),
 		},
+		{
+			Name:        ToolSetStatus,
+			Description: "MANDATORY: Set your status so other agents know what you are doing. Call before starting any task, after completing it, and when changing direction. Keep it short and specific (e.g. 'Implementing auth module', 'Running tests', 'Done — PR ready'). Use empty string to clear.",
+			InputSchema: schema(map[string]interface{}{
+				"agentId":  propString("Your agent ID"),
+				"status":   propString("Short status text describing what you are currently doing. Use empty string to clear."),
+				"category": propString("The category of action you are about to perform. Predefined categories: code, test, explore, review, plan, delegate, coordinate. Custom categories are also accepted."),
+			}, "agentId", "status"),
+		},
 	}
 }
 
@@ -155,6 +164,8 @@ func (h *toolHandler) call(params ToolCallParams, sess *session) (ToolResult, er
 		return h.displayMarkdown(params.Arguments, sess)
 	case ToolViewMermaid:
 		return h.viewMermaid(params.Arguments, sess)
+	case ToolSetStatus:
+		return h.setStatus(params.Arguments)
 	default:
 		return errorResult("unknown tool: " + params.Name), nil
 	}
@@ -303,6 +314,24 @@ func (h *toolHandler) viewMermaid(args map[string]interface{}, sess *session) (T
 		h.server.OnViewMermaid(sess.agentID.String(), source, title)
 	}
 	return textResult("Mermaid diagram displayed"), nil
+}
+
+func (h *toolHandler) setStatus(args map[string]interface{}) (ToolResult, error) {
+	agentIDStr := strArg(args, "agentId")
+	status := strArg(args, "status")
+	category := strArg(args, "category")
+
+	agentID, err := uuid.Parse(agentIDStr)
+	if err != nil {
+		return errorResult("invalid agentId"), nil
+	}
+
+	if _, ok := h.server.coordinator.Agent(agentID); !ok {
+		return errorResult("agent not found: " + agentIDStr), nil
+	}
+
+	h.server.coordinator.SetStatusText(agentID, status, category)
+	return textResult("Status updated"), nil
 }
 
 // --- schema helpers ---
