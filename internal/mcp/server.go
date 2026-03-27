@@ -65,7 +65,7 @@ func (s *Server) Start() error {
 		return nil
 	}
 
-	s.hookHandler = newHookHandler(s.StatusUpdater)
+	s.hookHandler = newHookHandler(s)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
@@ -318,7 +318,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		status := stringFromMap(raw, "status")
 		if payload, ok := raw["payload"].(map[string]interface{}); ok {
 			if sid := stringFromMap(payload, "session_id"); sid != "" {
-				s.hookHandler.updater.SetSessionID(agentID, sid)
+				s.StatusUpdater.SetSessionID(agentID, sid)
 			}
 		}
 		s.hookHandler.dispatchStatus(agentID, status, metadata)
@@ -330,7 +330,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			}
 			// Store thread-id as session ID.
 			if threadID := stringFromMap(payload, "thread-id"); threadID != "" {
-				s.hookHandler.updater.SetSessionID(agentID, threadID)
+				s.StatusUpdater.SetSessionID(agentID, threadID)
 			}
 		}
 		s.hookHandler.dispatchStatus(agentID, "idle", metadata)

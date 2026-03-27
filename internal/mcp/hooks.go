@@ -50,11 +50,11 @@ type AgentStatusUpdater interface {
 
 // hookHandler processes POST /hook requests from claude/codex plugin scripts.
 type hookHandler struct {
-	updater AgentStatusUpdater
+	server *Server
 }
 
-func newHookHandler(updater AgentStatusUpdater) *hookHandler {
-	return &hookHandler{updater: updater}
+func newHookHandler(server *Server) *hookHandler {
+	return &hookHandler{server: server}
 }
 
 func (h *hookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (h *hookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.updater != nil {
+	if h.server.StatusUpdater != nil {
 		h.dispatch(agentID, event)
 	}
 
@@ -98,7 +98,7 @@ func (h *hookHandler) dispatch(agentID uuid.UUID, event HookEvent) {
 
 	// Store session ID.
 	if event.SessionID != "" {
-		h.updater.SetSessionID(agentID, event.SessionID)
+		h.server.StatusUpdater.SetSessionID(agentID, event.SessionID)
 	}
 
 	// Normalise event type (Claude uses hook_event_name field).
@@ -128,18 +128,18 @@ func (h *hookHandler) dispatch(agentID uuid.UUID, event HookEvent) {
 func (h *hookHandler) dispatchStatus(agentID uuid.UUID, status string, metadata map[string]string) {
 	// Apply metadata.
 	for k, v := range metadata {
-		h.updater.SetMetadata(agentID, k, v)
+		h.server.StatusUpdater.SetMetadata(agentID, k, v)
 	}
 
 	// Apply status.
 	switch status {
 	case "running":
-		h.updater.SetRunning(agentID)
+		h.server.StatusUpdater.SetRunning(agentID)
 	case "idle":
-		h.updater.SetIdle(agentID)
+		h.server.StatusUpdater.SetIdle(agentID)
 	case "input":
-		h.updater.SetBlocked(agentID)
+		h.server.StatusUpdater.SetBlocked(agentID)
 	case "error":
-		h.updater.SetError(agentID)
+		h.server.StatusUpdater.SetError(agentID)
 	}
 }

@@ -143,7 +143,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	updater := newMockStatusUpdater()
 	srv := NewServer(coord, store, 0)
 	srv.StatusUpdater = updater
-	srv.hookHandler = newHookHandler(updater)
+	srv.hookHandler = newHookHandler(srv)
 	srv.tools = newToolHandler(srv)
 
 	mux := http.NewServeMux()
