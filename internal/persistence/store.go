@@ -216,6 +216,9 @@ func (s *Store) load(name string, v interface{}) error {
 		}
 		return err
 	}
+	if len(data) == 0 {
+		return nil
+	}
 	return json.Unmarshal(data, v)
 }
 
