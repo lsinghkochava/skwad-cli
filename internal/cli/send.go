@@ -22,17 +22,21 @@ var sendCmd = &cobra.Command{
 }
 
 func init() {
-	sendCmd.Flags().StringVar(&sendFlagFrom, "from", "", "sender agent name or ID (required)")
+	sendCmd.Flags().StringVar(&sendFlagFrom, "from", "", "sender agent name or ID (default: user)")
 	sendCmd.Flags().StringVar(&sendFlagTo, "to", "", "target agent name or ID (uses entry_agent if omitted)")
-	_ = sendCmd.MarkFlagRequired("from")
 	rootCmd.AddCommand(sendCmd)
 }
 
 func runSend(cmd *cobra.Command, args []string) error {
 	port := resolvePort()
 
+	from := sendFlagFrom
+	if from == "" {
+		from = "user"
+	}
+
 	payload := map[string]string{
-		"from":    sendFlagFrom,
+		"from":    from,
 		"to":      sendFlagTo,
 		"content": args[0],
 	}

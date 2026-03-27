@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/lsinghkochava/skwad-cli/internal/models"
@@ -69,9 +70,10 @@ func (b *CommandBuilder) claudeCommand(a *models.Agent, persona *models.Persona,
 		sb.WriteString(" --allowed-tools 'mcp__skwad__*'")
 	}
 
-	// Hook plugin dir
+	// Hook plugin dir — Claude expects scripts/ directly inside the plugin dir.
 	if b.PluginDir != "" {
-		sb.WriteString(fmt.Sprintf(" --plugin-dir %s", shellQuote(b.PluginDir)))
+		claudePluginDir := filepath.Join(b.PluginDir, "claude")
+		sb.WriteString(fmt.Sprintf(" --plugin-dir %s", shellQuote(claudePluginDir)))
 	}
 
 	// Resume / fork

@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -376,7 +377,13 @@ func (s *Server) resolveAgentID(nameOrID string) (uuid.UUID, bool) {
 	}
 	// Fall back to name lookup via registered agents.
 	for _, a := range s.coordinator.ListAgents() {
-		if a.Name == nameOrID {
+		if strings.EqualFold(a.Name, nameOrID) {
+			return a.ID, true
+		}
+	}
+	// Fall back to all agents (including unregistered) from the manager.
+	for _, a := range s.coordinator.AllAgents() {
+		if strings.EqualFold(a.Name, nameOrID) {
 			return a.ID, true
 		}
 	}
@@ -414,13 +421,18 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		req.To = s.EntryAgent
 	}
 
-	fromID, ok := s.resolveAgentID(req.From)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, MessageResponse{
-			Success: false,
-			Message: fmt.Sprintf("sender not found: %s", req.From),
-		})
-		return
+	// Resolve sender — "user" is a synthetic sender (not a real agent).
+	var fromID uuid.UUID
+	if !strings.EqualFold(req.From, "user") {
+		var ok bool
+		fromID, ok = s.resolveAgentID(req.From)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, MessageResponse{
+				Success: false,
+				Message: fmt.Sprintf("sender not found: %s", req.From),
+			})
+			return
+		}
 	}
 
 	if err := s.coordinator.SendMessage(fromID, req.To, req.Content); err != nil {
