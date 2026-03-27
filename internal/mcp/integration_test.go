@@ -1029,3 +1029,121 @@ func TestBroadcastEndpoint_UnknownSender(t *testing.T) {
 		t.Errorf("expected 404 for unknown sender, got %d: %s", code, body)
 	}
 }
+
+// --- Phase 5.4: Entry Agent Routing Tests ---
+
+func TestSendEndpoint_EmptyTo_WithEntryAgent(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	mgr := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+	env.registerAgent(t, mgr, "Manager", "/tmp/m", models.AgentTypeClaude)
+
+	// Configure entry agent on server.
+	env.srv.EntryAgent = "Manager"
+
+	// Send with empty To — should resolve to entry agent "Manager".
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    "Alice",
+		To:      "",
+		Content: "need help with tests",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("expected success=true, got message: %s", resp.Message)
+	}
+
+	// Verify Manager received the message.
+	sessM := uuid.NewString()
+	toolCall(t, env.ts, sessM, ToolRegisterAgent, map[string]interface{}{
+		"agentId": mgr.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	checkResp := toolCall(t, env.ts, sessM, ToolCheckMessages, map[string]interface{}{"markRead": true})
+	if checkResp.Error != nil {
+		t.Fatalf("check-messages error: %v", checkResp.Error)
+	}
+	result := checkResp.Result.(map[string]interface{})
+	text := result["content"].([]interface{})[0].(map[string]interface{})["text"].(string)
+	if !strings.Contains(text, "need help with tests") {
+		t.Errorf("expected Manager to receive message, got: %s", text)
+	}
+}
+
+func TestSendEndpoint_EmptyTo_NoEntryAgent(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+
+	// No entry agent configured (default).
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    "Alice",
+		To:      "",
+		Content: "where does this go?",
+	})
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when no entry_agent, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Success {
+		t.Error("expected success=false when no entry_agent configured")
+	}
+	if !strings.Contains(resp.Message, "no --to specified") {
+		t.Errorf("expected error about missing --to, got: %s", resp.Message)
+	}
+}
+
+func TestSendEndpoint_ExplicitTo_IgnoresEntryAgent(t *testing.T) {
+	env := newTestEnv(t)
+	alice := uuid.New()
+	bob := uuid.New()
+	mgr := uuid.New()
+	env.registerAgent(t, alice, "Alice", "/tmp/a", models.AgentTypeClaude)
+	env.registerAgent(t, bob, "Bob", "/tmp/b", models.AgentTypeClaude)
+	env.registerAgent(t, mgr, "Manager", "/tmp/m", models.AgentTypeClaude)
+
+	// Configure entry agent, but send with explicit To.
+	env.srv.EntryAgent = "Manager"
+
+	code, body := postJSON(t, env.ts.URL+"/api/v1/agent/send", SendMessageRequest{
+		From:    "Alice",
+		To:      "Bob",
+		Content: "direct message to Bob",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+
+	var resp MessageResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("explicit To should still work: %s", resp.Message)
+	}
+
+	// Verify Bob (not Manager) received the message.
+	sessB := uuid.NewString()
+	toolCall(t, env.ts, sessB, ToolRegisterAgent, map[string]interface{}{
+		"agentId": bob.String(), "name": "Bob", "folder": "/tmp/b",
+	})
+	checkResp := toolCall(t, env.ts, sessB, ToolCheckMessages, map[string]interface{}{"markRead": true})
+	if checkResp.Error != nil {
+		t.Fatalf("check-messages error: %v", checkResp.Error)
+	}
+	result := checkResp.Result.(map[string]interface{})
+	text := result["content"].([]interface{})[0].(map[string]interface{})["text"].(string)
+	if !strings.Contains(text, "direct message to Bob") {
+		t.Errorf("Bob should receive the direct message, got: %s", text)
+	}
+}

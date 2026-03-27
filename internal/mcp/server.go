@@ -39,6 +39,9 @@ type Server struct {
 
 	// StatusUpdater — set by the agent manager to receive hook events.
 	StatusUpdater AgentStatusUpdater
+
+	// EntryAgent is the default message recipient when "to" is omitted.
+	EntryAgent string
 }
 
 // NewServer creates a new MCP server.
@@ -392,12 +395,23 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.From == "" || req.To == "" || req.Content == "" {
+	if req.From == "" || req.Content == "" {
 		writeJSON(w, http.StatusBadRequest, MessageResponse{
 			Success: false,
-			Message: "from, to, and content are required",
+			Message: "from and content are required",
 		})
 		return
+	}
+
+	if req.To == "" {
+		if s.EntryAgent == "" {
+			writeJSON(w, http.StatusBadRequest, MessageResponse{
+				Success: false,
+				Message: "no --to specified and no entry_agent configured",
+			})
+			return
+		}
+		req.To = s.EntryAgent
 	}
 
 	fromID, ok := s.resolveAgentID(req.From)

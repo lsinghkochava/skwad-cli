@@ -62,8 +62,9 @@ func executeRun(cmd *cobra.Command, args []string) error {
 
 	// 4. Initialize daemon.
 	cfg := daemon.Config{
-		MCPPort:   flagPort,
-		PluginDir: findPluginDir(),
+		MCPPort:    flagPort,
+		PluginDir:  findPluginDir(),
+		EntryAgent: tc.EntryAgent,
 	}
 	d, err := daemon.New(cfg)
 	if err != nil {
@@ -138,10 +139,26 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// 11. Send prompt to each agent (per-agent > --prompt > team prompt).
+	// When entry_agent is set, global/flag prompts go only to the entry agent.
 	time.Sleep(2 * time.Second)
 	promptsSent := 0
 	for i, a := range agents {
-		agentPrompt := resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
+		var agentPrompt string
+		if tc.EntryAgent != "" {
+			// Per-agent prompt always goes to that agent.
+			if tc.Agents[i].Prompt != "" {
+				agentPrompt = tc.Agents[i].Prompt
+			} else if a.Name == tc.EntryAgent {
+				// Global/flag prompt goes only to the entry agent.
+				if prompt != "" {
+					agentPrompt = prompt
+				} else {
+					agentPrompt = tc.Prompt
+				}
+			}
+		} else {
+			agentPrompt = resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
+		}
 		if agentPrompt != "" {
 			d.Pool.QueueText(a.ID, agentPrompt+"\n")
 			promptsSent++

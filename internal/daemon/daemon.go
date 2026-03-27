@@ -17,9 +17,10 @@ import (
 
 // Config holds the parameters needed to initialize a Daemon.
 type Config struct {
-	MCPPort   int    // MCP server port (0 = use settings default)
-	DataDir   string // persistence directory (empty = ~/.config/skwad/)
-	PluginDir string // path to plugin/ scripts
+	MCPPort    int    // MCP server port (0 = use settings default)
+	DataDir    string // persistence directory (empty = ~/.config/skwad/)
+	PluginDir  string // path to plugin/ scripts
+	EntryAgent string // default message recipient when --to is omitted
 }
 
 // Daemon owns the core services shared by GUI and CLI binaries.
@@ -61,6 +62,7 @@ func New(cfg Config) (*Daemon, error) {
 	}
 
 	mcpServer := mcp.NewServer(coord, store, mcpPort)
+	mcpServer.EntryAgent = cfg.EntryAgent
 
 	d := &Daemon{
 		Store:       store,

@@ -23,9 +23,8 @@ var sendCmd = &cobra.Command{
 
 func init() {
 	sendCmd.Flags().StringVar(&sendFlagFrom, "from", "", "sender agent name or ID (required)")
-	sendCmd.Flags().StringVar(&sendFlagTo, "to", "", "target agent name or ID (required)")
+	sendCmd.Flags().StringVar(&sendFlagTo, "to", "", "target agent name or ID (uses entry_agent if omitted)")
 	_ = sendCmd.MarkFlagRequired("from")
-	_ = sendCmd.MarkFlagRequired("to")
 	rootCmd.AddCommand(sendCmd)
 }
 

@@ -46,9 +46,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// 2. Initialize daemon.
 	cfg := daemon.Config{
-		MCPPort:   flagPort,
-		DataDir:   startFlagDataDir,
-		PluginDir: findPluginDir(),
+		MCPPort:    flagPort,
+		DataDir:    startFlagDataDir,
+		PluginDir:  findPluginDir(),
+		EntryAgent: tc.EntryAgent,
 	}
 	d, err := daemon.New(cfg)
 	if err != nil {
