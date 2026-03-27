@@ -1,6 +1,7 @@
 {
   "name": "Code Reviews",
   "repo": "/Users/lsingh/Documents/projects/docs",
+  "entry_agent": "Review Coordinator",
   "agents": [
     {
       "name": "Performance Analyst",

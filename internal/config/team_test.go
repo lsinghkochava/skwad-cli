@@ -347,6 +347,73 @@ func TestLoadTeamConfig_TeamPrompt(t *testing.T) {
 	}
 }
 
+func TestValidate_EntryAgent_Valid(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name:       "Test",
+		Repo:       repo,
+		EntryAgent: "Manager",
+		Agents: []AgentConfig{
+			{Name: "Manager", AgentType: "claude"},
+			{Name: "Coder", AgentType: "claude"},
+		},
+	}
+	if err := tc.Validate(); err != nil {
+		t.Errorf("expected valid entry_agent, got error: %v", err)
+	}
+}
+
+func TestValidate_EntryAgent_NonExistent(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name:       "Test",
+		Repo:       repo,
+		EntryAgent: "NonExistent",
+		Agents: []AgentConfig{
+			{Name: "Coder", AgentType: "claude"},
+		},
+	}
+	err := tc.Validate()
+	if err == nil || !strings.Contains(err.Error(), "entry_agent") {
+		t.Errorf("expected entry_agent validation error, got %v", err)
+	}
+}
+
+func TestValidate_EntryAgent_Empty(t *testing.T) {
+	repo := t.TempDir()
+	tc := &TeamConfig{
+		Name:       "Test",
+		Repo:       repo,
+		EntryAgent: "", // optional, should pass
+		Agents: []AgentConfig{
+			{Name: "Bot", AgentType: "claude"},
+		},
+	}
+	if err := tc.Validate(); err != nil {
+		t.Errorf("empty entry_agent should be valid, got error: %v", err)
+	}
+}
+
+func TestLoadTeamConfig_EntryAgent(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Test",
+		"repo": "`+repo+`",
+		"entry_agent": "Manager",
+		"agents": [
+			{"name": "Manager", "agent_type": "claude"},
+			{"name": "Coder", "agent_type": "codex"}
+		]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.EntryAgent != "Manager" {
+		t.Errorf("expected entry_agent 'Manager', got %q", tc.EntryAgent)
+	}
+}
+
 func TestValidate_AvatarField(t *testing.T) {
 	repo := t.TempDir()
 	cfg := writeConfig(t, `{

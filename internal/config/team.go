@@ -24,8 +24,9 @@ type TeamConfig struct {
 	Name     string          `json:"name"`
 	Repo     string          `json:"repo"`
 	Prompt   string          `json:"prompt,omitempty"`
-	Agents   []AgentConfig   `json:"agents"`
-	Personas []PersonaConfig `json:"personas,omitempty"`
+	EntryAgent string          `json:"entry_agent,omitempty"`
+	Agents     []AgentConfig   `json:"agents"`
+	Personas   []PersonaConfig `json:"personas,omitempty"`
 }
 
 // PersonaConfig defines an inline persona within a team config.
@@ -102,6 +103,10 @@ func (tc *TeamConfig) Validate() error {
 				return fmt.Errorf("agent[%d].persona_id: invalid UUID '%s'", i, a.PersonaID)
 			}
 		}
+	}
+
+	if tc.EntryAgent != "" && !seen[tc.EntryAgent] {
+		return fmt.Errorf("entry_agent %q does not match any agent name", tc.EntryAgent)
 	}
 
 	// Validate inline personas.
