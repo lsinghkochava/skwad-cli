@@ -11,11 +11,11 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/google/uuid"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
-	"github.com/lsinghkochava/skwad-cli/internal/terminal"
+	"github.com/lsinghkochava/skwad-cli/internal/tui"
 )
 
 var (
@@ -64,23 +64,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("start daemon: %w", err)
 	}
 
-	// 5. Wire --watch output subscriber.
-	if startFlagWatch {
-		watcher := newWatchOutput(os.Stdout)
-		d.Pool.OutputSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
-			cleaned := terminal.CleanOutput(data)
-			if len(cleaned) > 0 {
-				watcher.write(agentName, cleaned)
-			}
-		}
-	}
-
-	// 6. Spawn all agents.
+	// 5. Spawn all agents.
 	for _, a := range agents {
 		d.Pool.Spawn(a)
 	}
 
-	// 7. Write PID file.
+	// 6. Write PID file.
 	dataDir := startFlagDataDir
 	if dataDir == "" {
 		dataDir = d.Store.Dir()
@@ -90,7 +79,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 		slog.Warn("failed to write PID file", "error", err)
 	}
 
-	// 8. Print startup banner.
+	// 7. TUI mode vs headless mode.
+	if startFlagWatch {
+		// TUI mode: Bubble Tea takes over the terminal.
+		app := tui.New(d, agents)
+		p := tea.NewProgram(app)
+		if _, err := p.Run(); err != nil {
+			slog.Error("TUI error", "error", err)
+		}
+		d.Stop()
+		if pidFile != nil {
+			pidFile.Close()
+		}
+		daemon.RemovePIDFile(dataDir)
+		return nil
+	}
+
+	// Headless mode: print banner and block on signals.
 	slog.Info("daemon started", "port", flagPort, "agents", len(agents))
 	fmt.Printf("skwad started on port %d\n", flagPort)
 	fmt.Printf("Agents: %d\n", len(agents))
@@ -99,12 +104,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  - %s (%s)\n", a.Name, a.AgentType)
 	}
 
-	// 9. Block on signals — double signal = force kill.
+	// Block on signals — double signal = force kill.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	// 10. Graceful shutdown — second signal forces exit.
 	slog.Info("shutting down...")
 	fmt.Println("\nShutting down...")
 	go func() {
