@@ -83,14 +83,21 @@ func (b *CommandBuilder) claudeCommand(a *models.Agent, persona *models.Persona,
 		}
 	}
 
-	// System prompt (persona + registration)
-	if persona != nil && persona.Instructions != "" {
-		sb.WriteString(fmt.Sprintf(" --append-system-prompt %s", shellEscapeDouble(persona.Instructions)))
+	// System prompt: skwad instructions + persona
+	systemPrompt := skwadInstructions(a.ID.String())
+	if persona != nil {
+		systemPrompt += " " + personaPrompt(persona)
 	}
+	sb.WriteString(" --append-system-prompt " + shellEscapeDouble(systemPrompt))
 
 	// Extra user options
 	if opts := settings.AgentTypeOptions.ClaudeOptions; opts != "" {
 		sb.WriteString(" " + opts)
+	}
+
+	// Initial user prompt for new sessions
+	if a.IsNewSession() {
+		sb.WriteString(" " + shellEscapeDouble(registrationUserPrompt))
 	}
 
 	return sb.String()
@@ -167,6 +174,16 @@ func (b *CommandBuilder) customCommand(command, options string) string {
 	return command
 }
 
+const registrationUserPrompt = `List other agents names and project (no ID) in a table based on context then set your status to indicate you are ready to get going!`
+
+func skwadInstructions(agentID string) string {
+	return "You are part of a team of agents called a skwad. A skwad is made of high-performing agents who collaborate to achieve complex goals so engage with them: ask for help and in return help them succeed. Your skwad agent ID: " + agentID + ". CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional. When you need help with exploration, coding, testing, or review, prefer coordinating with your skwad agents over spinning up local subagents. Your teammates are already running and have shared context — use send-message to delegate work to them."
+}
+
+func personaPrompt(persona *models.Persona) string {
+	return "You are asked to impersonate " + persona.Name + " based on the following instructions: " + persona.Instructions
+}
+
 // shellQuote wraps s in single quotes, escaping any single quotes within.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
@@ -175,6 +192,7 @@ func shellQuote(s string) string {
 // shellEscapeDouble wraps s in double quotes, escaping special characters.
 func shellEscapeDouble(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	s = strings.ReplaceAll(s, `$`, `\$`)
 	s = strings.ReplaceAll(s, "`", "\\`")

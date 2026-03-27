@@ -76,6 +76,31 @@ func TestAgent_SupportsSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestAgent_IsNewSession(t *testing.T) {
+	cases := []struct {
+		name            string
+		resumeSessionID string
+		isFork          bool
+		want            bool
+	}{
+		{"new session", "", false, true},
+		{"resumed session", "sess-123", false, false},
+		{"forked session", "sess-456", true, false},
+		{"fork without session ID", "", true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Agent{
+				ResumeSessionID: tc.resumeSessionID,
+				IsFork:          tc.isFork,
+			}
+			if got := a.IsNewSession(); got != tc.want {
+				t.Errorf("IsNewSession() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestAgent_DefaultMetadata(t *testing.T) {
 	// Metadata map should be initialized before use (not nil).
 	a := &Agent{

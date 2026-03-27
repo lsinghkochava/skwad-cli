@@ -107,6 +107,11 @@ func (a *Agent) SupportsResume() bool {
 	return false
 }
 
+// IsNewSession reports whether this agent is starting a fresh session (not resume/fork).
+func (a *Agent) IsNewSession() bool {
+	return a.ResumeSessionID == "" && !a.IsFork
+}
+
 // SupportsSystemPrompt reports whether this agent type accepts a system prompt flag.
 func (a *Agent) SupportsSystemPrompt() bool {
 	return a.AgentType == AgentTypeClaude || a.AgentType == AgentTypeCodex

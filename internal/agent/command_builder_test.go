@@ -152,3 +152,130 @@ func TestShellEscapeDouble(t *testing.T) {
 		t.Error("unescaped backtick found in double-quoted string")
 	}
 }
+
+func TestCommandBuilder_Claude_NewSession_WithPersona(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("aaaaaaaa-0000-0000-0000-000000000001")
+	a := &models.Agent{
+		ID:        agentID,
+		Folder:    "/tmp",
+		AgentType: models.AgentTypeClaude,
+		// No ResumeSessionID, no IsFork → IsNewSession() == true
+	}
+	persona := &models.Persona{Name: "Tester", Instructions: "Write tests for all code."}
+	cmd := b.Build(a, persona, defaultSettings())
+
+	// Must have --append-system-prompt with BOTH skwad instructions AND persona text.
+	if !strings.Contains(cmd, "--append-system-prompt") {
+		t.Fatalf("missing --append-system-prompt: %s", cmd)
+	}
+	if !strings.Contains(cmd, "Your skwad agent ID: "+agentID.String()) {
+		t.Errorf("skwad instructions missing agent ID: %s", cmd)
+	}
+	if !strings.Contains(cmd, "You are asked to impersonate Tester") {
+		t.Errorf("persona prompt missing: %s", cmd)
+	}
+	if !strings.Contains(cmd, "Write tests for all code.") {
+		t.Errorf("persona instructions missing: %s", cmd)
+	}
+	// New session: must have trailing positional user prompt (shell-escaped).
+	if !strings.Contains(cmd, "List other agents names and project") {
+		t.Errorf("new session should include registration user prompt: %s", cmd)
+	}
+}
+
+func TestCommandBuilder_Claude_Resume_NoUserPrompt(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{
+		ID:              uuid.New(),
+		Folder:          "/tmp",
+		AgentType:       models.AgentTypeClaude,
+		ResumeSessionID: "sess-resume-123",
+	}
+	persona := &models.Persona{Name: "Coder", Instructions: "Write clean code."}
+	cmd := b.Build(a, persona, defaultSettings())
+
+	// Resume: must have system prompt with skwad + persona.
+	if !strings.Contains(cmd, "--append-system-prompt") {
+		t.Fatalf("missing --append-system-prompt: %s", cmd)
+	}
+	if !strings.Contains(cmd, "You are asked to impersonate Coder") {
+		t.Errorf("persona prompt missing for resumed session: %s", cmd)
+	}
+	// Resume: must NOT have trailing user prompt.
+	if strings.Contains(cmd, "List other agents names and project") {
+		t.Errorf("resumed session should NOT include registration user prompt: %s", cmd)
+	}
+	// Must have --resume flag.
+	if !strings.Contains(cmd, "--resume sess-resume-123") {
+		t.Errorf("resume flag missing: %s", cmd)
+	}
+}
+
+func TestCommandBuilder_Claude_Fork_NoUserPrompt(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{
+		ID:              uuid.New(),
+		Folder:          "/tmp",
+		AgentType:       models.AgentTypeClaude,
+		ResumeSessionID: "sess-fork-456",
+		IsFork:          true,
+	}
+	cmd := b.Build(a, nil, defaultSettings())
+
+	// Fork: must NOT have trailing user prompt.
+	if strings.Contains(cmd, "List other agents names and project") {
+		t.Errorf("forked session should NOT include registration user prompt: %s", cmd)
+	}
+	// Must have --resume + --fork-session flags.
+	if !strings.Contains(cmd, "--resume sess-fork-456 --fork-session") {
+		t.Errorf("fork flags missing: %s", cmd)
+	}
+}
+
+func TestCommandBuilder_Claude_NoPersona_SkwadOnly(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("bbbbbbbb-0000-0000-0000-000000000002")
+	a := &models.Agent{
+		ID:        agentID,
+		Folder:    "/tmp",
+		AgentType: models.AgentTypeClaude,
+	}
+	cmd := b.Build(a, nil, defaultSettings())
+
+	// Must have skwad instructions.
+	if !strings.Contains(cmd, "Your skwad agent ID: "+agentID.String()) {
+		t.Errorf("skwad instructions missing: %s", cmd)
+	}
+	// Must NOT have persona text.
+	if strings.Contains(cmd, "You are asked to impersonate") {
+		t.Errorf("no persona set but persona prompt found: %s", cmd)
+	}
+}
+
+func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
+	id := "12345678-aaaa-bbbb-cccc-000000000099"
+	result := skwadInstructions(id)
+	if !strings.Contains(result, id) {
+		t.Errorf("skwad instructions should contain agent UUID %q, got: %s", id, result)
+	}
+	if !strings.Contains(result, "CRITICAL RULE") {
+		t.Error("skwad instructions should contain CRITICAL RULE for set-status")
+	}
+}
+
+func TestShellEscapeDouble_HandlesNewlines(t *testing.T) {
+	input := "Line one\nLine two\nLine three"
+	result := shellEscapeDouble(input)
+	// Newlines must be escaped as literal \n so the shell doesn't break.
+	if strings.Contains(result, "\n") {
+		t.Errorf("unescaped newline found in result: %q", result)
+	}
+	if !strings.Contains(result, `\n`) {
+		t.Errorf("escaped newline (\\n) not found in result: %q", result)
+	}
+	// Must be wrapped in double quotes.
+	if result[0] != '"' || result[len(result)-1] != '"' {
+		t.Errorf("result should be double-quoted: %q", result)
+	}
+}
