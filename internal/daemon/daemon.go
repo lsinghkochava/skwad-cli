@@ -94,6 +94,11 @@ func (d *Daemon) Start() error {
 	d.Pool = terminal.NewPool(d.Manager, d.Coordinator, mcpURL, d.Config.PluginDir)
 	d.MCPServer.StatusUpdater = &hookBridge{pool: d.Pool, manager: d.Manager}
 
+	// Wire message delivery: when a message arrives, inject it into the agent's PTY.
+	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+		d.Pool.InjectText(agentID, text)
+	}
+
 	return nil
 }
 

@@ -146,6 +146,11 @@ func (c *Coordinator) SendMessage(fromID uuid.UUID, toIDOrName, content string) 
 		Timestamp: time.Now(),
 	}
 	target.inbox = append(target.inbox, msg)
+
+	// Notify immediately if the agent is already idle.
+	targetID := target.info.ID
+	go func() { c.NotifyIdleAgent(targetID) }()
+
 	return nil
 }
 
@@ -172,6 +177,15 @@ func (c *Coordinator) BroadcastMessage(fromID uuid.UUID, content string) {
 			Timestamp: time.Now(),
 		}
 		ra.inbox = append(ra.inbox, msg)
+	}
+
+	// Notify all recipients immediately.
+	for id := range c.registered {
+		if id == fromID {
+			continue
+		}
+		rid := id
+		go func() { c.NotifyIdleAgent(rid) }()
 	}
 }
 
@@ -238,7 +252,12 @@ func (c *Coordinator) UnregisterAgent(id uuid.UUID) {
 }
 
 func buildNotificationText(m Message) string {
-	return "[Skwad] Message from " + m.FromName + ":\n" + m.Content
+	text := "[Skwad] Message from " + m.FromName + ":\n" + m.Content
+	const maxNotificationLen = 2000
+	if len(text) > maxNotificationLen {
+		text = text[:maxNotificationLen] + "\n[truncated — run check-messages for full text]"
+	}
+	return text
 }
 
 // ErrAgentNotFound is returned when a target agent cannot be found.
