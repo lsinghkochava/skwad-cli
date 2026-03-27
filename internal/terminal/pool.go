@@ -5,6 +5,7 @@ package terminal
 
 import (
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +96,10 @@ func (p *Pool) Spawn(a *models.Agent) {
 	}
 
 	cmd := p.builder.Build(a, persona, settings)
-	env := []string{"SKWAD_AGENT_ID=" + a.ID.String()}
+	env := []string{
+		"SKWAD_AGENT_ID=" + a.ID.String(),
+		"SKWAD_URL=" + strings.TrimSuffix(p.mcpURL, "/mcp"),
+	}
 
 	// Shell agents use deferred staggered startup on restore.
 	if a.AgentType == models.AgentTypeShell {
@@ -207,16 +211,18 @@ func (p *Pool) spawnNow(agentID uuid.UUID, a *models.Agent, cmd string, env []st
 	e := &entry{session: sess, activity: ac, agentID: agentID}
 	p.entries[agentID] = e
 
-	// Schedule registration prompt injection.
-	go func() {
-		time.Sleep(registrationDelay)
-		if settings := p.manager.ActiveSettings(); settings.MCPServerEnabled {
-			prompt := agent.RegistrationPrompt(agentID, p.mcpURL, a.AgentType)
-			if prompt != "" {
-				p.InjectText(agentID, prompt)
+	// Schedule registration prompt injection (skip Claude — uses inline registration).
+	if a.AgentType != models.AgentTypeClaude {
+		go func() {
+			time.Sleep(registrationDelay)
+			if settings := p.manager.ActiveSettings(); settings.MCPServerEnabled {
+				prompt := agent.RegistrationPrompt(agentID, p.mcpURL, a.AgentType)
+				if prompt != "" {
+					p.InjectText(agentID, prompt)
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 // RawOutput returns the most recent raw terminal output for the agent (up to 64KB).
