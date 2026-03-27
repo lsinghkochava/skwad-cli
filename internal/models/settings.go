@@ -1,5 +1,8 @@
 package models
 
+// DefaultMCPPort is the default port for the MCP server.
+const DefaultMCPPort = 8777
+
 // AppearanceMode controls light/dark theme selection.
 type AppearanceMode string
 
@@ -105,7 +108,7 @@ func DefaultSettings() AppSettings {
 		TerminalBgColor:       "#1E1E1E",
 		TerminalFgColor:       "#D4D4D4",
 		MCPServerEnabled:      true,
-		MCPServerPort:         8766,
+		MCPServerPort:         DefaultMCPPort,
 		Autopilot: AutopilotSettings{
 			Action: AutopilotActionMark,
 		},

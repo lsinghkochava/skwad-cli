@@ -17,7 +17,7 @@ if [ -z "$hook" ] || [ -z "$status" ] || [ -z "$SKWAD_AGENT_ID" ]; then
   exit 0
 fi
 
-SKWAD_URL="${SKWAD_URL:-http://127.0.0.1:8766}"
+SKWAD_URL="${SKWAD_URL:-http://127.0.0.1:8777}"
 
 # Fire and forget — don't block the agent
 # Forward raw hook payload for server-side metadata extraction

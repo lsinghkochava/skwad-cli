@@ -15,7 +15,7 @@ if [ "$source_type" != "startup" ] && [ "$source_type" != "resume" ]; then
   exit 0
 fi
 
-SKWAD_URL="${SKWAD_URL:-http://127.0.0.1:8766}"
+SKWAD_URL="${SKWAD_URL:-http://127.0.0.1:8777}"
 
 # Need agent ID to register
 if [ -z "$SKWAD_AGENT_ID" ]; then

@@ -9,13 +9,15 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
-// resolvePort returns MCP server port from: --port flag > SKWAD_MCP_PORT env > default 8766.
+// resolvePort returns MCP server port from: --port flag > SKWAD_MCP_PORT env > default.
 func resolvePort() int {
 	// If the user explicitly set --port, that takes priority.
-	// Cobra sets flagPort to default 8766, so check env var as fallback when flag is default.
-	if flagPort != 8766 {
+	// Cobra sets flagPort to DefaultMCPPort, so check env var as fallback when flag is default.
+	if flagPort != models.DefaultMCPPort {
 		return flagPort
 	}
 	if envPort := os.Getenv("SKWAD_MCP_PORT"); envPort != "" {

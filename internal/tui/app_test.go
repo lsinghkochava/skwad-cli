@@ -25,7 +25,7 @@ func newTestApp(t *testing.T) *App {
 	return &App{
 		sidebar:   NewSidebar(agents),
 		termPane:  tp,
-		statusBar: NewStatusBar("http://127.0.0.1:8766/mcp", 3),
+		statusBar: NewStatusBar("http://127.0.0.1:8777/mcp", 3),
 		statusCh:  make(chan StatusMsg, 64),
 		mode:      ModeNavigation,
 	}

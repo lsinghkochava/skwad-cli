@@ -6,16 +6,16 @@ import (
 )
 
 func TestStatusBar_ContainsMCPURL(t *testing.T) {
-	sb := NewStatusBar("http://127.0.0.1:8766/mcp", 5)
+	sb := NewStatusBar("http://127.0.0.1:8777/mcp", 5)
 	view := sb.View(120)
 
-	if !strings.Contains(view, "http://127.0.0.1:8766/mcp") {
+	if !strings.Contains(view, "http://127.0.0.1:8777/mcp") {
 		t.Errorf("status bar should contain MCP URL, got: %q", view)
 	}
 }
 
 func TestStatusBar_ContainsAgentCount(t *testing.T) {
-	sb := NewStatusBar("http://localhost:8766/mcp", 3)
+	sb := NewStatusBar("http://localhost:8777/mcp", 3)
 	view := sb.View(120)
 
 	if !strings.Contains(view, "Agents: 3") {
@@ -24,7 +24,7 @@ func TestStatusBar_ContainsAgentCount(t *testing.T) {
 }
 
 func TestStatusBar_ContainsActiveAgent(t *testing.T) {
-	sb := NewStatusBar("http://localhost:8766/mcp", 2)
+	sb := NewStatusBar("http://localhost:8777/mcp", 2)
 	sb.SetActive("Manager")
 	view := sb.View(120)
 

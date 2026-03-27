@@ -9,7 +9,7 @@ import (
 
 // CommandBuilder constructs the shell command string to launch an agent terminal.
 type CommandBuilder struct {
-	MCPServerURL string // e.g. "http://127.0.0.1:8766/mcp"
+	MCPServerURL string // e.g. "http://127.0.0.1:8777/mcp"
 	PluginDir    string // path to hook scripts directory
 }
 

@@ -162,8 +162,8 @@ func TestStore_DefaultSettings_UsedWhenMissing(t *testing.T) {
 	s := newTempStore(t)
 	// No settings file written — should return defaults.
 	settings := s.Settings()
-	if settings.MCPServerPort != 8766 {
-		t.Errorf("default MCPServerPort should be 8766, got %d", settings.MCPServerPort)
+	if settings.MCPServerPort != 8777 {
+		t.Errorf("default MCPServerPort should be 8777, got %d", settings.MCPServerPort)
 	}
 	if !settings.MCPServerEnabled {
 		t.Error("MCP server should be enabled by default")

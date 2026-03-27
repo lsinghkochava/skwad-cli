@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 var (
@@ -36,7 +37,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().IntVar(&flagPort, "port", 8766, "MCP server port")
+	rootCmd.PersistentFlags().IntVar(&flagPort, "port", models.DefaultMCPPort, "MCP server port")
 	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "enable verbose output")
 	rootCmd.PersistentFlags().BoolVar(&flagQuiet, "quiet", false, "suppress non-error output")
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", "", "path to team config file")

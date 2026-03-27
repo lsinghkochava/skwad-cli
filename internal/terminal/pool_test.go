@@ -30,7 +30,7 @@ func newTestPool(t *testing.T, mcpURL string) (*Pool, *agent.Manager) {
 }
 
 func TestPool_Spawn_SetsSkwadURL(t *testing.T) {
-	pool, mgr := newTestPool(t, "http://127.0.0.1:8766/mcp")
+	pool, mgr := newTestPool(t, "http://127.0.0.1:8777/mcp")
 
 	agentID := uuid.New()
 	a := &models.Agent{
@@ -62,7 +62,7 @@ func TestPool_Spawn_SetsSkwadURL(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	pool.InjectText(agentID, "echo SKWAD_URL_VAL=$SKWAD_URL")
 
-	wantMarker := "SKWAD_URL_VAL=http://127.0.0.1:8766"
+	wantMarker := "SKWAD_URL_VAL=http://127.0.0.1:8777"
 	deadline := time.After(5 * time.Second)
 	for {
 		select {
@@ -77,7 +77,7 @@ func TestPool_Spawn_SetsSkwadURL(t *testing.T) {
 			mu.Unlock()
 			if strings.Contains(got, wantMarker) {
 				// Verify /mcp suffix was stripped.
-				if strings.Contains(got, "SKWAD_URL_VAL=http://127.0.0.1:8766/mcp") {
+				if strings.Contains(got, "SKWAD_URL_VAL=http://127.0.0.1:8777/mcp") {
 					t.Fatal("/mcp suffix was not stripped from SKWAD_URL")
 				}
 				return
@@ -187,7 +187,7 @@ func TestPool_Spawn_EmptyMCPURL(t *testing.T) {
 }
 
 func TestPool_Spawn_PreservesSkwadAgentID(t *testing.T) {
-	pool, mgr := newTestPool(t, "http://127.0.0.1:8766/mcp")
+	pool, mgr := newTestPool(t, "http://127.0.0.1:8777/mcp")
 
 	agentID := uuid.New()
 	a := &models.Agent{
@@ -240,7 +240,7 @@ func TestPool_Spawn_NonClaude_GetsDelayedRegistration(t *testing.T) {
 		t.Skip("skipping slow registration delay test in short mode")
 	}
 
-	pool, mgr := newTestPool(t, "http://127.0.0.1:8766/mcp")
+	pool, mgr := newTestPool(t, "http://127.0.0.1:8777/mcp")
 
 	agentID := uuid.New()
 	a := &models.Agent{
@@ -291,7 +291,7 @@ func TestPool_Spawn_Claude_SkipsDelayedRegistration(t *testing.T) {
 		t.Skip("skipping slow registration delay test in short mode")
 	}
 
-	pool, mgr := newTestPool(t, "http://127.0.0.1:8766/mcp")
+	pool, mgr := newTestPool(t, "http://127.0.0.1:8777/mcp")
 
 	agentID := uuid.New()
 	a := &models.Agent{
@@ -337,8 +337,8 @@ func TestTrimSuffix_MCPURLVariants(t *testing.T) {
 	}{
 		{
 			name:    "standard mcp suffix",
-			mcpURL:  "http://127.0.0.1:8766/mcp",
-			wantURL: "http://127.0.0.1:8766",
+			mcpURL:  "http://127.0.0.1:8777/mcp",
+			wantURL: "http://127.0.0.1:8777",
 		},
 		{
 			name:    "non-default port",
@@ -347,8 +347,8 @@ func TestTrimSuffix_MCPURLVariants(t *testing.T) {
 		},
 		{
 			name:    "no mcp suffix",
-			mcpURL:  "http://127.0.0.1:8766",
-			wantURL: "http://127.0.0.1:8766",
+			mcpURL:  "http://127.0.0.1:8777",
+			wantURL: "http://127.0.0.1:8777",
 		},
 		{
 			name:    "empty string",
@@ -357,8 +357,8 @@ func TestTrimSuffix_MCPURLVariants(t *testing.T) {
 		},
 		{
 			name:    "trailing slash mcp",
-			mcpURL:  "http://127.0.0.1:8766/mcp/",
-			wantURL: "http://127.0.0.1:8766/mcp/",
+			mcpURL:  "http://127.0.0.1:8777/mcp/",
+			wantURL: "http://127.0.0.1:8777/mcp/",
 		},
 	}
 

@@ -10,7 +10,7 @@ import (
 
 func defaultBuilder() *CommandBuilder {
 	return &CommandBuilder{
-		MCPServerURL: "http://127.0.0.1:8766/mcp",
+		MCPServerURL: "http://127.0.0.1:8777/mcp",
 		PluginDir:    "/tmp/plugins",
 	}
 }
