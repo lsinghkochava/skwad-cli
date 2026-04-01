@@ -11,11 +11,11 @@ import (
 	"sync"
 	"syscall"
 
-	tea "charm.land/bubbletea/v2"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
-	"github.com/lsinghkochava/skwad-cli/internal/tui"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 var (
@@ -66,7 +66,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// 5. Spawn all agents.
 	for _, a := range agents {
-		d.Pool.Spawn(a)
+		d.SpawnAgent(a)
 	}
 
 	// 6. Write PID file.
@@ -79,23 +79,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 		slog.Warn("failed to write PID file", "error", err)
 	}
 
-	// 7. TUI mode vs headless mode.
+	// 7. Wire --watch output subscriber if requested.
 	if startFlagWatch {
-		// TUI mode: Bubble Tea takes over the terminal.
-		app := tui.New(d, agents)
-		p := tea.NewProgram(app)
-		if _, err := p.Run(); err != nil {
-			slog.Error("TUI error", "error", err)
+		wo := newWatchOutput(os.Stdout)
+		d.Pool.OutputSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
+			wo.write(agentName, data)
 		}
-		d.Stop()
-		if pidFile != nil {
-			pidFile.Close()
+		d.Pool.OnStatusChanged = func(agentID uuid.UUID, status models.AgentStatus) {
+			slog.Info("agent status changed", "agentID", agentID, "status", status)
 		}
-		daemon.RemovePIDFile(dataDir)
-		return nil
 	}
 
-	// Headless mode: print banner and block on signals.
+	// Print banner and block on signals.
 	slog.Info("daemon started", "port", flagPort, "agents", len(agents))
 	fmt.Printf("skwad started on port %d\n", flagPort)
 	fmt.Printf("Agents: %d\n", len(agents))

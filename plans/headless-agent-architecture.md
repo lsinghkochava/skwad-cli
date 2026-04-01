@@ -1339,20 +1339,20 @@ Each commit is buildable and testable. Tests at every step.
 
 ## Status
 
-- [ ] Phase 0.1 — Stream format verification (prerequisite gate)
-- [ ] Phase 1.1 — Command Builder update
-- [ ] Phase 1.2 — Process Runner
-- [ ] Phase 1.3 — Process Pool
-- [ ] Phase 1.4 — Activity Controller rewrite
-- [ ] Phase 2.1 — Daemon rewire
-- [ ] Phase 2.2 — start.go update + remove TUI
-- [ ] Phase 2.3 — run.go update
-- [ ] Phase 2.4 — Hook handler update
-- [ ] Phase 2.5 — Log stream watch mode
-- [ ] Phase 3.1 — Remove terminal/ package
-- [ ] Phase 3.2 — Remove tui/ package
-- [ ] Phase 3.3 — Remove creack/pty + bubbleterm deps
-- [ ] Phase 3.4 — Remove Claude plugin scripts
+- [x] Phase 0.1 — Stream format verification (prerequisite gate) *(2026-04-01)*
+- [x] Phase 1.1 — Command Builder update *(2026-04-01)*
+- [x] Phase 1.2 — Process Runner *(2026-04-01)*
+- [x] Phase 1.3 — Process Pool *(2026-04-01)*
+- [x] Phase 1.4 — Activity Controller rewrite *(2026-04-01)*
+- [x] Phase 2.1 — Daemon rewire *(2026-04-01)*
+- [x] Phase 2.2 — start.go update + remove TUI *(2026-04-01)*
+- [x] Phase 2.3 — run.go update *(2026-04-01)*
+- [x] Phase 2.4 — Hook handler update *(2026-04-01)*
+- [x] Phase 2.5 — Log stream watch mode *(2026-04-01)*
+- [x] Phase 3.1 — Remove terminal/ package *(2026-04-01)*
+- [x] Phase 3.2 — Remove tui/ package *(2026-04-01)*
+- [x] Phase 3.3 — Remove creack/pty + bubbleterm deps *(2026-04-01)*
+- [x] Phase 3.4 — Remove Claude plugin scripts *(2026-04-01)*
 - [ ] Phase 4.1 — TUI dashboard scaffold
 - [ ] Phase 4.2 — Status table panel
 - [ ] Phase 4.3 — Activity log panel

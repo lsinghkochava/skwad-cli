@@ -81,7 +81,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		outputBufs[a.ID] = &bytes.Buffer{}
 	}
 
-	// 7. Exit codes are captured by Pool.ExitCode() from the PTY session.
+	// 7. Exit codes are captured by Pool.ExitCode() from the agent process.
 
 	// 8. Start daemon.
 	if err := d.Start(); err != nil {
@@ -118,7 +118,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 
 	// 9. Spawn all agents.
 	for _, a := range agents {
-		d.Pool.Spawn(a)
+		d.SpawnAgent(a)
 	}
 
 	// 10. Wait for agents to register (up to 30s).
@@ -140,7 +140,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 
 	// 11. Send prompt to each agent (per-agent > --prompt > team prompt).
 	// When entry_agent is set, global/flag prompts go only to the entry agent.
-	time.Sleep(2 * time.Second)
+	// No sleep needed — SendPrompt handles readiness via stream-json protocol.
 	promptsSent := 0
 	for i, a := range agents {
 		var agentPrompt string
@@ -160,7 +160,9 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			agentPrompt = resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
 		}
 		if agentPrompt != "" {
-			d.Pool.QueueText(a.ID, agentPrompt+"\n")
+			if err := d.Pool.SendPrompt(a.ID, agentPrompt); err != nil {
+				slog.Error("failed to send prompt", "agent", a.Name, "error", err)
+			}
 			promptsSent++
 		}
 	}

@@ -48,7 +48,10 @@ type AgentStatusUpdater interface {
 	SetStatusText(agentID uuid.UUID, status, category string)
 }
 
-// hookHandler processes POST /hook requests from claude/codex plugin scripts.
+// hookHandler processes POST /hook requests from agent plugin scripts.
+// For Claude agents in headless mode, status is derived from the stdout JSON
+// stream via Pool → ActivityController. This HTTP endpoint is used by
+// non-Claude agents (Codex, Gemini, etc.) that post status via HTTP hooks.
 type hookHandler struct {
 	server *Server
 }

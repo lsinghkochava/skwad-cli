@@ -20,239 +20,6 @@ func defaultSettings() *models.AppSettings {
 	return &s
 }
 
-func TestCommandBuilder_ContainsCdAndClear(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:        uuid.New(),
-		Folder:    "/home/user/project",
-		AgentType: models.AgentTypeClaude,
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "cd '/home/user/project'") {
-		t.Errorf("command missing cd: %s", cmd)
-	}
-	if !strings.Contains(cmd, "clear") {
-		t.Errorf("command missing clear: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_InjectsAgentID(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:        uuid.MustParse("12345678-0000-0000-0000-000000000000"),
-		Folder:    "/tmp",
-		AgentType: models.AgentTypeClaude,
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "SKWAD_AGENT_ID=12345678-0000-0000-0000-000000000000") {
-		t.Errorf("command missing SKWAD_AGENT_ID: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_HistoryPrefix(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{ID: uuid.New(), Folder: "/tmp", AgentType: models.AgentTypeShell}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.HasPrefix(cmd, " ") {
-		t.Error("command must start with a space to suppress shell history")
-	}
-}
-
-func TestCommandBuilder_ClaudeMCPFlags(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{ID: uuid.New(), Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "--mcp-config") {
-		t.Errorf("claude command missing --mcp-config: %s", cmd)
-	}
-	if !strings.Contains(cmd, "--allowed-tools") {
-		t.Errorf("claude command missing --allowed-tools: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_ClaudeResume(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:              uuid.New(),
-		Folder:          "/tmp",
-		AgentType:       models.AgentTypeClaude,
-		ResumeSessionID: "sess-abc",
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "--resume sess-abc") {
-		t.Errorf("claude resume flag missing: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_ClaudePersonaInjected(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{ID: uuid.New(), Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	persona := &models.Persona{Instructions: "Always write tests first."}
-	cmd := b.Build(a, persona, defaultSettings())
-	if !strings.Contains(cmd, "--append-system-prompt") {
-		t.Errorf("claude persona injection missing: %s", cmd)
-	}
-	if !strings.Contains(cmd, "Always write tests first.") {
-		t.Errorf("persona instructions not present in command: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_ShellAgent(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:           uuid.New(),
-		Folder:       "/tmp",
-		AgentType:    models.AgentTypeShell,
-		ShellCommand: "bash",
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "bash") {
-		t.Errorf("shell agent command missing 'bash': %s", cmd)
-	}
-}
-
-func TestCommandBuilder_ShellAgent_DefaultsToSHELL(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{ID: uuid.New(), Folder: "/tmp", AgentType: models.AgentTypeShell}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "$SHELL") {
-		t.Errorf("shell agent without ShellCommand should use $SHELL: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_CodexCommand(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{ID: uuid.New(), Folder: "/tmp", AgentType: models.AgentTypeCodex}
-	cmd := b.Build(a, nil, defaultSettings())
-	if !strings.Contains(cmd, "codex") {
-		t.Errorf("codex command missing 'codex': %s", cmd)
-	}
-}
-
-func TestShellQuote(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"hello", "'hello'"},
-		{"it's", "'it'\\''s'"},
-		{"/home/user/my project", "'/home/user/my project'"},
-	}
-	for _, tc := range cases {
-		if got := shellQuote(tc.in); got != tc.want {
-			t.Errorf("shellQuote(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestShellEscapeDouble(t *testing.T) {
-	// Dollar signs and backticks must be escaped inside double quotes.
-	result := shellEscapeDouble("hello $world `test` \"quoted\"")
-	if strings.Contains(result, " $world") {
-		t.Error("unescaped $ found in double-quoted string")
-	}
-	if strings.Contains(result, " `test`") {
-		t.Error("unescaped backtick found in double-quoted string")
-	}
-}
-
-func TestCommandBuilder_Claude_NewSession_WithPersona(t *testing.T) {
-	b := defaultBuilder()
-	agentID := uuid.MustParse("aaaaaaaa-0000-0000-0000-000000000001")
-	a := &models.Agent{
-		ID:        agentID,
-		Folder:    "/tmp",
-		AgentType: models.AgentTypeClaude,
-		// No ResumeSessionID, no IsFork → IsNewSession() == true
-	}
-	persona := &models.Persona{Name: "Tester", Instructions: "Write tests for all code."}
-	cmd := b.Build(a, persona, defaultSettings())
-
-	// Must have --append-system-prompt with BOTH skwad instructions AND persona text.
-	if !strings.Contains(cmd, "--append-system-prompt") {
-		t.Fatalf("missing --append-system-prompt: %s", cmd)
-	}
-	if !strings.Contains(cmd, "Your skwad agent ID: "+agentID.String()) {
-		t.Errorf("skwad instructions missing agent ID: %s", cmd)
-	}
-	if !strings.Contains(cmd, "You are asked to impersonate Tester") {
-		t.Errorf("persona prompt missing: %s", cmd)
-	}
-	if !strings.Contains(cmd, "Write tests for all code.") {
-		t.Errorf("persona instructions missing: %s", cmd)
-	}
-	// New session: must have trailing positional user prompt (shell-escaped).
-	if !strings.Contains(cmd, "List other agents names and project") {
-		t.Errorf("new session should include registration user prompt: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_Claude_Resume_NoUserPrompt(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:              uuid.New(),
-		Folder:          "/tmp",
-		AgentType:       models.AgentTypeClaude,
-		ResumeSessionID: "sess-resume-123",
-	}
-	persona := &models.Persona{Name: "Coder", Instructions: "Write clean code."}
-	cmd := b.Build(a, persona, defaultSettings())
-
-	// Resume: must have system prompt with skwad + persona.
-	if !strings.Contains(cmd, "--append-system-prompt") {
-		t.Fatalf("missing --append-system-prompt: %s", cmd)
-	}
-	if !strings.Contains(cmd, "You are asked to impersonate Coder") {
-		t.Errorf("persona prompt missing for resumed session: %s", cmd)
-	}
-	// Resume: must NOT have trailing user prompt.
-	if strings.Contains(cmd, "List other agents names and project") {
-		t.Errorf("resumed session should NOT include registration user prompt: %s", cmd)
-	}
-	// Must have --resume flag.
-	if !strings.Contains(cmd, "--resume sess-resume-123") {
-		t.Errorf("resume flag missing: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_Claude_Fork_NoUserPrompt(t *testing.T) {
-	b := defaultBuilder()
-	a := &models.Agent{
-		ID:              uuid.New(),
-		Folder:          "/tmp",
-		AgentType:       models.AgentTypeClaude,
-		ResumeSessionID: "sess-fork-456",
-		IsFork:          true,
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-
-	// Fork: must NOT have trailing user prompt.
-	if strings.Contains(cmd, "List other agents names and project") {
-		t.Errorf("forked session should NOT include registration user prompt: %s", cmd)
-	}
-	// Must have --resume + --fork-session flags.
-	if !strings.Contains(cmd, "--resume sess-fork-456 --fork-session") {
-		t.Errorf("fork flags missing: %s", cmd)
-	}
-}
-
-func TestCommandBuilder_Claude_NoPersona_SkwadOnly(t *testing.T) {
-	b := defaultBuilder()
-	agentID := uuid.MustParse("bbbbbbbb-0000-0000-0000-000000000002")
-	a := &models.Agent{
-		ID:        agentID,
-		Folder:    "/tmp",
-		AgentType: models.AgentTypeClaude,
-	}
-	cmd := b.Build(a, nil, defaultSettings())
-
-	// Must have skwad instructions.
-	if !strings.Contains(cmd, "Your skwad agent ID: "+agentID.String()) {
-		t.Errorf("skwad instructions missing: %s", cmd)
-	}
-	// Must NOT have persona text.
-	if strings.Contains(cmd, "You are asked to impersonate") {
-		t.Errorf("no persona set but persona prompt found: %s", cmd)
-	}
-}
-
 func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
 	id := "12345678-aaaa-bbbb-cccc-000000000099"
 	result := skwadInstructions(id)
@@ -264,18 +31,281 @@ func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
 	}
 }
 
-func TestShellEscapeDouble_HandlesNewlines(t *testing.T) {
-	input := "Line one\nLine two\nLine three"
-	result := shellEscapeDouble(input)
-	// Newlines must be escaped as literal \n so the shell doesn't break.
-	if strings.Contains(result, "\n") {
-		t.Errorf("unescaped newline found in result: %q", result)
+// --- BuildArgs tests ---
+
+func TestBuildArgs_ClaudeBasicFlags(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("aaaaaaaa-1111-2222-3333-444444444444")
+	a := &models.Agent{
+		ID:        agentID,
+		Name:      "TestAgent",
+		Folder:    "/home/user/project",
+		AgentType: models.AgentTypeClaude,
 	}
-	if !strings.Contains(result, `\n`) {
-		t.Errorf("escaped newline (\\n) not found in result: %q", result)
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	// Must be wrapped in double quotes.
-	if result[0] != '"' || result[len(result)-1] != '"' {
-		t.Errorf("result should be double-quoted: %q", result)
+
+	required := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "auto"}
+	for _, flag := range required {
+		if !containsArg(args, flag) {
+			t.Errorf("missing required flag %q in args: %v", flag, args)
+		}
 	}
+}
+
+func TestBuildArgs_ClaudeMCPConfig(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !containsArg(args, "--mcp-config") {
+		t.Error("missing --mcp-config")
+	}
+	if !containsArg(args, "--allowed-tools") {
+		t.Error("missing --allowed-tools")
+	}
+	mcpIdx := argIndex(args, "--mcp-config")
+	if mcpIdx < 0 || mcpIdx+1 >= len(args) {
+		t.Fatal("--mcp-config flag missing value")
+	}
+	if !strings.Contains(args[mcpIdx+1], "http://127.0.0.1:8777/mcp") {
+		t.Errorf("MCP config missing URL: %s", args[mcpIdx+1])
+	}
+}
+
+func TestBuildArgs_ClaudeNoMCP(t *testing.T) {
+	b := &CommandBuilder{MCPServerURL: "", PluginDir: "/tmp/plugins"}
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if containsArg(args, "--mcp-config") {
+		t.Error("should not have --mcp-config when MCPServerURL is empty")
+	}
+}
+
+func TestBuildArgs_ClaudePersona(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("bbbbbbbb-1111-2222-3333-444444444444")
+	a := &models.Agent{ID: agentID, Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	persona := &models.Persona{Name: "Tester", Instructions: "Write tests for all code."}
+	args, err := b.BuildArgs(a, persona, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sysIdx := argIndex(args, "--append-system-prompt")
+	if sysIdx < 0 || sysIdx+1 >= len(args) {
+		t.Fatal("missing --append-system-prompt value")
+	}
+	prompt := args[sysIdx+1]
+	if !strings.Contains(prompt, "Your skwad agent ID: "+agentID.String()) {
+		t.Error("system prompt missing skwad agent ID")
+	}
+	if !strings.Contains(prompt, "You are asked to impersonate Tester") {
+		t.Error("system prompt missing persona name")
+	}
+	if !strings.Contains(prompt, "Write tests for all code.") {
+		t.Error("system prompt missing persona instructions")
+	}
+}
+
+func TestBuildArgs_ClaudeNoPersona(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("cccccccc-1111-2222-3333-444444444444")
+	a := &models.Agent{ID: agentID, Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sysIdx := argIndex(args, "--append-system-prompt")
+	if sysIdx < 0 || sysIdx+1 >= len(args) {
+		t.Fatal("missing --append-system-prompt value")
+	}
+	prompt := args[sysIdx+1]
+	if strings.Contains(prompt, "You are asked to impersonate") {
+		t.Error("should not contain persona prompt when no persona given")
+	}
+}
+
+func TestBuildArgs_ClaudeResumeSession(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{
+		ID:              uuid.New(),
+		Name:            "Agent",
+		Folder:          "/tmp",
+		AgentType:       models.AgentTypeClaude,
+		ResumeSessionID: "sess-headless-123",
+	}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	idx := argIndex(args, "--session-id")
+	if idx < 0 || idx+1 >= len(args) {
+		t.Fatal("missing --session-id")
+	}
+	if args[idx+1] != "sess-headless-123" {
+		t.Errorf("wrong session ID: got %s, want sess-headless-123", args[idx+1])
+	}
+}
+
+func TestBuildArgs_ClaudeModelFromOptions(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	settings := defaultSettings()
+	settings.AgentTypeOptions.ClaudeOptions = "--model claude-sonnet-4-20250514 --some-other-flag"
+	args, err := b.BuildArgs(a, nil, settings)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	idx := argIndex(args, "--model")
+	if idx < 0 || idx+1 >= len(args) {
+		t.Fatal("missing --model flag")
+	}
+	if args[idx+1] != "claude-sonnet-4-20250514" {
+		t.Errorf("wrong model: got %s", args[idx+1])
+	}
+}
+
+func TestBuildArgs_ClaudeNoModel(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if containsArg(args, "--model") {
+		t.Error("should not have --model when ClaudeOptions has no model")
+	}
+}
+
+func TestBuildArgs_ClaudeWorkingDir(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/home/user/project", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	idx := argIndex(args, "--add-dir")
+	if idx < 0 || idx+1 >= len(args) {
+		t.Fatal("missing --add-dir")
+	}
+	if args[idx+1] != "/home/user/project" {
+		t.Errorf("wrong dir: got %s", args[idx+1])
+	}
+}
+
+func TestBuildArgs_ClaudeAgentName(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "MyAgent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	idx := argIndex(args, "--name")
+	if idx < 0 || idx+1 >= len(args) {
+		t.Fatal("missing --name")
+	}
+	if args[idx+1] != "MyAgent" {
+		t.Errorf("wrong name: got %s, want MyAgent", args[idx+1])
+	}
+}
+
+func TestBuildArgs_NoPluginDir(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if containsArg(args, "--plugin-dir") {
+		t.Error("headless mode should not include --plugin-dir")
+	}
+}
+
+func TestBuildArgs_NoRegistrationPrompt(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, arg := range args {
+		if strings.Contains(arg, "List other agents names and project") {
+			t.Error("headless mode should not include registration user prompt")
+		}
+	}
+}
+
+func TestBuildArgs_UnsupportedAgentTypes(t *testing.T) {
+	unsupported := []models.AgentType{
+		models.AgentTypeCodex,
+		models.AgentTypeOpenCode,
+		models.AgentTypeGemini,
+		models.AgentTypeCopilot,
+		models.AgentTypeCustom1,
+		models.AgentTypeCustom2,
+		models.AgentTypeShell,
+	}
+	b := defaultBuilder()
+	for _, agentType := range unsupported {
+		a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: agentType}
+		_, err := b.BuildArgs(a, nil, defaultSettings())
+		if err == nil {
+			t.Errorf("expected error for agent type %s, got nil", agentType)
+		}
+		if err != nil && !strings.Contains(err.Error(), "headless mode not supported") {
+			t.Errorf("unexpected error message for %s: %v", agentType, err)
+		}
+	}
+}
+
+func TestParseFlag(t *testing.T) {
+	cases := []struct {
+		opts, flag, want string
+	}{
+		{"--model claude-sonnet-4-20250514", "--model", "claude-sonnet-4-20250514"},
+		{"--some-flag value --model opus", "--model", "opus"},
+		{"--other stuff", "--model", ""},
+		{"--model", "--model", ""}, // flag at end with no value
+		{"", "--model", ""},
+	}
+	for _, tc := range cases {
+		got := parseFlag(tc.opts, tc.flag)
+		if got != tc.want {
+			t.Errorf("parseFlag(%q, %q) = %q, want %q", tc.opts, tc.flag, got, tc.want)
+		}
+	}
+}
+
+// helpers for BuildArgs tests
+
+func containsArg(args []string, target string) bool {
+	for _, a := range args {
+		if a == target {
+			return true
+		}
+	}
+	return false
+}
+
+func argIndex(args []string, target string) int {
+	for i, a := range args {
+		if a == target {
+			return i
+		}
+	}
+	return -1
 }
