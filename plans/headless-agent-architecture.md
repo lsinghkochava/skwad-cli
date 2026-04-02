@@ -1174,6 +1174,316 @@ Deletes `~/.config/skwad/runs/<run-id>/` directories older than the specified du
 
 ---
 
+### Phase 6 — Autonomous Team Coordination
+
+**Goal**: Add a task management system to the MCP server with two coordination modes — **managed** (current model: a Manager assigns work) and **autonomous** (agents self-organize, dynamically claim tasks, decide who does what). Inspired by Claude Code's native agent teams architecture (shared task lists, self-claiming, direct messaging, quality hooks).
+
+**Dependencies**: Phase 6 has no hard dependency on Phases 4 or 5. It builds on the headless foundation (Phases 0-3) and the existing MCP/coordinator architecture. Phase 6.6 has a soft integration point with Phase 5.4 (enriched system prompts) — see notes below.
+
+#### Design Decisions
+
+1. **Coordination mode is per-team** (`"coordination": "managed" | "autonomous"`) — simpler than per-agent. Mixed teams are handled by persona instructions (a Manager persona in autonomous mode naturally gravitates toward coordinating). If per-agent mode is needed later, it can be added by making `coordination` a field on `AgentConfig`.
+
+2. **Tasks are in-memory with optional persistence** — same philosophy as messages (in-memory only per CLAUDE.md rules). Opt-in `persist_tasks: true` team config flag for CI/long-running use cases where daemon restarts are possible.
+
+3. **Auto-claim via new `OnAgentIdle` callback** — separate from `NotifyIdleAgent` to keep message delivery and task claiming as independent concerns. Fired **outside the mutex** (same unlock/relock dance as `OnDeliverMessage`) to avoid deadlock when the callback calls back into the coordinator (e.g., `ClaimTask`).
+
+4. **Task eligibility is simple** — any idle agent can claim any unblocked, unassigned task. No system-level capability matching. In managed mode, the manager assigns explicitly. In autonomous mode, agents self-claim. Role-based intelligence comes from prompt instructions ("as an Explorer, prefer research tasks"). Tasks are claimed FIFO (sorted by `CreatedAt`).
+
+5. **Dependencies are flat `blocked_by []TaskID`** — no DAG library, just a list check. Task is claimable when all `blocked_by` tasks are completed. **Circular dependency detection** in `CreateTask` — walks the dependency chain to reject cycles (A→B→A). Simple O(d) check.
+
+6. **Wire `AllowedTools` as part of this phase** — prerequisite for meaningful capability restriction, already half-built (`config.AgentConfig.AllowedTools` defined at `team.go:48` but never consumed by `BuildArgs()`).
+
+7. **Quality gate callbacks on task transitions** — `OnTaskCreated`, `OnTaskCompleted` on coordinator for future hook extensibility.
+
+8. **Max task count is configurable** — `max_tasks` field in `TeamConfig` (default 50) prevents runaway task creation in autonomous mode.
+
+9. **Ownership checks on mutations** — `CompleteTask` verifies the completing agent is the assignee. `UpdateTask` verifies the caller is the creator or assignee.
+
+---
+
+#### 6.1 — Task model + coordinator task management
+
+**New file**: `internal/models/task.go`
+
+```go
+type TaskStatus string
+
+const (
+    TaskStatusPending    TaskStatus = "pending"
+    TaskStatusInProgress TaskStatus = "in_progress"
+    TaskStatusCompleted  TaskStatus = "completed"
+    TaskStatusBlocked    TaskStatus = "blocked"
+)
+
+type Task struct {
+    ID           uuid.UUID   `json:"id"`
+    Title        string      `json:"title"`
+    Description  string      `json:"description"`
+    Status       TaskStatus  `json:"status"`
+    AssigneeID   *uuid.UUID  `json:"assigneeId,omitempty"`
+    AssigneeName string      `json:"assigneeName,omitempty"`
+    CreatedBy    uuid.UUID   `json:"createdBy"`
+    Dependencies []uuid.UUID `json:"dependencies,omitempty"` // blocked_by task IDs
+    CreatedAt    time.Time   `json:"createdAt"`
+    CompletedAt  *time.Time  `json:"completedAt,omitempty"`
+}
+```
+
+**File**: `internal/agent/coordinator.go`
+
+Add task storage and management to the coordinator:
+
+```go
+// New fields on Coordinator struct:
+tasks           map[uuid.UUID]*models.Task  // in-memory task store
+maxTasks        int                          // configurable limit (default 50)
+
+// New callbacks:
+OnAgentIdle     func(agentID uuid.UUID)     // fired when idle + no unread messages
+OnTaskCreated   func(task *models.Task)     // quality gate hook
+OnTaskCompleted func(task *models.Task)     // quality gate hook
+```
+
+Methods:
+- `CreateTask(createdBy uuid.UUID, title, description string, deps []uuid.UUID) (*models.Task, error)` — validates deps exist, **checks for circular dependencies** (walks transitive dep chain, rejects if cycle detected), checks max task count, sets status to Pending (or Blocked if deps incomplete), fires `OnTaskCreated`
+- `ListTasks() []*models.Task` — returns all tasks **sorted by CreatedAt** (FIFO ordering for predictable auto-claim)
+- `ClaimTask(agentID uuid.UUID, taskID uuid.UUID) error` — atomic: check unassigned + unblocked, assign, set InProgress. Error if already claimed or blocked.
+- `CompleteTask(agentID uuid.UUID, taskID uuid.UUID) error` — **verifies agentID == task.AssigneeID**, mark completed, set CompletedAt, auto-unblock dependent tasks inline (scan all tasks, remove this ID from their deps, if deps now empty → set Pending). Fire `OnTaskCompleted`.
+- `UpdateTask(callerID uuid.UUID, taskID uuid.UUID, title, description string) error` — **verifies callerID is creator or assignee**, update mutable fields only
+- `GetTask(taskID uuid.UUID) (*models.Task, error)` — single task lookup
+
+Circular dependency detection in `CreateTask`:
+```go
+func (c *Coordinator) hasCircularDep(taskID uuid.UUID, deps []uuid.UUID) bool {
+    visited := map[uuid.UUID]bool{taskID: true}
+    queue := append([]uuid.UUID{}, deps...)
+    for len(queue) > 0 {
+        current := queue[0]
+        queue = queue[1:]
+        if visited[current] {
+            return true // cycle detected
+        }
+        visited[current] = true
+        if t, ok := c.tasks[current]; ok {
+            queue = append(queue, t.Dependencies...)
+        }
+    }
+    return false
+}
+```
+
+Extend `NotifyIdleAgent()`: after inbox check, if no unread messages, fire `OnAgentIdle(agentID)` callback **outside the mutex** (same unlock/relock pattern as `OnDeliverMessage` to prevent deadlock):
+```go
+// At end of NotifyIdleAgent, after message delivery loop:
+if !delivered {
+    if c.OnAgentIdle != nil {
+        c.mu.Unlock()
+        c.OnAgentIdle(agentID)
+        c.mu.Lock()
+    }
+}
+```
+
+**Tests**: `internal/agent/coordinator_test.go` additions + new `internal/models/task_test.go`
+- CRUD operations
+- Atomic claiming (two goroutines claim same task → one succeeds, one fails)
+- Dependency blocking (task with incomplete deps → blocked status, cannot be claimed)
+- Auto-unblocking (complete a dep → dependent task moves from blocked to pending)
+- Circular dependency detection (A→B→A rejected, A→B→C accepted)
+- Max task count enforcement
+- CompleteTask rejects non-assignee
+- UpdateTask rejects non-owner
+- OnAgentIdle fires when idle + no messages
+- ListTasks returns FIFO order
+
+**Commit**: `feat: add task model and coordinator task management`
+
+---
+
+#### 6.2 — MCP task tools
+
+**File**: `internal/mcp/types.go` — add constants:
+```go
+ToolCreateTask   = "create-task"
+ToolListTasks    = "list-tasks"
+ToolClaimTask    = "claim-task"
+ToolCompleteTask = "complete-task"
+ToolUpdateTask   = "update-task"
+```
+
+**File**: `internal/mcp/tools.go` — add 5 tool definitions to `list()`, 5 cases to `call()` switch, 5 handler methods.
+
+Tool schemas:
+- `create-task`: `{title: string (required), description: string (required), dependencies: []string (optional, task IDs)}`
+- `list-tasks`: `{status: string (optional, filter by status), assignee: string (optional, filter by agent name/ID)}`
+- `claim-task`: `{taskId: string (required)}`
+- `complete-task`: `{taskId: string (required)}`
+- `update-task`: `{taskId: string (required), title: string (optional), description: string (optional)}`
+
+All handlers follow existing pattern: extract args with `strArg()` → call coordinator method → return `textResult(json)` or `errorResult(msg)`. The `create-task` handler extracts `dependencies` as `[]string`, parses each to `uuid.UUID`, passes to `coordinator.CreateTask()`.
+
+**Tests**: `internal/mcp/integration_test.go` additions — test each tool end-to-end through MCP JSON-RPC.
+
+**Commit**: `feat: add mcp task tools (create/list/claim/complete/update)`
+
+---
+
+#### 6.3 — Wire `AllowedTools` from config
+
+**File**: `internal/models/agent.go` — add field:
+```go
+AllowedTools []string `json:"allowedTools,omitempty"`
+```
+
+**File**: `internal/cli/helpers.go:24-33` — in `createAgentsFromConfig()`, map `cfg.AllowedTools` to `agent.AllowedTools`.
+
+**File**: `internal/agent/command_builder.go:35` — after the hardcoded `mcp__skwad__*`, append any additional allowed tools from agent config:
+```go
+args = append(args, "--allowed-tools", "mcp__skwad__*")
+for _, tool := range a.AllowedTools {
+    args = append(args, "--allowed-tools", tool)
+}
+```
+
+Note: Task tools (`create-task`, `claim-task`, etc.) are under `mcp__skwad__*` which is always allowed. `AllowedTools` is additive — it grants access to tools beyond the skwad MCP tools (e.g., `Edit`, `Bash`, `Read` for Claude's built-in tools).
+
+**Tests**:
+- `command_builder_test.go` — agent with AllowedTools → extra `--allowed-tools` flags present
+- `command_builder_test.go` — agent without AllowedTools → only `mcp__skwad__*`
+- `helpers_test.go` — config AllowedTools maps to agent AllowedTools
+
+**Commit**: `feat: wire allowed-tools from team config to command builder`
+
+---
+
+#### 6.4 — Coordination mode + team config + task persistence
+
+**File**: `internal/config/team.go` — add fields to `TeamConfig`:
+```go
+type TeamConfig struct {
+    // ... existing fields ...
+    Coordination string `json:"coordination,omitempty"` // "managed" (default) or "autonomous"
+    PersistTasks bool   `json:"persist_tasks,omitempty"` // save tasks to disk for crash recovery
+    MaxTasks     int    `json:"max_tasks,omitempty"`     // max task count (default 50)
+}
+```
+
+**File**: `internal/persistence/store.go` — add:
+```go
+const tasksFile = "tasks.json"
+
+func (s *Store) LoadTasks() ([]*models.Task, error) {
+    var tasks []*models.Task
+    if err := s.load(tasksFile, &tasks); err != nil {
+        return nil, err
+    }
+    return tasks, nil
+}
+
+func (s *Store) SaveTasks(tasks []*models.Task) error {
+    return s.save(tasksFile, tasks)
+}
+```
+
+**File**: `internal/daemon/daemon.go` — if `PersistTasks`:
+- On startup: load tasks from store into coordinator
+- Wire `OnTaskCreated` and `OnTaskCompleted` callbacks to save tasks via store
+- Task persistence calls go through coordinator (which holds the mutex), so store's lack of locking is safe
+
+**Tests**: config parsing, persistence round-trip, default coordination mode is "managed", default max_tasks is 50
+
+**Commit**: `feat: add coordination mode and task persistence to team config`
+
+---
+
+#### 6.5 — Auto-claim wiring in daemon
+
+**File**: `internal/daemon/daemon.go`
+
+Wire `OnAgentIdle` callback:
+```go
+d.Coordinator.OnAgentIdle = func(agentID uuid.UUID) {
+    if d.CoordinationMode != "autonomous" {
+        return // managed mode — only inbox-driven delivery
+    }
+    // Find next claimable task (FIFO order from ListTasks)
+    tasks := d.Coordinator.ListTasks()
+    for _, t := range tasks {
+        if t.Status == models.TaskStatusPending && t.AssigneeID == nil {
+            err := d.Coordinator.ClaimTask(agentID, t.ID)
+            if err != nil {
+                continue // another agent beat us, try next
+            }
+            // Deliver task to agent
+            prompt := fmt.Sprintf("Task assigned to you:\n\nTitle: %s\nDescription: %s\nTask ID: %s\n\nWhen complete, call complete-task with this task ID.",
+                t.Title, t.Description, t.ID)
+            d.Pool.SendPrompt(agentID, prompt)
+            return
+        }
+    }
+}
+```
+
+In managed mode: `OnAgentIdle` returns immediately — current behavior preserved.
+In autonomous mode: idle agents automatically pick up the next available task (FIFO).
+
+**Tests**:
+- Autonomous mode: agent goes idle → claims next pending task → receives prompt
+- Managed mode: agent goes idle → no auto-claiming
+- Race condition: two agents idle simultaneously → only one claims each task (test with goroutines)
+- No pending tasks: agent goes idle → no error, no action
+- Blocked tasks skipped: only pending+unassigned tasks eligible
+
+**Commit**: `feat: wire auto-claim for autonomous coordination mode`
+
+---
+
+#### 6.6 — System prompt updates for coordination modes
+
+**File**: `internal/agent/command_builder.go` (or `internal/agent/prompt.go` if Phase 5.4 has landed)
+
+> **Integration note**: If Phase 5.4 has NOT landed, add coordination instructions to `skwadInstructions()` in `command_builder.go:83`. If Phase 5.4 HAS landed, add a new Layer (between Layer 2 "Team Protocol" and Layer 3 "Role Instructions") in `prompt.go`.
+
+Update system prompt to include coordination mode context:
+
+**Managed mode addition**:
+```
+## Task Coordination (Managed Mode)
+You work in a managed team. The Manager agent coordinates work and assigns tasks.
+- Wait for task assignments via messages from the Manager
+- Use `complete-task` to mark assigned tasks as done
+- Use `list-tasks` to see the team's task board
+- Do not use `claim-task` unless explicitly instructed by the Manager
+- Focus on your assigned persona role and wait for direction
+```
+
+**Autonomous mode addition**:
+```
+## Task Coordination (Autonomous Mode)
+You work in an autonomous team. There is no central manager — agents self-organize.
+- Proactively check `list-tasks` for available work
+- Use `claim-task` to pick up unassigned tasks that match your skills
+- Use `complete-task` when done, then immediately check for more work
+- Use `create-task` to break down complex work into subtasks for teammates
+- Coordinate with teammates via `send-message` when tasks overlap or need handoff
+- If you see no available tasks and have ideas for what needs doing, create new tasks
+- When blocked, message the teammate whose task is blocking yours
+```
+
+Include task tool documentation in system prompt for both modes.
+
+**File**: `internal/agent/command_builder.go` — `BuildArgs()` needs access to coordination mode. Add `CoordinationMode string` field to `CommandBuilder`.
+
+**Tests**:
+- Managed mode → prompt contains "managed" instructions, no "claim-task" encouragement
+- Autonomous mode → prompt contains "autonomous" instructions with self-claim guidance
+- Default (empty coordination mode) → treated as managed
+
+**Commit**: `feat: add coordination mode system prompts for managed and autonomous teams`
+
+---
+
 ## Stream JSON Protocol
 
 The bidirectional streaming protocol is the core of this architecture. Understanding it is critical.
@@ -1270,6 +1580,18 @@ Phase 5 (Enhancements — from oh-my-codex analysis) — after headless pivot is
   Parallelization: 5.1, 5.2, 5.4 are independent — can be built in parallel.
   5.3 should land before 5.5 (pipeline events feed into event log).
   5.4.1-5.4.3 can be built in parallel, then 5.4.4-5.4.5 sequentially.
+
+Phase 6 (Autonomous Team Coordination) — no hard dependency on Phase 4 or 5:
+  6.1 Task model + coordinator    — foundation, no dependencies
+  6.2 MCP task tools              — depends on 6.1
+  6.3 AllowedTools wiring         — independent, can parallel with 6.2
+  6.4 Team config + persistence   — depends on 6.1
+  6.5 Auto-claim wiring           — depends on 6.1, 6.4
+  6.6 System prompts              — depends on 6.2, 6.5; soft integration with 5.4
+
+  Parallelization: 6.2 and 6.3 are independent.
+  6.4 can start as soon as 6.1 lands.
+  6.6 adapts to whether Phase 5.4 has landed (skwadInstructions vs prompt.go).
 ```
 
 ---
@@ -1312,6 +1634,12 @@ Phase 5 (Enhancements — from oh-my-codex analysis) — after headless pivot is
 | 32 | `feat: add event log replay for run state reconstruction` | 5.5.2 |
 | 33 | `feat: wire event-sourced state into run command with resume support` | 5.5.3 |
 | 34 | `feat: add run state cleanup for old event logs` | 5.5.4 |
+| 35 | `feat: add task model and coordinator task management` | 6.1 |
+| 36 | `feat: add mcp task tools (create/list/claim/complete/update)` | 6.2 |
+| 37 | `feat: wire allowed-tools from team config to command builder` | 6.3 |
+| 38 | `feat: add coordination mode and task persistence to team config` | 6.4 |
+| 39 | `feat: wire auto-claim for autonomous coordination mode` | 6.5 |
+| 40 | `feat: add coordination mode system prompts for managed and autonomous teams` | 6.6 |
 
 Each commit is buildable and testable. Tests at every step.
 
@@ -1334,6 +1662,13 @@ Each commit is buildable and testable. Tests at every step.
 | Resume session continuity — Claude `--resume` may not work across process restarts | Store `session_id` from stream JSON. If `--resume` fails, fall back to new session with context summary of previous work. |
 | Iteration loops — fix→verify may not converge | Default max 3 iterations. Non-zero exit after max → clear error message in report. User must explicitly increase limit. |
 | Role instruction mismatch — custom personas may conflict with role instructions | Role instructions are additive, not overriding. Persona layer (Layer 4) has final say. If persona contradicts role, persona wins. |
+| Auto-claim race conditions — two agents idle at same instant | `ClaimTask` is atomic behind coordinator mutex. Second claimer gets error, tries next task. |
+| Autonomous mode token runaway — agents create infinite subtasks | Configurable `max_tasks` in TeamConfig (default 50). `CreateTask` returns error when limit hit. |
+| Task persistence locking — store has no mutex | Task persistence goes through coordinator (which has mutex). Coordinator calls `store.SaveTasks()` inside its lock. |
+| Capability mismatch — Explorer claims coding task | System doesn't enforce this. Prompt instructions guide role-appropriate claiming. If this becomes a problem, add optional `eligible_roles` field to tasks in a future enhancement. |
+| Mixed mode confusion — some agents expect assignments, others self-claim | Mode is per-team, not per-agent. All agents get the same coordination instructions. Personas can add nuance on top. |
+| Circular task dependencies — A→B→A permanently blocks both tasks | `CreateTask` walks transitive dependency chain and rejects cycles. O(d) check where d = dependency depth. |
+| `OnAgentIdle` deadlock — callback calls back into coordinator | Callback fired outside the mutex (same unlock/relock pattern as `OnDeliverMessage`). Documented in Phase 6.1. |
 
 ---
 
@@ -1353,10 +1688,10 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Phase 3.2 — Remove tui/ package *(2026-04-01)*
 - [x] Phase 3.3 — Remove creack/pty + bubbleterm deps *(2026-04-01)*
 - [x] Phase 3.4 — Remove Claude plugin scripts *(2026-04-01)*
-- [ ] Phase 4.1 — TUI dashboard scaffold
-- [ ] Phase 4.2 — Status table panel
-- [ ] Phase 4.3 — Activity log panel
-- [ ] Phase 4.4 — Keyboard shortcuts + status bar
+- [x] Phase 4.1 — TUI dashboard scaffold *(2026-04-02)*
+- [x] Phase 4.2 — Status table panel *(2026-04-02)*
+- [x] Phase 4.3 — Activity log panel *(2026-04-02)*
+- [x] Phase 4.4 — Keyboard shortcuts + status bar *(2026-04-02)*
 - [ ] Phase 5.1.1 — Explore mode: model + config changes
 - [ ] Phase 5.1.2 — Explore mode: command builder flags
 - [ ] Phase 5.1.3 — Explore mode: CLI --explore flag
@@ -1373,6 +1708,12 @@ Each commit is buildable and testable. Tests at every step.
 - [ ] Phase 5.5.2 — Event-sourced state: replay + state reconstruction
 - [ ] Phase 5.5.3 — Event-sourced state: wire into run command with --resume
 - [ ] Phase 5.5.4 — Event-sourced state: run state cleanup
+- [ ] Phase 6.1 — Task model + coordinator task management
+- [ ] Phase 6.2 — MCP task tools (create/list/claim/complete/update)
+- [ ] Phase 6.3 — Wire AllowedTools from team config to command builder
+- [ ] Phase 6.4 — Coordination mode + team config + task persistence
+- [ ] Phase 6.5 — Auto-claim wiring for autonomous mode
+- [ ] Phase 6.6 — Coordination mode system prompts
 
 ---
 
@@ -1402,8 +1743,38 @@ Plan reviewed by Reviewer agent. Key revisions incorporated:
     - LOW: fsync batching strategy (immediate for critical events, batched for high-frequency)
     - LOW: Token budget test with measurable assertion (4 chars/token approximation)
 
+11. **Phase 6 — Autonomous Team Coordination (2026-04-02)**: Added two coordination modes (managed + autonomous) inspired by Claude Code's native agent teams architecture. Reviewed and approved by Reviewer with 2 must-address items and 4 recommendations, all incorporated:
+    - CRITICAL: Circular dependency detection in `CreateTask` — walks transitive dep chain to reject cycles
+    - CRITICAL: `OnAgentIdle` fires outside the mutex (unlock/relock pattern) to prevent deadlock when callback calls `ClaimTask`
+    - RECOMMENDED: FIFO task claiming via `CreatedAt` sort in `ListTasks` — predictable auto-claim order
+    - RECOMMENDED: `CompleteTask` verifies completing agent is the assignee
+    - RECOMMENDED: `max_tasks` configurable in TeamConfig instead of hardcoded 50
+    - RECOMMENDED: `UpdateTask` ownership check — only creator or assignee can update
+
 ---
 
 ## Key Learnings
 
-(To be filled after implementation)
+### Protocol Discoveries (Phase 0)
+1. **`--verbose` is required** — `--output-format stream-json` in `--print` mode fails without it. Not documented anywhere. Must be included in all headless agent commands.
+2. **Input format requires nested `message` object** — `{"type":"user","message":{"role":"user","content":"..."}}`, NOT the flat `{"type":"user","content":"..."}` format. The error (`TypeError: undefined is not an object (evaluating '_.message.role')`) is not helpful.
+3. **`--include-hook-events` has no visible effect** — No hook event messages appear in the stream even with tool use. Status must be derived from message types (`assistant` → Running, `result` → Idle). This eliminated the entire hook-event-based status pipeline from the plan.
+4. **Multi-turn works via stdin** — Multiple JSON messages piped on stdin are processed sequentially in the same process. This confirmed the long-lived process model (no need for `--resume` per-prompt).
+
+### Architecture Patterns
+5. **Keep legacy methods during rewiring** — Phase 1.4 (ActivityController) originally planned to remove all PTY methods, but `internal/terminal/pool.go` still called them. Keeping legacy methods with "remove in Phase 3" comments maintained compilation continuity throughout.
+6. **Worktree isolation helps but merge is tricky** — Coder 2 worked in a worktree for Phase 1.2/1.3, which avoided conflicts but the worktree was cleaned up before changes were committed to the branch. Recovery required finding the physical worktree directory and copying files back. Lesson: ensure worktree changes are committed before cleanup.
+7. **Stub-then-replace works well for cross-cutting changes** — Coder created a stub `process/pool.go` in Phase 2.1 so daemon.go could compile immediately, then the real implementation was merged in later. This pattern keeps the build green throughout.
+8. **Parallel coders need clear API contracts** — When two coders work on interdependent packages (daemon.go ↔ process/pool.go), defining the exact function signatures and callback types upfront prevents merge conflicts.
+
+### Team Coordination
+9. **Dispatch Explorer first, always** — Having the Explorer gather full file:line context before dispatching Coders resulted in precise, first-attempt-correct implementations. Coders that received Explorer findings never needed to re-explore.
+10. **Parallelize by dependency, not by phase** — Phase 1.1 (CommandBuilder) and 1.2 (Runner) had no dependency and ran in parallel. Phase 1.4 (ActivityController) had no dependency on 1.2/1.3 and ran in parallel with those. This compressed Phase 1 from sequential to ~2 rounds.
+
+### TUI Dashboard Patterns (Phase 4)
+11. **Bubble Tea v2 module paths changed** — v2 uses `charm.land/bubbletea/v2` and `charm.land/lipgloss/v2`, NOT `github.com/charmbracelet/...`. The `View()` method returns a `tea.View` struct (not string), alt screen is set via `v.AltScreen = true`, and `lipgloss.Color()` is a function returning `color.Color` (not a type).
+12. **Pure function vs sub-model component pattern** — Stateless panels (status table, status bar) work best as standalone render functions. Stateful panels (activity log with scroll position) work best as sub-models with their own methods. This kept `app.go` clean (~211 lines) while each component is independently testable.
+13. **Extract incrementally, test at each step** — Extracting one component per phase (4.1 scaffold → 4.2 table → 4.3 log → 4.4 bar) meant tests broke predictably at each extraction. The Tester fixed compilation issues in parallel with the next phase's Explorer work, keeping the pipeline moving.
+14. **Scroll/filter state interaction** — When adding filtering to a scrollable view, always reset scroll position on filter change. The filtered subset is smaller than the full list, so the old scroll position can index past the end. Caught by Reviewer.
+15. **Rune-safe string truncation** — `len(s)` and `s[:n]` operate on bytes, not runes. Multi-byte UTF-8 (emoji, CJK) will be sliced mid-rune. Always use `[]rune` conversion for display truncation. Caught by Reviewer.
+16. **Pipeline Tester + Coder in parallel** — After Coder delivers a phase, dispatch Tester for that phase AND Explorer for the next phase simultaneously. Tester fixes/adds tests while Explorer gathers context, so the Coder can start the next phase immediately after Explorer reports back. This compressed Phase 4 from 8 sequential rounds to ~5.
