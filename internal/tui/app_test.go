@@ -797,3 +797,58 @@ func TestLogBuffer_ManyEntries(t *testing.T) {
 		t.Error("View should render with many log entries")
 	}
 }
+
+// --- PageUp / PageDown key handling ---
+
+func TestUpdate_PgUpKey_ScrollsActivityLog(t *testing.T) {
+	mgr := newTestManager(t)
+	m := New(mgr, "http://localhost:8766")
+	m = simulateWindowSize(m, 80, 30)
+
+	// Add enough lines to enable scrolling.
+	for i := 0; i < 100; i++ {
+		msg := LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}
+		updated, _ := m.Update(msg)
+		m = updated.(Model)
+	}
+
+	// Record scroll position (should be auto-scrolled to bottom).
+	posBefore := m.activityLog.ScrollPos()
+	if posBefore == 0 {
+		t.Fatal("scrollPos should be non-zero after many appends")
+	}
+
+	// Press pgup.
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
+	m = updated.(Model)
+
+	if m.activityLog.ScrollPos() >= posBefore {
+		t.Errorf("pgup should decrease scrollPos, got %d (was %d)", m.activityLog.ScrollPos(), posBefore)
+	}
+}
+
+func TestUpdate_PgDownKey_ScrollsActivityLog(t *testing.T) {
+	mgr := newTestManager(t)
+	m := New(mgr, "http://localhost:8766")
+	m = simulateWindowSize(m, 80, 30)
+
+	// Add enough lines to enable scrolling.
+	for i := 0; i < 100; i++ {
+		msg := LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}
+		updated, _ := m.Update(msg)
+		m = updated.(Model)
+	}
+
+	// Scroll up first so we have room to scroll down.
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
+	m = updated.(Model)
+	posAfterUp := m.activityLog.ScrollPos()
+
+	// Press pgdown.
+	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	m = updated.(Model)
+
+	if m.activityLog.ScrollPos() <= posAfterUp {
+		t.Errorf("pgdown should increase scrollPos, got %d (was %d)", m.activityLog.ScrollPos(), posAfterUp)
+	}
+}

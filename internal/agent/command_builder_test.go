@@ -81,8 +81,8 @@ func TestBuildArgs_ClaudeMCPConfig(t *testing.T) {
 	if !containsArg(args, "--mcp-config") {
 		t.Error("missing --mcp-config")
 	}
-	if !containsArg(args, "--allowed-tools") {
-		t.Error("missing --allowed-tools")
+	if !containsArg(args, "--allowedTools") {
+		t.Error("missing --allowedTools")
 	}
 	mcpIdx := argIndex(args, "--mcp-config")
 	if mcpIdx < 0 || mcpIdx+1 >= len(args) {

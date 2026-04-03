@@ -206,9 +206,14 @@ func TestActivityLog_Render_EmptyLines(t *testing.T) {
 	al := NewActivityLog()
 
 	out := al.Render(80, 5, "")
-	// Should be 5 empty lines.
-	if strings.Count(out, "\n") != 5 {
-		t.Errorf("empty render should have 5 newlines, got %d", strings.Count(out, "\n"))
+	// Bordered output: top border + header + content lines + bottom border.
+	// With height=5, innerHeight=2 (5-3 border/header overhead).
+	// Should contain border characters and header text.
+	if !strings.Contains(out, "Activity Log") {
+		t.Error("empty render should contain 'Activity Log' header")
+	}
+	if !strings.Contains(out, "╭") || !strings.Contains(out, "╰") {
+		t.Error("empty render should contain border characters")
 	}
 }
 
@@ -310,11 +315,13 @@ func TestActivityLog_Render_FilterNoMatch(t *testing.T) {
 
 	// Filter to nonexistent agent.
 	out := al.Render(80, 5, "NonExistent")
-	// Should be all empty lines.
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if strings.TrimSpace(line) != "" {
-			t.Errorf("filtered render with no match should be empty, got %q", line)
-		}
+	// Bordered output will have border chars and header, but no log content lines.
+	// Verify the filter name appears in header and no Coder content is shown.
+	if !strings.Contains(out, "NonExistent") {
+		t.Error("filtered render should show filter agent name in header")
+	}
+	if strings.Contains(out, "Coder") {
+		t.Error("filtered render should NOT contain non-matching agent lines")
 	}
 }
 
@@ -384,10 +391,241 @@ func TestActivityLog_Render_TruncatesLongLines(t *testing.T) {
 	al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte(longText)}, 10, assign)
 
 	out := al.Render(80, 5, "")
-	// Each rendered line should not exceed width.
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) > 80 {
-			t.Errorf("line length %d exceeds width 80", len(line))
-		}
+	// The rendered content inside the border should be truncated to innerWidth (78).
+	// ANSI escape codes inflate len(), so verify the log text is truncated by checking
+	// the raw content doesn't contain the full 200-char string.
+	if strings.Contains(out, longText) {
+		t.Error("rendered output should truncate long lines, but full 200-char text found")
+	}
+	// Verify the output still contains some of the text (it was rendered, just truncated).
+	if !strings.Contains(out, "xxxx") {
+		t.Error("rendered output should contain truncated portion of long text")
+	}
+}
+
+// --- Ring buffer eviction tests ---
+
+func TestActivityLog_RingBuffer_EvictsOldestLines(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	// Append more than maxLines (10000) lines.
+	for i := 0; i < maxLines+500; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 10, assign)
+	}
+
+	if len(al.Lines()) != maxLines {
+		t.Errorf("Lines() = %d, want %d (ring buffer cap)", len(al.Lines()), maxLines)
+	}
+}
+
+func TestActivityLog_RingBuffer_ScrollPosAdjustedOnEviction(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	// Fill to just under the cap.
+	for i := 0; i < maxLines; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 10, assign)
+	}
+
+	// Set scroll position to a known value.
+	al.scrollPos = 100
+
+	// Append 50 more lines — should evict 50 and adjust scrollPos by 50.
+	for i := 0; i < 50; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("new")}, 10, assign)
+	}
+
+	if len(al.Lines()) != maxLines {
+		t.Errorf("Lines() = %d, want %d", len(al.Lines()), maxLines)
+	}
+	// scrollPos was 100, evicted 50 → should be 50. But auto-scroll may kick in
+	// if near bottom. Since 50 is far from bottom (maxLines-10=9990), it stays at 50.
+	if al.ScrollPos() != 50 {
+		t.Errorf("ScrollPos() = %d, want 50 (adjusted by eviction)", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_RingBuffer_ScrollPosClampedToZeroOnEviction(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	// Fill to cap.
+	for i := 0; i < maxLines; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 10, assign)
+	}
+
+	// Set scroll position lower than eviction count.
+	al.scrollPos = 10
+
+	// Append 50 more lines — evicts 50, scrollPos 10-50 = -40, clamped to 0.
+	for i := 0; i < 50; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("new")}, 10, assign)
+	}
+
+	if al.ScrollPos() != 0 {
+		t.Errorf("ScrollPos() = %d, want 0 (clamped after eviction)", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_RingBuffer_AutoScrollPreservedAfterEviction(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	viewHeight := 10
+
+	// Fill past cap while auto-scrolling (default behavior).
+	for i := 0; i < maxLines+100; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, viewHeight, assign)
+	}
+
+	// Should be at maxScroll (auto-scrolled to bottom).
+	max := al.MaxScroll(viewHeight)
+	if al.ScrollPos() != max {
+		t.Errorf("ScrollPos() = %d, want max %d (auto-scroll after eviction)", al.ScrollPos(), max)
+	}
+}
+
+// --- PageUp / PageDown tests ---
+
+func TestActivityLog_PageUp_ScrollsByViewHeight(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	for i := 0; i < 100; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 20, assign)
+	}
+
+	// Set scroll to a known position.
+	al.scrollPos = 50
+
+	al.PageUp(20)
+	if al.ScrollPos() != 30 {
+		t.Errorf("PageUp: ScrollPos() = %d, want 30 (50-20)", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_PageUp_ClampedToZero(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	for i := 0; i < 50; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 20, assign)
+	}
+
+	// Set scroll to a position less than viewHeight.
+	al.scrollPos = 5
+
+	al.PageUp(20)
+	if al.ScrollPos() != 0 {
+		t.Errorf("PageUp at low position: ScrollPos() = %d, want 0", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_PageUp_FromZero(t *testing.T) {
+	al := NewActivityLog()
+
+	al.scrollPos = 0
+	al.PageUp(10)
+
+	if al.ScrollPos() != 0 {
+		t.Errorf("PageUp from 0: ScrollPos() = %d, want 0", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_PageDown_ScrollsByViewHeight(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	for i := 0; i < 100; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 20, assign)
+	}
+
+	al.scrollPos = 10
+
+	al.PageDown(20)
+	if al.ScrollPos() != 30 {
+		t.Errorf("PageDown: ScrollPos() = %d, want 30 (10+20)", al.ScrollPos())
+	}
+}
+
+func TestActivityLog_PageDown_ClampedToMax(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	for i := 0; i < 50; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 20, assign)
+	}
+
+	max := al.MaxScroll(20)
+	// Set scroll near max.
+	al.scrollPos = max - 5
+
+	al.PageDown(20)
+	if al.ScrollPos() != max {
+		t.Errorf("PageDown near max: ScrollPos() = %d, want max %d", al.ScrollPos(), max)
+	}
+}
+
+func TestActivityLog_PageDown_AlreadyAtBottom(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	for i := 0; i < 50; i++ {
+		al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "A", Data: []byte("line")}, 20, assign)
+	}
+
+	max := al.MaxScroll(20)
+	al.scrollPos = max
+
+	al.PageDown(20)
+	if al.ScrollPos() != max {
+		t.Errorf("PageDown at bottom: ScrollPos() = %d, want max %d", al.ScrollPos(), max)
+	}
+}
+
+// --- Bordered Render tests ---
+
+func TestActivityLog_Render_BorderedOutput(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "Coder", Data: []byte("hello world")}, 10, assign)
+
+	out := al.Render(80, 10, "")
+
+	// Verify border characters.
+	if !strings.Contains(out, "╭") {
+		t.Error("bordered render should contain top-left corner ╭")
+	}
+	if !strings.Contains(out, "╰") {
+		t.Error("bordered render should contain bottom-left corner ╰")
+	}
+	if !strings.Contains(out, "│") {
+		t.Error("bordered render should contain vertical border │")
+	}
+
+	// Verify header.
+	if !strings.Contains(out, "Activity Log") {
+		t.Error("bordered render should contain 'Activity Log' header")
+	}
+
+	// Verify scroll indicator format [pos/max].
+	if !strings.Contains(out, "[") || !strings.Contains(out, "/") {
+		t.Error("bordered render should contain scroll indicator [pos/max]")
+	}
+}
+
+func TestActivityLog_Render_FilteredHeader(t *testing.T) {
+	al := NewActivityLog()
+	assign := testColorAssigner()
+
+	al.Append(LogEntryMsg{AgentID: uuid.New(), AgentName: "Coder", Data: []byte("code")}, 10, assign)
+
+	out := al.Render(80, 10, "Coder")
+
+	// Header should show filtered agent name.
+	if !strings.Contains(out, "Activity Log [Coder]") {
+		t.Error("filtered bordered render should show 'Activity Log [Coder]' in header")
 	}
 }

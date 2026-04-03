@@ -38,6 +38,11 @@ type Server struct {
 	OnCreateAgent     func(req CreateAgentRequest) error
 	OnCloseAgent      func(callerID, targetID string) error
 
+	// OnToolCall is called after a tool is dispatched, for logging.
+	OnToolCall func(agentID, agentName, toolName string, args map[string]interface{}, result interface{})
+	// OnToolCallLog is called after a tool is dispatched, for TUI activity log display.
+	OnToolCallLog func(agentName, toolName, argsPreview string)
+
 	// StatusUpdater — set by the agent manager to receive hook events.
 	StatusUpdater AgentStatusUpdater
 

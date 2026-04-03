@@ -40,12 +40,18 @@ type Coordinator struct {
 
 	// OnDeliverMessage is called when a message should be injected into a terminal.
 	OnDeliverMessage func(agentID uuid.UUID, text string)
+
+	// OnMessageSent is called after a message is successfully queued.
+	OnMessageSent func(fromID, fromName, toID, content string)
+	// OnBroadcast is called after a broadcast message is queued.
+	OnBroadcast func(fromID, fromName, content string)
+	// OnStatusChanged is called after an agent's status text is updated.
+	OnStatusChanged func(agentID, agentName, status, category string)
 }
 
 type registeredAgent struct {
-	info          AgentInfo
-	inbox         []Message
-	lastNotifiedID uuid.UUID
+	info  AgentInfo
+	inbox []Message
 }
 
 // NewCoordinator creates a Coordinator backed by the given Manager.
@@ -94,6 +100,11 @@ func (c *Coordinator) Agent(id uuid.UUID) (*models.Agent, bool) {
 // AllAgents returns every agent from the underlying manager.
 func (c *Coordinator) AllAgents() []*models.Agent {
 	return c.manager.AllAgents()
+}
+
+// Persona returns a persona by ID from the underlying manager.
+func (c *Coordinator) Persona(id uuid.UUID) *models.Persona {
+	return c.manager.Persona(id)
 }
 
 // ListAgents returns all currently registered agents.
@@ -151,6 +162,10 @@ func (c *Coordinator) SendMessage(fromID uuid.UUID, toIDOrName, content string) 
 	targetID := target.info.ID
 	go func() { c.NotifyIdleAgent(targetID) }()
 
+	if c.OnMessageSent != nil {
+		c.OnMessageSent(fromID.String(), fromName, targetID.String(), content)
+	}
+
 	return nil
 }
 
@@ -187,6 +202,10 @@ func (c *Coordinator) BroadcastMessage(fromID uuid.UUID, content string) {
 		rid := id
 		go func() { c.NotifyIdleAgent(rid) }()
 	}
+
+	if c.OnBroadcast != nil {
+		c.OnBroadcast(fromID.String(), fromName, content)
+	}
 }
 
 // CheckMessages returns the inbox for an agent, optionally marking messages as read.
@@ -222,14 +241,11 @@ func (c *Coordinator) NotifyIdleAgent(agentID uuid.UUID) {
 	}
 
 	for i := range ra.inbox {
-		msg := &ra.inbox[i]
-		if !msg.Read && msg.ID != ra.lastNotifiedID {
-			ra.lastNotifiedID = msg.ID
+		if !ra.inbox[i].Read {
+			ra.inbox[i].Read = true
 			if c.OnDeliverMessage != nil {
-				text := buildNotificationText(*msg)
-				c.mu.Unlock()
+				text := buildNotificationText(ra.inbox[i])
 				c.OnDeliverMessage(agentID, text)
-				c.mu.Lock()
 			}
 			return
 		}
@@ -242,6 +258,13 @@ func (c *Coordinator) SetStatusText(agentID uuid.UUID, status, category string) 
 		a.StatusText = status
 		a.StatusCategory = category
 	})
+	if c.OnStatusChanged != nil {
+		agentName := ""
+		if a, ok := c.manager.Agent(agentID); ok {
+			agentName = a.Name
+		}
+		c.OnStatusChanged(agentID.String(), agentName, status, category)
+	}
 }
 
 // UnregisterAgent removes an agent from the registry (e.g., on close).
@@ -252,8 +275,12 @@ func (c *Coordinator) UnregisterAgent(id uuid.UUID) {
 }
 
 func buildNotificationText(m Message) string {
-	text := "[Skwad] Message from " + m.FromName + ":\n" + m.Content
-	const maxNotificationLen = 2000
+	name := m.FromName
+	if name == "" {
+		name = "User (external)"
+	}
+	text := "[Skwad] Message from " + name + ":\n" + m.Content
+	const maxNotificationLen = 100000
 	if len(text) > maxNotificationLen {
 		text = text[:maxNotificationLen] + "\n[truncated — run check-messages for full text]"
 	}

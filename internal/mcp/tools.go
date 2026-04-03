@@ -3,6 +3,8 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/lsinghkochava/skwad-cli/internal/git"
@@ -139,36 +141,75 @@ func (h *toolHandler) list() []toolDefinition {
 }
 
 func (h *toolHandler) call(params ToolCallParams, sess *session) (ToolResult, error) {
+	var result ToolResult
+	var err error
+
 	switch params.Name {
 	case ToolRegisterAgent:
-		return h.registerAgent(params.Arguments, sess)
+		result, err = h.registerAgent(params.Arguments, sess)
 	case ToolListAgents:
-		return h.listAgents()
+		result, err = h.listAgents()
 	case ToolSendMessage:
-		return h.sendMessage(params.Arguments, sess)
+		result, err = h.sendMessage(params.Arguments, sess)
 	case ToolCheckMessages:
-		return h.checkMessages(params.Arguments, sess)
+		result, err = h.checkMessages(params.Arguments, sess)
 	case ToolBroadcast:
-		return h.broadcast(params.Arguments, sess)
+		result, err = h.broadcast(params.Arguments, sess)
 	case ToolListRepos:
-		return h.listRepos()
+		result, err = h.listRepos()
 	case ToolListWorktrees:
-		return h.listWorktrees(params.Arguments)
+		result, err = h.listWorktrees(params.Arguments)
 	case ToolCreateAgent:
-		return h.createAgent(params.Arguments, sess)
+		result, err = h.createAgent(params.Arguments, sess)
 	case ToolCloseAgent:
-		return h.closeAgent(params.Arguments, sess)
+		result, err = h.closeAgent(params.Arguments, sess)
 	case ToolCreateWorktree:
-		return h.createWorktree(params.Arguments)
+		result, err = h.createWorktree(params.Arguments)
 	case ToolDisplayMD:
-		return h.displayMarkdown(params.Arguments, sess)
+		result, err = h.displayMarkdown(params.Arguments, sess)
 	case ToolViewMermaid:
-		return h.viewMermaid(params.Arguments, sess)
+		result, err = h.viewMermaid(params.Arguments, sess)
 	case ToolSetStatus:
-		return h.setStatus(params.Arguments)
+		result, err = h.setStatus(params.Arguments)
 	default:
 		return errorResult("unknown tool: " + params.Name), nil
 	}
+
+	agentID := sess.agentID.String()
+	agentName := ""
+	if a, ok := h.server.coordinator.Agent(sess.agentID); ok {
+		agentName = a.Name
+	}
+
+	// Fallback: extract agent identity from tool arguments when session has zero agentID.
+	if sess.agentID == uuid.Nil {
+		if idStr, ok := params.Arguments["agentId"].(string); ok {
+			agentID = idStr
+			if parsed, err := uuid.Parse(idStr); err == nil {
+				if a, ok := h.server.coordinator.Agent(parsed); ok {
+					agentName = a.Name
+				}
+			}
+		} else if fromStr, ok := params.Arguments["from"].(string); ok {
+			agentID = fromStr
+			if parsed, err := uuid.Parse(fromStr); err == nil {
+				if a, ok := h.server.coordinator.Agent(parsed); ok {
+					agentName = a.Name
+				}
+			}
+		}
+	}
+
+	if h.server.OnToolCall != nil {
+		h.server.OnToolCall(agentID, agentName, params.Name, params.Arguments, result)
+	}
+
+	if h.server.OnToolCallLog != nil {
+		preview := formatArgsPreview(params.Arguments, 80)
+		h.server.OnToolCallLog(agentName, params.Name, preview)
+	}
+
+	return result, err
 }
 
 func (h *toolHandler) registerAgent(args map[string]interface{}, sess *session) (ToolResult, error) {
@@ -326,12 +367,63 @@ func (h *toolHandler) setStatus(args map[string]interface{}) (ToolResult, error)
 		return errorResult("invalid agentId"), nil
 	}
 
-	if _, ok := h.server.coordinator.Agent(agentID); !ok {
+	a, ok := h.server.coordinator.Agent(agentID)
+	if !ok {
 		return errorResult("agent not found: " + agentIDStr), nil
 	}
 
 	h.server.coordinator.SetStatusText(agentID, status, category)
+
+	// Soft warning if category is outside the persona's allowed list.
+	if category != "" && a.PersonaID != nil {
+		if persona := h.server.coordinator.Persona(*a.PersonaID); persona != nil && len(persona.AllowedCategories) > 0 {
+			allowed := false
+			for _, c := range persona.AllowedCategories {
+				if c == category {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				slog.Warn("agent status category outside persona scope",
+					"agent", a.Name, "category", category, "allowed", persona.AllowedCategories)
+				return textResult(fmt.Sprintf("Status updated (warning: category '%s' is outside this agent's scope)", category)), nil
+			}
+		}
+	}
+
 	return textResult("Status updated"), nil
+}
+
+// formatArgsPreview builds a concise key=value summary of tool arguments for display.
+// Skips agentId/from fields (agent name is shown separately). Sorted alphabetically.
+func formatArgsPreview(args map[string]interface{}, maxLen int) string {
+	skipKeys := map[string]bool{"agentId": true, "from": true}
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		if !skipKeys[k] {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+
+	var result string
+	for i, k := range keys {
+		v := fmt.Sprintf("%v", args[k])
+		if len(v) > 30 {
+			v = v[:30] + "…"
+		}
+		pair := fmt.Sprintf("%s=%q", k, v)
+		if i > 0 {
+			pair = ", " + pair
+		}
+		if len(result)+len(pair) > maxLen {
+			result += "…"
+			break
+		}
+		result += pair
+	}
+	return result
 }
 
 // --- schema helpers ---

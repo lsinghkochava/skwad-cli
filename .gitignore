@@ -28,5 +28,8 @@ vendor/
 # Claude Code
 .claude/
 
+# Run logs
+runlogs/
+
 # Reference implementation (macOS source — not part of this repo)
 Skwad-Mac/

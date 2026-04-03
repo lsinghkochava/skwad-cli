@@ -21,11 +21,12 @@ const (
 
 // Persona is a named system prompt modifier applied to an agent at launch.
 type Persona struct {
-	ID           uuid.UUID    `json:"id"`
-	Name         string       `json:"name"`
-	Instructions string       `json:"instructions"`
-	Type         PersonaType  `json:"type"`
-	State        PersonaState `json:"state"`
+	ID                uuid.UUID    `json:"id"`
+	Name              string       `json:"name"`
+	Instructions      string       `json:"instructions"`
+	Type              PersonaType  `json:"type"`
+	State             PersonaState `json:"state"`
+	AllowedCategories []string     `json:"allowed_categories,omitempty"`
 }
 
 // Fixed UUIDs for system personas — must remain stable across installs.

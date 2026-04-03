@@ -9,6 +9,9 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// maxLines is the maximum number of lines retained in the activity log ring buffer.
+const maxLines = 10000
+
 // logLine is a single entry in the activity log.
 type logLine struct {
 	timestamp time.Time
@@ -45,6 +48,16 @@ func (al *ActivityLog) Append(msg LogEntryMsg, viewHeight int, assignColor func(
 		})
 	}
 
+	// Evict oldest lines if we exceed the ring buffer limit.
+	if len(al.lines) > maxLines {
+		evicted := len(al.lines) - maxLines
+		al.lines = al.lines[evicted:]
+		al.scrollPos -= evicted
+		if al.scrollPos < 0 {
+			al.scrollPos = 0
+		}
+	}
+
 	// Auto-scroll to bottom if user is near the bottom.
 	maxScroll := al.MaxScroll(viewHeight)
 	if al.scrollPos >= maxScroll-2 || maxScroll <= 0 {
@@ -66,6 +79,22 @@ func (al *ActivityLog) ScrollDown(viewHeight int) {
 	}
 }
 
+// PageUp scrolls the log up by one page (viewHeight lines).
+func (al *ActivityLog) PageUp(viewHeight int) {
+	al.scrollPos -= viewHeight
+	if al.scrollPos < 0 {
+		al.scrollPos = 0
+	}
+}
+
+// PageDown scrolls the log down by one page (viewHeight lines).
+func (al *ActivityLog) PageDown(viewHeight int) {
+	al.scrollPos += viewHeight
+	if max := al.MaxScroll(viewHeight); al.scrollPos > max {
+		al.scrollPos = max
+	}
+}
+
 // MaxScroll returns the maximum scroll position for the given view height.
 func (al *ActivityLog) MaxScroll(viewHeight int) int {
 	if viewHeight < 1 {
@@ -78,10 +107,20 @@ func (al *ActivityLog) MaxScroll(viewHeight int) int {
 	return max
 }
 
-// Render renders the visible portion of the activity log.
+// Render renders the visible portion of the activity log inside a bordered frame.
 // If filterAgent is non-empty, only lines from that agent are shown.
+// height is the total height available including the border and header.
 func (al *ActivityLog) Render(width, height int, filterAgent string) string {
-	var b strings.Builder
+	// Border (top+bottom) + header = 3 lines of overhead.
+	innerHeight := height - 3
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+	// Border left+right = 2 columns of overhead.
+	innerWidth := width - 2
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
 
 	// Build the visible set of lines (filtered or all).
 	visible := al.lines
@@ -94,35 +133,71 @@ func (al *ActivityLog) Render(width, height int, filterAgent string) string {
 		}
 	}
 
-	start := al.scrollPos
+	// When filtering, scrollPos indexes into al.lines (full set) but we display
+	// from the filtered visible slice. Clamp to the filtered range.
+	filteredMax := len(visible) - innerHeight
+	if filteredMax < 0 {
+		filteredMax = 0
+	}
+	scrollOffset := al.scrollPos
+	if scrollOffset > filteredMax {
+		scrollOffset = filteredMax
+	}
+
+	// Header line: title on left, scroll indicator on right.
+	title := "Activity Log"
+	if filterAgent != "" {
+		title = fmt.Sprintf("Activity Log [%s]", filterAgent)
+	}
+	scrollInfo := fmt.Sprintf("[%d/%d]", scrollOffset, filteredMax)
+	padding := innerWidth - len(title) - len(scrollInfo)
+	if padding < 1 {
+		padding = 1
+	}
+	header := title + strings.Repeat(" ", padding) + scrollInfo
+
+	start := scrollOffset
 	if start > len(visible) {
 		start = len(visible)
 	}
-	end := start + height
+	end := start + innerHeight
 	if end > len(visible) {
 		end = len(visible)
 	}
+
+	var content strings.Builder
+	content.WriteString(header)
+	content.WriteString("\n")
 
 	linesRendered := 0
 	for i := start; i < end; i++ {
 		ll := visible[i]
 		ts := ll.timestamp.Format("15:04:05")
-		prefix := lipgloss.NewStyle().Foreground(ll.color).Render(fmt.Sprintf("[%s]", ll.agentName))
-		line := fmt.Sprintf(" %s %s %s", ts, prefix, ll.text)
-		if len(line) > width {
-			line = line[:width]
+		// Build plain text first, truncate, then apply ANSI styling to avoid
+		// cutting mid-escape-sequence.
+		agentTag := fmt.Sprintf("[%s]", ll.agentName)
+		plainLine := fmt.Sprintf(" %s %s %s", ts, agentTag, ll.text)
+		if len(plainLine) > innerWidth {
+			plainLine = plainLine[:innerWidth]
 		}
-		b.WriteString(line)
-		b.WriteString("\n")
+		// Re-apply color to the agent tag portion within the truncated line.
+		styledLine := strings.Replace(plainLine, agentTag, lipgloss.NewStyle().Foreground(ll.color).Render(agentTag), 1)
+		content.WriteString(styledLine)
+		content.WriteString("\n")
 		linesRendered++
 	}
 
 	// Fill remaining lines.
-	for i := linesRendered; i < height; i++ {
-		b.WriteString("\n")
+	for i := linesRendered; i < innerHeight; i++ {
+		content.WriteString("\n")
 	}
 
-	return b.String()
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Width(innerWidth)
+
+	return borderStyle.Render(content.String())
 }
 
 // Lines returns the log lines for testing/inspection.

@@ -14,6 +14,7 @@ import (
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
 	"github.com/lsinghkochava/skwad-cli/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/runlog"
 	"github.com/lsinghkochava/skwad-cli/internal/tui"
 )
 
@@ -56,6 +57,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("initialize daemon: %w", err)
 	}
+
+	// Create run logger (non-fatal — logging is optional).
+	rl, rlErr := runlog.New("runlogs")
+	if rlErr != nil {
+		slog.Warn("failed to create run logger", "error", rlErr)
+	}
+	d.SetRunLogger(rl)
 
 	// 3. Create agents from team config.
 	agents := createAgentsFromConfig(d, tc)

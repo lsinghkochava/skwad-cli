@@ -32,9 +32,10 @@ type TeamConfig struct {
 
 // PersonaConfig defines an inline persona within a team config.
 type PersonaConfig struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Instructions string `json:"instructions"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Instructions string   `json:"instructions"`
+	Tags         []string `json:"tags,omitempty"`
 }
 
 // AgentConfig defines a single agent within a team.

@@ -103,6 +103,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activityLog.ScrollDown(m.logViewHeight())
 		case msg.String() == "k", msg.String() == "up":
 			m.activityLog.ScrollUp()
+		case msg.String() == "pgup":
+			m.activityLog.PageUp(m.logViewHeight())
+		case msg.String() == "pgdown":
+			m.activityLog.PageDown(m.logViewHeight())
 		case msg.String() == "tab":
 			m.cycleFilter()
 		case msg.String() == "?":
@@ -207,7 +211,8 @@ func (m *Model) assignColor(name string) color.Color {
 }
 
 func (m *Model) logViewHeight() int {
-	h := m.height - m.tableHeight() - 1
+	// Subtract 3 for border (top+bottom) and header line.
+	h := m.height - m.tableHeight() - 1 - 3
 	if h < 1 {
 		h = 1
 	}
@@ -268,6 +273,8 @@ func renderHelp(height int) string {
 		"  q / ctrl+c    Quit",
 		"  j / ↓         Scroll down",
 		"  k / ↑         Scroll up",
+		"  PgUp          Page up",
+		"  PgDn          Page down",
 		"  tab           Cycle agent filter",
 		"  ?             Toggle this help",
 		"  s             Send message (coming soon)",

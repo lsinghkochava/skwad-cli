@@ -62,7 +62,7 @@ func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.A
 func resolveAgentPersona(ac config.AgentConfig, tc *config.TeamConfig, personas []models.Persona, d *daemon.Daemon) *uuid.UUID {
 	// 1. Inline instructions — highest priority.
 	if ac.PersonaInstructions != "" {
-		return createTransientPersona(ac.Name+" persona", ac.PersonaInstructions, d)
+		return createTransientPersona(ac.Name+" persona", ac.PersonaInstructions, nil, d)
 	}
 
 	// 2. Explicit persona ID.
@@ -80,7 +80,7 @@ func resolveAgentPersona(ac config.AgentConfig, tc *config.TeamConfig, personas 
 	// 4. Team-level inline personas matching agent name.
 	for _, p := range tc.Personas {
 		if strings.EqualFold(p.Name, ac.Name) {
-			return createTransientPersona(p.Name, p.Instructions, d)
+			return createTransientPersona(p.Name, p.Instructions, p.Tags, d)
 		}
 	}
 
@@ -96,18 +96,19 @@ func resolvePersonaByName(name string, personas []models.Persona, d *daemon.Daem
 			return &id
 		}
 	}
-	return createTransientPersona(name, name, d)
+	return createTransientPersona(name, name, nil, d)
 }
 
 // createTransientPersona creates an in-memory persona and registers it with the Manager.
 // It is NOT persisted to disk — only lives for the duration of this daemon process.
-func createTransientPersona(name, instructions string, d *daemon.Daemon) *uuid.UUID {
+func createTransientPersona(name, instructions string, categories []string, d *daemon.Daemon) *uuid.UUID {
 	p := models.Persona{
-		ID:           uuid.New(),
-		Name:         name,
-		Instructions: instructions,
-		Type:         models.PersonaTypeUser,
-		State:        models.PersonaStateEnabled,
+		ID:                uuid.New(),
+		Name:              name,
+		Instructions:      instructions,
+		AllowedCategories: categories,
+		Type:              models.PersonaTypeUser,
+		State:             models.PersonaStateEnabled,
 	}
 	d.Manager.RegisterTransientPersona(p)
 	return &p.ID

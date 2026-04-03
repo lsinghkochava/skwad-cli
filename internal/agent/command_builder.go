@@ -33,13 +33,16 @@ func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, set
 	if b.MCPServerURL != "" {
 		mcpConfig := fmt.Sprintf(`{"mcpServers":{"skwad":{"type":"http","url":"%s"}}}`, b.MCPServerURL)
 		args = append(args, "--mcp-config", mcpConfig)
-		args = append(args, "--allowed-tools", "mcp__skwad__*")
+		args = append(args, "--allowedTools", "mcp__skwad__*", "Read", "Write", "Edit", "Glob", "Grep", "Bash(*)", "Agent")
 	}
 
-	// System prompt: skwad instructions + persona
+	// System prompt: skwad instructions + persona + allowed categories
 	systemPrompt := skwadInstructions(a.ID.String())
 	if persona != nil {
 		systemPrompt += " " + personaPrompt(persona)
+		if len(persona.AllowedCategories) > 0 {
+			systemPrompt += " When calling set-status, use one of these categories: " + strings.Join(persona.AllowedCategories, ", ") + "."
+		}
 	}
 	args = append(args, "--append-system-prompt", systemPrompt)
 

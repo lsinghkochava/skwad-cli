@@ -41,6 +41,10 @@ type Pool struct {
 	OnStreamMessage func(agentID uuid.UUID, msg StreamMessage)
 	// OnExit is called when an agent process exits.
 	OnExit func(agentID uuid.UUID, exitCode int)
+	// OnSpawn is called after an agent process is successfully spawned.
+	OnSpawn func(agentID uuid.UUID, agentName string, args []string)
+	// OnPromptSent is called after a prompt is sent to an agent.
+	OnPromptSent func(agentID uuid.UUID, agentName, promptType, prompt string)
 }
 
 // NewPool creates a Pool with the given MCP server URL.
@@ -118,6 +122,11 @@ func (p *Pool) Spawn(agentID uuid.UUID, name string, args []string, env []string
 
 	p.agents[agentID] = ma
 	slog.Debug("pool.Spawn complete", "name", name, "totalAgents", len(p.agents))
+
+	if p.OnSpawn != nil {
+		p.OnSpawn(agentID, name, args)
+	}
+
 	return nil
 }
 
@@ -141,7 +150,13 @@ func (p *Pool) SendBootstrapPrompt(agentID uuid.UUID, text string) error {
 	}
 
 	slog.Debug("pool.SendBootstrapPrompt sending immediately", "agentID", agentID, "textLen", len(text))
-	return ma.runner.SendPrompt(text)
+	if err := ma.runner.SendPrompt(text); err != nil {
+		return err
+	}
+	if p.OnPromptSent != nil {
+		p.OnPromptSent(agentID, ma.name, "bootstrap", text)
+	}
+	return nil
 }
 
 // SendPrompt blocks until the agent is ready, then sends the prompt via stdin.
@@ -164,7 +179,13 @@ func (p *Pool) SendPrompt(agentID uuid.UUID, text string) error {
 			return fmt.Errorf("agent %s exited before prompt could be sent (exit code %d)", ma.name, ma.runner.ExitCode())
 		default:
 		}
-		return ma.runner.SendPrompt(text)
+		if err := ma.runner.SendPrompt(text); err != nil {
+			return err
+		}
+		if p.OnPromptSent != nil {
+			p.OnPromptSent(agentID, ma.name, "message", text)
+		}
+		return nil
 	case <-ma.runner.Wait():
 		return fmt.Errorf("agent %s exited before becoming ready (exit code %d)", ma.name, ma.runner.ExitCode())
 	}

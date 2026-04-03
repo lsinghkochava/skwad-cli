@@ -15,6 +15,7 @@ import (
 	"github.com/lsinghkochava/skwad-cli/internal/models"
 	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 	"github.com/lsinghkochava/skwad-cli/internal/process"
+	"github.com/lsinghkochava/skwad-cli/internal/runlog"
 )
 
 // Config holds the parameters needed to initialize a Daemon.
@@ -37,6 +38,9 @@ type Daemon struct {
 
 	// activities tracks the ActivityController per agent for stream-based status.
 	activities map[uuid.UUID]*agent.ActivityController
+
+	// runLog is the structured JSONL logger for agent activity.
+	runLog *runlog.RunLogger
 }
 
 // New initializes all core services and wires the hookBridge.
@@ -93,6 +97,11 @@ func New(cfg Config) (*Daemon, error) {
 	return d, nil
 }
 
+// SetRunLogger sets the structured JSONL logger on the Daemon.
+func (d *Daemon) SetRunLogger(rl *runlog.RunLogger) {
+	d.runLog = rl
+}
+
 // Start starts the MCP server and creates the process pool.
 // The MCP server's UI callbacks (OnDisplayMarkdown, etc.) should be set
 // before calling Start if the caller needs them.
@@ -114,7 +123,7 @@ func (d *Daemon) Start() error {
 	d.Pool = process.NewPool(mcpURL)
 	d.Builder = &agent.CommandBuilder{MCPServerURL: mcpURL, PluginDir: d.Config.PluginDir}
 	d.activities = make(map[uuid.UUID]*agent.ActivityController)
-	d.MCPServer.StatusUpdater = &hookBridge{manager: d.Manager}
+	d.MCPServer.StatusUpdater = &hookBridge{manager: d.Manager, runLog: d.runLog}
 
 	// Wire message delivery: when a message arrives, send via stream-json stdin.
 	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) {
@@ -130,6 +139,39 @@ func (d *Daemon) Start() error {
 		}
 	}
 
+	// Wire run logging callbacks.
+	d.MCPServer.OnToolCall = func(agentID, agentName, toolName string, args map[string]interface{}, result interface{}) {
+		d.runLog.LogToolCall(agentID, agentName, toolName, args, result)
+	}
+	d.MCPServer.OnToolCallLog = func(agentName, toolName, argsPreview string) {
+		if d.Pool.LogSubscriber != nil {
+			line := fmt.Sprintf("→ %s(%s)", toolName, argsPreview)
+			d.Pool.LogSubscriber(uuid.Nil, agentName, []byte(line))
+		}
+	}
+	d.Coordinator.OnMessageSent = func(fromID, fromName, toID, content string) {
+		d.runLog.LogMessage(fromID, fromName, toID, content)
+	}
+	d.Coordinator.OnBroadcast = func(fromID, fromName, content string) {
+		d.runLog.LogBroadcast(fromID, fromName, content)
+	}
+	d.Coordinator.OnStatusChanged = func(agentID, agentName, status, category string) {
+		d.runLog.LogStatus(agentID, agentName, status, "", category)
+	}
+	d.Pool.OnSpawn = func(agentID uuid.UUID, agentName string, args []string) {
+		d.runLog.LogSpawn(agentID.String(), agentName, "", "", args)
+	}
+	d.Pool.OnExit = func(agentID uuid.UUID, exitCode int) {
+		agentName := ""
+		if a, ok := d.Manager.Agent(agentID); ok {
+			agentName = a.Name
+		}
+		d.runLog.LogExit(agentID.String(), agentName, exitCode)
+	}
+	d.Pool.OnPromptSent = func(agentID uuid.UUID, agentName, promptType, prompt string) {
+		d.runLog.LogPrompt(agentID.String(), agentName, promptType, prompt)
+	}
+
 	return nil
 }
 
@@ -141,6 +183,7 @@ func (d *Daemon) Stop() error {
 	if d.MCPServer != nil {
 		d.MCPServer.Stop()
 	}
+	d.runLog.Close()
 	d.Manager.Shutdown()
 	return nil
 }
@@ -202,19 +245,24 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 // non-Claude agents and metadata updates.
 type hookBridge struct {
 	manager *agent.Manager
+	runLog  *runlog.RunLogger
 }
 
 func (h *hookBridge) SetRunning(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusRunning })
+	h.logHook(id, "set_running", "running")
 }
 func (h *hookBridge) SetIdle(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusIdle })
+	h.logHook(id, "set_idle", "idle")
 }
 func (h *hookBridge) SetBlocked(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusInput })
+	h.logHook(id, "set_blocked", "input")
 }
 func (h *hookBridge) SetError(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusError })
+	h.logHook(id, "set_error", "error")
 }
 func (h *hookBridge) SetMetadata(id uuid.UUID, key, value string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) {
@@ -225,13 +273,24 @@ func (h *hookBridge) SetMetadata(id uuid.UUID, key, value string) {
 			a.Metadata[key] = value
 		}
 	})
+	h.logHook(id, "set_metadata", key+"="+value)
 }
 func (h *hookBridge) SetSessionID(id uuid.UUID, sessionID string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.SessionID = sessionID })
+	h.logHook(id, "set_session_id", sessionID)
 }
 func (h *hookBridge) SetStatusText(id uuid.UUID, status, category string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) {
 		a.StatusText = status
 		a.StatusCategory = category
 	})
+	h.logHook(id, "set_status_text", status)
+}
+
+func (h *hookBridge) logHook(id uuid.UUID, eventType, status string) {
+	agentName := ""
+	if a, ok := h.manager.Agent(id); ok {
+		agentName = a.Name
+	}
+	h.runLog.LogHookEvent(id.String(), agentName, eventType, status)
 }

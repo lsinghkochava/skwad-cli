@@ -1174,6 +1174,14 @@ Deletes `~/.config/skwad/runs/<run-id>/` directories older than the specified du
 
 ---
 
+#### 5.6 — Run Log Rotation & Cleanup
+
+- [ ] Implement log rotation for `internal/runlog/` — cap at N files or M total bytes
+- [ ] Add `--runlog-dir` flag to override default `runlogs/` directory
+- [ ] Consider structured log viewer / analysis tooling
+
+---
+
 ### Phase 6 — Autonomous Team Coordination
 
 **Goal**: Add a task management system to the MCP server with two coordination modes — **managed** (current model: a Manager assigns work) and **autonomous** (agents self-organize, dynamically claim tasks, decide who does what). Inspired by Claude Code's native agent teams architecture (shared task lists, self-claiming, direct messaging, quality hooks).

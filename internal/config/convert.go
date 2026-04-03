@@ -30,11 +30,12 @@ type macAgent struct {
 }
 
 type macPersona struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Instructions string `json:"instructions"`
-	State        string `json:"state"`
-	Type         string `json:"type"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Instructions      string   `json:"instructions"`
+	State             string   `json:"state"`
+	Type              string   `json:"type"`
+	AllowedCategories []string `json:"allowedCategories"`
 }
 
 // IsMacOSExport checks if JSON data is a macOS workspace export
@@ -83,10 +84,19 @@ func ConvertMacOSExport(data []byte) (*TeamConfig, error) {
 			Avatar:    a.Avatar,
 		}
 
-		// Resolve persona instructions from export's persona list.
+		// Resolve persona from export's persona list.
 		if a.PersonaID != "" {
 			if p, ok := personaMap[a.PersonaID]; ok && p.Instructions != "" {
-				ac.PersonaInstructions = p.Instructions
+				if len(p.AllowedCategories) > 0 {
+					// Emit as team-level persona (matched by agent name) to carry tags.
+					tc.Personas = append(tc.Personas, PersonaConfig{
+						Name:         a.Name,
+						Instructions: p.Instructions,
+						Tags:         p.AllowedCategories,
+					})
+				} else {
+					ac.PersonaInstructions = p.Instructions
+				}
 			}
 		}
 
