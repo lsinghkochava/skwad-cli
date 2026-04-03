@@ -5,6 +5,7 @@ package tui
 
 import (
 	"image/color"
+	"log/slog"
 	"strings"
 
 	"github.com/google/uuid"
@@ -162,6 +163,11 @@ func (m Model) View() tea.View {
 
 func (m *Model) refreshAgents() {
 	agents := m.manager.Agents()
+	names := make([]string, len(agents))
+	for i, a := range agents {
+		names[i] = a.Name
+	}
+	slog.Debug("tui.refreshAgents", "count", len(agents), "names", names)
 	m.agents = make([]agentState, 0, len(agents))
 	for _, a := range agents {
 		m.agents = append(m.agents, agentState{

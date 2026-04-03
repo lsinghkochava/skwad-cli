@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
 
 func TestPoolSpawnAndIsRunning(t *testing.T) {
@@ -212,15 +211,15 @@ echo '{"type":"result","subtype":"success"}'`
 	}
 }
 
-func TestPoolOnStatusChanged(t *testing.T) {
+func TestPoolOnStreamMessage(t *testing.T) {
 	p := NewPool("http://localhost:8080/mcp")
 	id := uuid.New()
 
 	var mu sync.Mutex
-	var statuses []models.AgentStatus
-	p.OnStatusChanged = func(agentID uuid.UUID, status models.AgentStatus) {
+	var messages []StreamMessage
+	p.OnStreamMessage = func(agentID uuid.UUID, msg StreamMessage) {
 		mu.Lock()
-		statuses = append(statuses, status)
+		messages = append(messages, msg)
 		mu.Unlock()
 	}
 
@@ -237,15 +236,15 @@ echo '{"type":"result","subtype":"success"}'`
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(statuses) < 2 {
-		t.Fatalf("got %d status changes, want at least 2", len(statuses))
+	if len(messages) < 2 {
+		t.Fatalf("got %d stream messages, want at least 2", len(messages))
 	}
 
-	if statuses[0] != models.AgentStatusRunning {
-		t.Errorf("status[0] = %q, want %q", statuses[0], models.AgentStatusRunning)
+	if messages[0].Type != "assistant" {
+		t.Errorf("messages[0].Type = %q, want %q", messages[0].Type, "assistant")
 	}
-	if statuses[1] != models.AgentStatusIdle {
-		t.Errorf("status[1] = %q, want %q", statuses[1], models.AgentStatusIdle)
+	if messages[1].Type != "result" {
+		t.Errorf("messages[1].Type = %q, want %q", messages[1].Type, "result")
 	}
 }
 

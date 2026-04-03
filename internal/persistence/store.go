@@ -5,6 +5,7 @@ package persistence
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -60,6 +61,15 @@ func (s *Store) LoadAgents() ([]models.Agent, error) {
 		if agents[i].AgentType == "" {
 			agents[i].AgentType = models.AgentTypeClaude
 		}
+	}
+	if len(agents) > 0 {
+		names := make([]string, len(agents))
+		for i, a := range agents {
+			names[i] = a.Name
+		}
+		slog.Debug("store.LoadAgents", "count", len(agents), "names", names, "dir", s.dir)
+	} else {
+		slog.Debug("store.LoadAgents", "count", 0, "dir", s.dir)
 	}
 	return agents, nil
 }

@@ -4,8 +4,10 @@
 package process
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -34,6 +36,9 @@ type Pool struct {
 	LogSubscriber func(agentID uuid.UUID, agentName string, data []byte)
 	// OnStatusChanged is called when an agent's inferred status changes.
 	OnStatusChanged func(agentID uuid.UUID, status models.AgentStatus)
+	// OnStreamMessage is called for each parsed stream message, allowing external
+	// controllers (e.g. ActivityController) to process the message.
+	OnStreamMessage func(agentID uuid.UUID, msg StreamMessage)
 	// OnExit is called when an agent process exits.
 	OnExit func(agentID uuid.UUID, exitCode int)
 }
@@ -63,7 +68,10 @@ func (p *Pool) Spawn(agentID uuid.UUID, name string, args []string, env []string
 		ready:   make(chan struct{}),
 	}
 
+	slog.Debug("pool.Spawn creating runner", "name", name, "agentID", agentID)
+
 	runner.OnMessage = func(msg StreamMessage) {
+		slog.Debug("pool.OnMessage", "agentID", agentID, "name", name, "type", msg.Type, "subtype", msg.Subtype)
 		// Mark ready on first system or assistant message.
 		if msg.Type == "system" || msg.Type == "assistant" {
 			ma.readyOnce.Do(func() {
@@ -84,16 +92,9 @@ func (p *Pool) Spawn(agentID uuid.UUID, name string, args []string, env []string
 			}
 		}
 
-		// Infer status from message type.
-		if p.OnStatusChanged != nil {
-			switch msg.Type {
-			case "system":
-				p.OnStatusChanged(agentID, models.AgentStatusRunning)
-			case "assistant":
-				p.OnStatusChanged(agentID, models.AgentStatusRunning)
-			case "result":
-				p.OnStatusChanged(agentID, models.AgentStatusIdle)
-			}
+		// Route to external stream message handler (e.g. ActivityController).
+		if p.OnStreamMessage != nil {
+			p.OnStreamMessage(agentID, msg)
 		}
 	}
 
@@ -110,12 +111,37 @@ func (p *Pool) Spawn(agentID uuid.UUID, name string, args []string, env []string
 		}
 	}
 
+	slog.Debug("pool.Spawn starting runner", "name", name, "args", args)
 	if err := runner.Start(); err != nil {
 		return fmt.Errorf("start agent %s: %w", name, err)
 	}
 
 	p.agents[agentID] = ma
+	slog.Debug("pool.Spawn complete", "name", name, "totalAgents", len(p.agents))
 	return nil
+}
+
+// SendBootstrapPrompt sends the initial prompt directly to stdin without waiting
+// for readiness. This is the first message that kicks off the agent — processes like
+// `claude -p --input-format stream-json` don't produce output until they receive input,
+// so waiting for readiness would deadlock.
+func (p *Pool) SendBootstrapPrompt(agentID uuid.UUID, text string) error {
+	p.mu.RLock()
+	ma, ok := p.agents[agentID]
+	p.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+
+	// Check the process hasn't already exited.
+	select {
+	case <-ma.runner.Wait():
+		return fmt.Errorf("agent %s exited before bootstrap prompt could be sent (exit code %d)", ma.name, ma.runner.ExitCode())
+	default:
+	}
+
+	slog.Debug("pool.SendBootstrapPrompt sending immediately", "agentID", agentID, "textLen", len(text))
+	return ma.runner.SendPrompt(text)
 }
 
 // SendPrompt blocks until the agent is ready, then sends the prompt via stdin.
@@ -247,10 +273,69 @@ func formatLogLine(msg StreamMessage) string {
 		}
 		return "system: " + msg.Subtype
 	case "assistant":
-		return "assistant message received"
+		return extractAssistantText(msg.Raw)
 	case "result":
-		return "result: " + msg.Subtype
+		return extractResultText(msg.Raw, msg.Subtype)
 	default:
 		return ""
 	}
+}
+
+// extractAssistantText parses assistant message content blocks for display.
+func extractAssistantText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return "assistant message received"
+	}
+	var am AssistantMessage
+	if err := json.Unmarshal(raw, &am); err != nil {
+		return "assistant message received"
+	}
+	var blocks []ContentBlock
+	if err := json.Unmarshal(am.Message.Content, &blocks); err != nil {
+		return "assistant message received"
+	}
+	var parts []string
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			if b.Text != "" {
+				parts = append(parts, b.Text)
+			}
+		case "tool_use":
+			parts = append(parts, "→ "+b.Name)
+		}
+	}
+	if len(parts) == 0 {
+		return "assistant message received"
+	}
+	text := strings.Join(parts, " | ")
+	const maxLen = 500
+	if len(text) > maxLen {
+		text = text[:maxLen] + "…"
+	}
+	return text
+}
+
+// extractResultText parses result message for display.
+func extractResultText(raw json.RawMessage, subtype string) string {
+	if len(raw) == 0 {
+		return "result: " + subtype
+	}
+	var rm ResultMessage
+	if err := json.Unmarshal(raw, &rm); err != nil {
+		return "result: " + subtype
+	}
+	summary := "result: " + subtype
+	if rm.NumTurns > 0 {
+		summary += fmt.Sprintf(" (%d turns, $%.4f)", rm.NumTurns, rm.TotalCost)
+	}
+	if rm.Result != "" {
+		text := rm.Result
+		const maxLen = 300
+		if len(text) > maxLen {
+			text = text[:maxLen] + "…"
+		}
+		summary += " — " + text
+	}
+	return summary
 }

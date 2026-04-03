@@ -33,6 +33,21 @@ func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
 
 // --- BuildArgs tests ---
 
+func TestBuildArgs_ClaudeExecutable(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(args) == 0 {
+		t.Fatal("args is empty")
+	}
+	if args[0] != "claude" {
+		t.Errorf("args[0] = %q, want %q", args[0], "claude")
+	}
+}
+
 func TestBuildArgs_ClaudeBasicFlags(t *testing.T) {
 	b := defaultBuilder()
 	agentID := uuid.MustParse("aaaaaaaa-1111-2222-3333-444444444444")

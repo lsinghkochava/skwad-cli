@@ -14,7 +14,7 @@ type CommandBuilder struct {
 }
 
 // BuildArgs returns a slice of command-line arguments for launching a headless
-// Claude agent via exec.Command("claude", args...). No shell wrapping is applied.
+// Claude agent. args[0] is the executable, args[1:] are flags.
 // Only Claude agents are supported; other agent types return an error.
 func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, settings *models.AppSettings) ([]string, error) {
 	if a.AgentType != models.AgentTypeClaude {
@@ -22,6 +22,7 @@ func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, set
 	}
 
 	args := []string{
+		"claude", // executable — args[0] is used by exec.Command
 		"-p",
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",

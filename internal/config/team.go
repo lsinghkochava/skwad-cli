@@ -4,6 +4,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
@@ -64,6 +65,14 @@ func LoadTeamConfig(path string) (*TeamConfig, error) {
 	if err := tc.Validate(); err != nil {
 		return nil, err
 	}
+
+	// Debug: log parsed team config.
+	agentNames := make([]string, len(tc.Agents))
+	for i, a := range tc.Agents {
+		agentNames[i] = a.Name
+	}
+	slog.Debug("team config loaded", "team", tc.Name, "agentCount", len(tc.Agents), "agents", agentNames)
+
 	return &tc, nil
 }
 

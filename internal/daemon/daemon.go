@@ -78,6 +78,18 @@ func New(cfg Config) (*Daemon, error) {
 		Config:      cfg,
 	}
 
+	// Debug: log persisted agent state.
+	persistedAgents := mgr.AllAgents()
+	if len(persistedAgents) > 0 {
+		names := make([]string, len(persistedAgents))
+		for i, a := range persistedAgents {
+			names[i] = a.Name
+		}
+		slog.Debug("loaded persisted agents", "count", len(persistedAgents), "names", names)
+	} else {
+		slog.Debug("no persisted agents found")
+	}
+
 	return d, nil
 }
 
@@ -108,6 +120,13 @@ func (d *Daemon) Start() error {
 	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) {
 		if err := d.Pool.SendPrompt(agentID, text); err != nil {
 			slog.Error("failed to deliver message", "agentID", agentID, "error", err)
+		}
+	}
+
+	// Wire stream messages through ActivityController for centralized status tracking.
+	d.Pool.OnStreamMessage = func(agentID uuid.UUID, msg process.StreamMessage) {
+		if ac, ok := d.activities[agentID]; ok {
+			ac.OnStreamMessage(msg.Type, msg.Subtype)
 		}
 	}
 
@@ -162,10 +181,19 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 	}
 	d.activities[a.ID] = ac
 
+	slog.Debug("pool.Spawn", "name", a.Name, "id", a.ID, "args", strings.Join(args, " "), "dir", a.Folder)
 	if err := d.Pool.Spawn(a.ID, a.Name, args, env, a.Folder); err != nil {
 		slog.Error("failed to spawn agent", "name", a.Name, "error", err)
 		return
 	}
+
+	// Pre-register agent with coordinator so all agents are visible immediately
+	// via list-agents, even before the agent calls register-agent itself.
+	if _, _, err := d.Coordinator.RegisterAgent(a.ID, a.Name, a.Folder, ""); err != nil {
+		slog.Warn("failed to pre-register agent", "name", a.Name, "error", err)
+	}
+
+	slog.Debug("agent spawned successfully", "name", a.Name, "id", a.ID)
 }
 
 // hookBridge implements mcp.AgentStatusUpdater by routing hook events

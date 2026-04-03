@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -60,10 +61,12 @@ func (r *Runner) Start() error {
 		return fmt.Errorf("no command arguments provided")
 	}
 
+	slog.Debug("runner.Start", "executable", r.args[0], "args", r.args[1:], "dir", r.dir)
 	cmd := exec.Command(r.args[0], r.args[1:]...)
 	cmd.Dir = r.dir
 	if len(r.env) > 0 {
-		cmd.Env = r.env
+		// TODO temporary short circuit till the time we get an API key
+		cmd.Env = append(os.Environ(), r.env...)
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -85,6 +88,7 @@ func (r *Runner) Start() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start process: %w", err)
 	}
+	slog.Debug("runner process started", "pid", cmd.Process.Pid)
 
 	r.cmd = cmd
 	r.stdin = stdin
@@ -251,6 +255,7 @@ func (r *Runner) waitLoop() {
 		}
 	}
 	r.exitCode.Store(int32(code))
+	slog.Debug("runner process exited", "exitCode", code, "dir", r.dir)
 
 	if r.OnExit != nil {
 		r.OnExit(code)

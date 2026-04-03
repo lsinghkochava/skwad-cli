@@ -13,8 +13,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 	"github.com/lsinghkochava/skwad-cli/internal/tui"
 )
+
+const defaultBootstrapPrompt = "List other agents names and project (no ID) in a table based on context then set your status to indicate you are ready to get going!"
 
 var (
 	startFlagWatch   bool
@@ -62,12 +65,47 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("start daemon: %w", err)
 	}
 
-	// 5. Spawn all agents.
+	// 5. Wire TUI callbacks BEFORE spawning agents (so early messages aren't dropped).
+	var p *tea.Program
+	if startFlagWatch {
+		slog.Debug("entering TUI watch mode")
+		m := tui.New(d.Manager, d.Pool.MCPURL())
+		p = tea.NewProgram(m)
+
+		d.Manager.OnAgentChanged = func(id uuid.UUID) {
+			go p.Send(tui.AgentChangedMsg(id))
+		}
+		d.Pool.LogSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
+			go p.Send(tui.LogEntryMsg{AgentID: agentID, AgentName: agentName, Data: data})
+		}
+	}
+
+	// 6. Spawn all agents.
+	slog.Debug("spawning agents from config", "count", len(agents))
 	for _, a := range agents {
+		slog.Debug("spawning agent", "name", a.Name, "id", a.ID, "type", a.AgentType)
 		d.SpawnAgent(a)
 	}
 
-	// 6. Write PID file.
+	// 7. Fire off bootstrap prompts — each goroutine independently waits for
+	// its agent to become ready then sends. Fire-and-forget so the TUI starts immediately.
+	for i, a := range agents {
+		agentPrompt := tc.Prompt
+		if tc.Agents[i].Prompt != "" {
+			agentPrompt = tc.Agents[i].Prompt
+		}
+		if agentPrompt == "" {
+			agentPrompt = defaultBootstrapPrompt
+		}
+		go func(a *models.Agent, prompt string) {
+			slog.Debug("sending prompt to agent", "name", a.Name, "promptLen", len(prompt))
+			if err := d.Pool.SendBootstrapPrompt(a.ID, prompt); err != nil {
+				slog.Error("failed to send prompt", "agent", a.Name, "error", err)
+			}
+		}(a, agentPrompt)
+	}
+
+	// 8. Write PID file.
 	dataDir := startFlagDataDir
 	if dataDir == "" {
 		dataDir = d.Store.Dir()
@@ -77,24 +115,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 		slog.Warn("failed to write PID file", "error", err)
 	}
 
-	// 7. Wire --watch mode.
-	if startFlagWatch {
-		// TUI dashboard mode — Bubble Tea v2.
-		m := tui.New(d.Manager, d.Pool.MCPURL())
-		p := tea.NewProgram(m)
-
-		// Wire callbacks BEFORE agents start producing output.
-		d.Manager.OnAgentChanged = func(id uuid.UUID) {
-			p.Send(tui.AgentChangedMsg(id))
-		}
-		d.Pool.LogSubscriber = func(agentID uuid.UUID, agentName string, data []byte) {
-			p.Send(tui.LogEntryMsg{AgentID: agentID, AgentName: agentName, Data: data})
-		}
-
-		// Run TUI (blocks until quit).
+	// 9. Block on TUI or signals.
+	if p != nil {
+		slog.Debug("starting TUI program")
 		if _, err := p.Run(); err != nil {
 			slog.Error("tui error", "error", err)
 		}
+		slog.Debug("TUI program exited")
 
 		d.Stop()
 		if pidFile != nil {

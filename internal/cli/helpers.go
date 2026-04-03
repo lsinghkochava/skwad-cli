@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,6 +13,15 @@ import (
 // createAgentsFromConfig maps AgentConfig entries to models.Agent, adds them
 // to the daemon's Manager, and returns the created agents.
 func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.Agent {
+	// Clear persisted agents — CLI mode treats agents as ephemeral (defined by config, not persisted).
+	existing := d.Manager.AllAgents()
+	if len(existing) > 0 {
+		slog.Debug("clearing persisted agents", "count", len(existing))
+		for _, a := range existing {
+			d.Manager.RemoveAgent(a.ID)
+		}
+	}
+
 	// Load available personas (defaults + any user-saved).
 	personas, _ := d.Store.LoadPersonas()
 

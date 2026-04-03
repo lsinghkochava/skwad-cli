@@ -5,6 +5,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/google/uuid"
@@ -153,11 +154,13 @@ func (m *Manager) Agent(id uuid.UUID) (*models.Agent, bool) {
 // AddAgent creates a new agent, optionally inserting it after afterID in the active workspace.
 func (m *Manager) AddAgent(a *models.Agent, afterID *uuid.UUID) {
 	m.mu.Lock()
+	slog.Debug("manager.AddAgent", "name", a.Name, "id", a.ID, "totalBefore", len(m.agents))
 	a.Metadata = make(map[string]string)
 	m.agents[a.ID] = a
 
 	ws := m.activeWorkspace()
 	if ws == nil {
+		slog.Debug("no active workspace, creating default")
 		ws = m.createDefaultWorkspace()
 	}
 
@@ -172,6 +175,7 @@ func (m *Manager) AddAgent(a *models.Agent, afterID *uuid.UUID) {
 	ws.AgentIDs = append(ws.AgentIDs, a.ID)
 
 saved:
+	slog.Debug("manager.AddAgent complete", "name", a.Name, "wsAgentIDs", len(ws.AgentIDs), "totalAgents", len(m.agents))
 	m.save()
 	agentID := a.ID
 	m.mu.Unlock()
