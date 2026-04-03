@@ -40,13 +40,15 @@ func RenderStatusTable(agents []agentState, width, height int, colorMap map[stri
 		dot := statusDot(a.status)
 
 		// Color-code agent name using assigned color.
-		nameStr := truncate(a.name, nameW)
+		// We must pad BEFORE coloring since ANSI codes break fmt width calculation.
+		nameStr := fmt.Sprintf("%-*s", nameW, truncate(a.name, nameW))
 		if c, ok := colorMap[a.name]; ok {
 			nameStr = lipgloss.NewStyle().Foreground(c).Render(nameStr)
 		}
 
-		activity := truncate(a.statusText, activityW)
-		row := fmt.Sprintf(" %-*s  %s %-*s  %-*s", nameW, nameStr, dot, statusW-2, a.status, activityW, activity)
+		statusStr := fmt.Sprintf("%-*s", statusW-2, a.status)
+		activity := fmt.Sprintf("%-*s", activityW, truncate(a.statusText, activityW))
+		row := fmt.Sprintf(" %s  %s %s  %s", nameStr, dot, statusStr, activity)
 		b.WriteString(row)
 		b.WriteString("\n")
 	}
