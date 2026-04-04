@@ -4,18 +4,22 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/lsinghkochava/skwad-cli/internal/agent"
+	"github.com/lsinghkochava/skwad-cli/internal/git"
 	"github.com/lsinghkochava/skwad-cli/internal/mcp"
 	"github.com/lsinghkochava/skwad-cli/internal/models"
 	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 	"github.com/lsinghkochava/skwad-cli/internal/process"
-	"github.com/lsinghkochava/skwad-cli/internal/runlog"
 )
 
 // Config holds the parameters needed to initialize a Daemon.
@@ -24,6 +28,7 @@ type Config struct {
 	DataDir    string // persistence directory (empty = ~/.config/skwad/)
 	PluginDir  string // path to plugin/ scripts
 	EntryAgent string // default message recipient when --to is omitted
+	RepoPath   string // root repo path for worktree creation
 }
 
 // Daemon owns the core services shared by GUI and CLI binaries.
@@ -35,12 +40,19 @@ type Daemon struct {
 	Pool        *process.Pool
 	Builder     *agent.CommandBuilder
 	Config      Config
+	SessionID   string // unique per daemon run
 
 	// activities tracks the ActivityController per agent for stream-based status.
 	activities map[uuid.UUID]*agent.ActivityController
 
-	// runLog is the structured JSONL logger for agent activity.
-	runLog *runlog.RunLogger
+	// worktrees tracks agentID → worktree path for isolated agents.
+	worktrees map[uuid.UUID]string
+
+	// Team readiness gate.
+	readyMu     sync.Mutex
+	readyAgents map[uuid.UUID]bool
+	teamReady   chan struct{}
+	teamSize    int
 }
 
 // New initializes all core services and wires the hookBridge.
@@ -97,11 +109,6 @@ func New(cfg Config) (*Daemon, error) {
 	return d, nil
 }
 
-// SetRunLogger sets the structured JSONL logger on the Daemon.
-func (d *Daemon) SetRunLogger(rl *runlog.RunLogger) {
-	d.runLog = rl
-}
-
 // Start starts the MCP server and creates the process pool.
 // The MCP server's UI callbacks (OnDisplayMarkdown, etc.) should be set
 // before calling Start if the caller needs them.
@@ -119,11 +126,21 @@ func (d *Daemon) Start() error {
 		}
 	}
 
+	d.SessionID = uuid.New().String()[:8]
+	d.worktrees = make(map[uuid.UUID]string)
+
+	// Prune stale worktree refs once at startup, and ensure .gitignore has entry.
+	if d.Config.RepoPath != "" {
+		wm := git.NewWorktreeManager(d.Config.RepoPath)
+		_ = wm.Prune()
+		ensureGitignoreEntry(d.Config.RepoPath, ".skwad-worktrees/")
+	}
+
 	// Create process pool and wire hookBridge.
 	d.Pool = process.NewPool(mcpURL)
 	d.Builder = &agent.CommandBuilder{MCPServerURL: mcpURL, PluginDir: d.Config.PluginDir}
 	d.activities = make(map[uuid.UUID]*agent.ActivityController)
-	d.MCPServer.StatusUpdater = &hookBridge{manager: d.Manager, runLog: d.runLog}
+	d.MCPServer.StatusUpdater = &hookBridge{manager: d.Manager}
 
 	// Wire message delivery: when a message arrives, send via stream-json stdin.
 	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) {
@@ -139,37 +156,12 @@ func (d *Daemon) Start() error {
 		}
 	}
 
-	// Wire run logging callbacks.
-	d.MCPServer.OnToolCall = func(agentID, agentName, toolName string, args map[string]interface{}, result interface{}) {
-		d.runLog.LogToolCall(agentID, agentName, toolName, args, result)
-	}
+	// Wire tool call log for TUI display.
 	d.MCPServer.OnToolCallLog = func(agentName, toolName, argsPreview string) {
 		if d.Pool.LogSubscriber != nil {
 			line := fmt.Sprintf("→ %s(%s)", toolName, argsPreview)
 			d.Pool.LogSubscriber(uuid.Nil, agentName, []byte(line))
 		}
-	}
-	d.Coordinator.OnMessageSent = func(fromID, fromName, toID, content string) {
-		d.runLog.LogMessage(fromID, fromName, toID, content)
-	}
-	d.Coordinator.OnBroadcast = func(fromID, fromName, content string) {
-		d.runLog.LogBroadcast(fromID, fromName, content)
-	}
-	d.Coordinator.OnStatusChanged = func(agentID, agentName, status, category string) {
-		d.runLog.LogStatus(agentID, agentName, status, "", category)
-	}
-	d.Pool.OnSpawn = func(agentID uuid.UUID, agentName string, args []string) {
-		d.runLog.LogSpawn(agentID.String(), agentName, "", "", args)
-	}
-	d.Pool.OnExit = func(agentID uuid.UUID, exitCode int) {
-		agentName := ""
-		if a, ok := d.Manager.Agent(agentID); ok {
-			agentName = a.Name
-		}
-		d.runLog.LogExit(agentID.String(), agentName, exitCode)
-	}
-	d.Pool.OnPromptSent = func(agentID uuid.UUID, agentName, promptType, prompt string) {
-		d.runLog.LogPrompt(agentID.String(), agentName, promptType, prompt)
 	}
 
 	return nil
@@ -183,9 +175,85 @@ func (d *Daemon) Stop() error {
 	if d.MCPServer != nil {
 		d.MCPServer.Stop()
 	}
-	d.runLog.Close()
+	if len(d.worktrees) > 0 {
+		slog.Info(fmt.Sprintf("%d agent worktrees remain in .skwad-worktrees/%s/", len(d.worktrees), d.SessionID))
+		slog.Info("run 'skwad merge' to consolidate or 'skwad clean' to remove")
+	}
 	d.Manager.Shutdown()
 	return nil
+}
+
+// SetTeamSize sets the expected number of agents for the readiness gate.
+// Must be called before spawning agents.
+func (d *Daemon) SetTeamSize(n int) {
+	d.readyMu.Lock()
+	defer d.readyMu.Unlock()
+	d.teamSize = n
+	d.readyAgents = make(map[uuid.UUID]bool, n)
+	d.teamReady = make(chan struct{})
+}
+
+// MarkAgentReady marks an agent as having completed its init turn.
+// When all agents are ready, the teamReady channel is closed.
+func (d *Daemon) MarkAgentReady(agentID uuid.UUID) {
+	d.readyMu.Lock()
+	defer d.readyMu.Unlock()
+
+	if d.teamReady == nil {
+		return
+	}
+
+	d.readyAgents[agentID] = true
+	slog.Info("agent ready", "agentID", agentID, "ready", len(d.readyAgents), "total", d.teamSize)
+
+	if len(d.readyAgents) >= d.teamSize {
+		select {
+		case <-d.teamReady:
+			// already closed
+		default:
+			close(d.teamReady)
+		}
+	}
+}
+
+// WaitForTeamReady blocks until all agents have completed their init turn,
+// or the context is cancelled.
+func (d *Daemon) WaitForTeamReady(ctx context.Context) error {
+	d.readyMu.Lock()
+	ch := d.teamReady
+	d.readyMu.Unlock()
+
+	if ch == nil {
+		return nil
+	}
+
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// TeamReady returns the teamReady channel (nil if SetTeamSize was not called).
+func (d *Daemon) TeamReady() <-chan struct{} {
+	d.readyMu.Lock()
+	defer d.readyMu.Unlock()
+	return d.teamReady
+}
+
+// CleanupWorktrees removes all worktrees created during this session.
+func (d *Daemon) CleanupWorktrees() error {
+	if d.Config.RepoPath == "" {
+		return nil
+	}
+	wm := git.NewWorktreeManager(d.Config.RepoPath)
+	for agentID, path := range d.worktrees {
+		if err := wm.Remove(path); err != nil {
+			slog.Warn("failed to remove worktree", "agentID", agentID, "path", path, "error", err)
+		}
+	}
+	return wm.Prune()
 }
 
 // SpawnAgent builds args and spawns a headless process for the given agent.
@@ -197,7 +265,42 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 		persona = d.Manager.Persona(*a.PersonaID)
 	}
 
-	args, err := d.Builder.BuildArgs(a, persona, &settings)
+	// Create worktree for isolated agents.
+	if a.WorktreeIsolation && d.Config.RepoPath != "" {
+		branchName := fmt.Sprintf("skwad/%s/%s", d.SessionID, sanitizeName(a.Name))
+		worktreeDir := filepath.Join(d.Config.RepoPath, ".skwad-worktrees", d.SessionID, sanitizeName(a.Name))
+
+		wm := git.NewWorktreeManager(d.Config.RepoPath)
+
+		if wm.BranchExists(branchName) {
+			if err := wm.CreateFromExisting(branchName, worktreeDir); err != nil {
+				slog.Error("failed to create worktree from existing branch", "agent", a.Name, "branch", branchName, "error", err)
+				return
+			}
+		} else {
+			if err := wm.Create(branchName, worktreeDir); err != nil {
+				slog.Error("failed to create worktree", "agent", a.Name, "branch", branchName, "error", err)
+				return
+			}
+		}
+
+		a.WorktreePath = worktreeDir
+		a.WorktreeBranch = branchName
+		a.Folder = worktreeDir
+		d.worktrees[a.ID] = worktreeDir
+		slog.Info("created worktree for agent", "agent", a.Name, "branch", branchName, "path", worktreeDir)
+	}
+
+	// Gather teammates for system prompt team protocol.
+	allAgents := d.Manager.AllAgents()
+	var teammates []models.Agent
+	for _, ta := range allAgents {
+		if ta.ID != a.ID {
+			teammates = append(teammates, *ta)
+		}
+	}
+
+	args, err := d.Builder.BuildArgs(a, persona, &settings, teammates)
 	if err != nil {
 		slog.Warn("skipping agent — headless not supported", "name", a.Name, "type", a.AgentType, "error", err)
 		return
@@ -218,9 +321,10 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 			d.Pool.OnStatusChanged(id, status)
 		}
 	}
+	agentID := a.ID
 	ac.OnTurnComplete = func() {
-		// Agent finished a turn — ready for next prompt.
-		slog.Debug("agent turn complete", "agentID", a.ID, "name", a.Name)
+		slog.Debug("agent turn complete", "agentID", agentID, "name", a.Name)
+		d.MarkAgentReady(agentID)
 	}
 	d.activities[a.ID] = ac
 
@@ -239,30 +343,52 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 	slog.Debug("agent spawned successfully", "name", a.Name, "id", a.ID)
 }
 
+// ensureGitignoreEntry adds an entry to .gitignore if not already present.
+func ensureGitignoreEntry(repoPath, entry string) {
+	gitignorePath := filepath.Join(repoPath, ".gitignore")
+	data, _ := os.ReadFile(gitignorePath)
+	if strings.Contains(string(data), entry) {
+		return
+	}
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		f.WriteString("\n")
+	}
+	f.WriteString(entry + "\n")
+}
+
+// sanitizeName converts a name to a filesystem/branch-safe string.
+func sanitizeName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(name, " ", "-"), "/", "-"))
+}
+
 // hookBridge implements mcp.AgentStatusUpdater by routing hook events
 // directly to the agent manager. In headless mode, Claude agent status
 // comes from stream messages via ActivityController; hookBridge handles
 // non-Claude agents and metadata updates.
 type hookBridge struct {
 	manager *agent.Manager
-	runLog  *runlog.RunLogger
 }
 
 func (h *hookBridge) SetRunning(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusRunning })
-	h.logHook(id, "set_running", "running")
+	slog.Debug("hook: set_running", "agentID", id)
 }
 func (h *hookBridge) SetIdle(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusIdle })
-	h.logHook(id, "set_idle", "idle")
+	slog.Debug("hook: set_idle", "agentID", id)
 }
 func (h *hookBridge) SetBlocked(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusInput })
-	h.logHook(id, "set_blocked", "input")
+	slog.Debug("hook: set_blocked", "agentID", id)
 }
 func (h *hookBridge) SetError(id uuid.UUID) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.Status = models.AgentStatusError })
-	h.logHook(id, "set_error", "error")
+	slog.Debug("hook: set_error", "agentID", id)
 }
 func (h *hookBridge) SetMetadata(id uuid.UUID, key, value string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) {
@@ -273,24 +399,16 @@ func (h *hookBridge) SetMetadata(id uuid.UUID, key, value string) {
 			a.Metadata[key] = value
 		}
 	})
-	h.logHook(id, "set_metadata", key+"="+value)
+	slog.Debug("hook: set_metadata", "agentID", id, "key", key)
 }
 func (h *hookBridge) SetSessionID(id uuid.UUID, sessionID string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) { a.SessionID = sessionID })
-	h.logHook(id, "set_session_id", sessionID)
+	slog.Debug("hook: set_session_id", "agentID", id, "sessionID", sessionID)
 }
 func (h *hookBridge) SetStatusText(id uuid.UUID, status, category string) {
 	h.manager.UpdateAgent(id, func(a *models.Agent) {
 		a.StatusText = status
 		a.StatusCategory = category
 	})
-	h.logHook(id, "set_status_text", status)
-}
-
-func (h *hookBridge) logHook(id uuid.UUID, eventType, status string) {
-	agentName := ""
-	if a, ok := h.manager.Agent(id); ok {
-		agentName = a.Name
-	}
-	h.runLog.LogHookEvent(id.String(), agentName, eventType, status)
+	slog.Debug("hook: set_status_text", "agentID", id, "status", status)
 }

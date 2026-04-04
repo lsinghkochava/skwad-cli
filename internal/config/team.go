@@ -26,7 +26,8 @@ type TeamConfig struct {
 	Repo     string          `json:"repo"`
 	Prompt   string          `json:"prompt,omitempty"`
 	EntryAgent string          `json:"entry_agent,omitempty"`
-	Agents     []AgentConfig   `json:"agents"`
+	IsolateAgents bool            `json:"isolate_agents,omitempty"`
+	Agents        []AgentConfig   `json:"agents"`
 	Personas   []PersonaConfig `json:"personas,omitempty"`
 }
 
@@ -49,6 +50,8 @@ type AgentConfig struct {
 	Command             string   `json:"command,omitempty"`
 	AllowedTools        []string `json:"allowed_tools,omitempty"`
 	Prompt              string   `json:"prompt,omitempty"`
+	ExploreMode         bool     `json:"explore_mode,omitempty"`
+	Isolate             *bool    `json:"isolate,omitempty"`
 }
 
 // LoadTeamConfig reads a JSON file and returns a validated TeamConfig.

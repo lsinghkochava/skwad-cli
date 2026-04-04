@@ -20,14 +20,15 @@ func defaultSettings() *models.AppSettings {
 	return &s
 }
 
-func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
-	id := "12345678-aaaa-bbbb-cccc-000000000099"
-	result := skwadInstructions(id)
-	if !strings.Contains(result, id) {
-		t.Errorf("skwad instructions should contain agent UUID %q, got: %s", id, result)
+func TestBuildSystemPrompt_ContainsUUID(t *testing.T) {
+	id := uuid.MustParse("12345678-aaaa-bbbb-cccc-000000000099")
+	a := &models.Agent{ID: id, Name: "Agent"}
+	result := BuildSystemPrompt(a, nil, nil)
+	if !strings.Contains(result, id.String()) {
+		t.Errorf("system prompt should contain agent UUID %q", id.String())
 	}
 	if !strings.Contains(result, "CRITICAL RULE") {
-		t.Error("skwad instructions should contain CRITICAL RULE for set-status")
+		t.Error("system prompt should contain CRITICAL RULE for set-status")
 	}
 }
 
@@ -36,7 +37,7 @@ func TestCommandBuilder_SkwadInstructions_ContainsUUID(t *testing.T) {
 func TestBuildArgs_ClaudeExecutable(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestBuildArgs_ClaudeBasicFlags(t *testing.T) {
 		Folder:    "/home/user/project",
 		AgentType: models.AgentTypeClaude,
 	}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestBuildArgs_ClaudeBasicFlags(t *testing.T) {
 func TestBuildArgs_ClaudeMCPConfig(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestBuildArgs_ClaudeMCPConfig(t *testing.T) {
 func TestBuildArgs_ClaudeNoMCP(t *testing.T) {
 	b := &CommandBuilder{MCPServerURL: "", PluginDir: "/tmp/plugins"}
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestBuildArgs_ClaudePersona(t *testing.T) {
 	agentID := uuid.MustParse("bbbbbbbb-1111-2222-3333-444444444444")
 	a := &models.Agent{ID: agentID, Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
 	persona := &models.Persona{Name: "Tester", Instructions: "Write tests for all code."}
-	args, err := b.BuildArgs(a, persona, defaultSettings())
+	args, err := b.BuildArgs(a, persona, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestBuildArgs_ClaudePersona(t *testing.T) {
 	if !strings.Contains(prompt, "Your skwad agent ID: "+agentID.String()) {
 		t.Error("system prompt missing skwad agent ID")
 	}
-	if !strings.Contains(prompt, "You are asked to impersonate Tester") {
+	if !strings.Contains(prompt, "Persona: Tester") {
 		t.Error("system prompt missing persona name")
 	}
 	if !strings.Contains(prompt, "Write tests for all code.") {
@@ -135,7 +136,7 @@ func TestBuildArgs_ClaudeNoPersona(t *testing.T) {
 	b := defaultBuilder()
 	agentID := uuid.MustParse("cccccccc-1111-2222-3333-444444444444")
 	a := &models.Agent{ID: agentID, Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +146,7 @@ func TestBuildArgs_ClaudeNoPersona(t *testing.T) {
 		t.Fatal("missing --append-system-prompt value")
 	}
 	prompt := args[sysIdx+1]
-	if strings.Contains(prompt, "You are asked to impersonate") {
+	if strings.Contains(prompt, "Persona:") {
 		t.Error("should not contain persona prompt when no persona given")
 	}
 }
@@ -159,7 +160,7 @@ func TestBuildArgs_ClaudeResumeSession(t *testing.T) {
 		AgentType:       models.AgentTypeClaude,
 		ResumeSessionID: "sess-headless-123",
 	}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,7 +179,7 @@ func TestBuildArgs_ClaudeModelFromOptions(t *testing.T) {
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
 	settings := defaultSettings()
 	settings.AgentTypeOptions.ClaudeOptions = "--model claude-sonnet-4-20250514 --some-other-flag"
-	args, err := b.BuildArgs(a, nil, settings)
+	args, err := b.BuildArgs(a, nil, settings, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestBuildArgs_ClaudeModelFromOptions(t *testing.T) {
 func TestBuildArgs_ClaudeNoModel(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -207,7 +208,7 @@ func TestBuildArgs_ClaudeNoModel(t *testing.T) {
 func TestBuildArgs_ClaudeWorkingDir(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/home/user/project", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -224,7 +225,7 @@ func TestBuildArgs_ClaudeWorkingDir(t *testing.T) {
 func TestBuildArgs_ClaudeAgentName(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "MyAgent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,7 +242,7 @@ func TestBuildArgs_ClaudeAgentName(t *testing.T) {
 func TestBuildArgs_NoPluginDir(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,13 +254,70 @@ func TestBuildArgs_NoPluginDir(t *testing.T) {
 func TestBuildArgs_NoRegistrationPrompt(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
-	args, err := b.BuildArgs(a, nil, defaultSettings())
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, arg := range args {
 		if strings.Contains(arg, "List other agents names and project") {
 			t.Error("headless mode should not include registration user prompt")
+		}
+	}
+}
+
+func TestBuildArgs_ExploreModeFlags(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Explorer", Folder: "/tmp", AgentType: models.AgentTypeClaude, ExploreMode: true}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have plan permission mode
+	pmIdx := argIndex(args, "--permission-mode")
+	if pmIdx < 0 || pmIdx+1 >= len(args) {
+		t.Fatal("missing --permission-mode")
+	}
+	if args[pmIdx+1] != "plan" {
+		t.Errorf("expected --permission-mode plan, got %s", args[pmIdx+1])
+	}
+
+	// Should NOT have Write, Edit, or Bash
+	for _, tool := range []string{"Write", "Edit", "Bash(*)"} {
+		if containsArg(args, tool) {
+			t.Errorf("explore mode should not have tool %q", tool)
+		}
+	}
+
+	// Should have read-only tools
+	for _, tool := range []string{"Read", "Glob", "Grep", "WebSearch", "WebFetch"} {
+		if !containsArg(args, tool) {
+			t.Errorf("explore mode should have tool %q", tool)
+		}
+	}
+}
+
+func TestBuildArgs_NormalModeFlags(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Coder", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have auto permission mode
+	pmIdx := argIndex(args, "--permission-mode")
+	if pmIdx < 0 || pmIdx+1 >= len(args) {
+		t.Fatal("missing --permission-mode")
+	}
+	if args[pmIdx+1] != "auto" {
+		t.Errorf("expected --permission-mode auto, got %s", args[pmIdx+1])
+	}
+
+	// Should have Write, Edit, Bash
+	for _, tool := range []string{"Write", "Edit", "Bash(*)"} {
+		if !containsArg(args, tool) {
+			t.Errorf("normal mode should have tool %q", tool)
 		}
 	}
 }
@@ -277,7 +335,7 @@ func TestBuildArgs_UnsupportedAgentTypes(t *testing.T) {
 	b := defaultBuilder()
 	for _, agentType := range unsupported {
 		a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: agentType}
-		_, err := b.BuildArgs(a, nil, defaultSettings())
+		_, err := b.BuildArgs(a, nil, defaultSettings(), nil)
 		if err == nil {
 			t.Errorf("expected error for agent type %s, got nil", agentType)
 		}
@@ -302,6 +360,68 @@ func TestParseFlag(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("parseFlag(%q, %q) = %q, want %q", tc.opts, tc.flag, got, tc.want)
 		}
+	}
+}
+
+func TestBuildArgs_WithTeammates(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Coder", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	teammates := []models.Agent{
+		{ID: uuid.New(), Name: "Explorer"},
+		{ID: uuid.New(), Name: "Tester"},
+		{ID: uuid.New(), Name: "Reviewer"},
+	}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), teammates)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sysIdx := argIndex(args, "--append-system-prompt")
+	if sysIdx < 0 || sysIdx+1 >= len(args) {
+		t.Fatal("missing --append-system-prompt value")
+	}
+	prompt := args[sysIdx+1]
+	if !strings.Contains(prompt, "Team Roster") {
+		t.Error("system prompt should contain team roster when teammates present")
+	}
+	if !strings.Contains(prompt, "Explorer") {
+		t.Error("system prompt should list Explorer teammate")
+	}
+}
+
+func TestBuildArgs_NoTeammates(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Coder", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sysIdx := argIndex(args, "--append-system-prompt")
+	if sysIdx < 0 || sysIdx+1 >= len(args) {
+		t.Fatal("missing --append-system-prompt value")
+	}
+	prompt := args[sysIdx+1]
+	if strings.Contains(prompt, "Team Roster") {
+		t.Error("system prompt should NOT contain team roster when no teammates")
+	}
+}
+
+func TestBuildArgs_RoleInstructionsInPrompt(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Coder", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sysIdx := argIndex(args, "--append-system-prompt")
+	if sysIdx < 0 || sysIdx+1 >= len(args) {
+		t.Fatal("missing --append-system-prompt value")
+	}
+	prompt := args[sysIdx+1]
+	if !strings.Contains(prompt, "Role: Coder") {
+		t.Error("system prompt should contain coder role instructions for agent named Coder")
 	}
 }
 

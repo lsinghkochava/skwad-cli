@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -110,5 +112,116 @@ func TestAgent_DefaultMetadata(t *testing.T) {
 	a.Metadata["cwd"] = "/tmp"
 	if a.Metadata["cwd"] != "/tmp" {
 		t.Error("metadata map not writable")
+	}
+}
+
+func TestAgent_JSON_ExploreMode_RoundTrip(t *testing.T) {
+	a := Agent{
+		ID:          uuid.MustParse("a1000001-0000-0000-0000-000000000001"),
+		Name:        "Explorer",
+		AgentType:   AgentTypeClaude,
+		ExploreMode: true,
+	}
+
+	data, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded Agent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if !decoded.ExploreMode {
+		t.Error("ExploreMode should survive JSON round-trip")
+	}
+}
+
+func TestAgent_JSON_WorktreeIsolation_RoundTrip(t *testing.T) {
+	a := Agent{
+		ID:                uuid.MustParse("a1000001-0000-0000-0000-000000000002"),
+		Name:              "Isolated",
+		AgentType:         AgentTypeCodex,
+		WorktreeIsolation: true,
+	}
+
+	data, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded Agent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if !decoded.WorktreeIsolation {
+		t.Error("WorktreeIsolation should survive JSON round-trip")
+	}
+}
+
+func TestAgent_JSON_RuntimeFields_Excluded(t *testing.T) {
+	a := Agent{
+		ID:             uuid.MustParse("a1000001-0000-0000-0000-000000000003"),
+		Name:           "Worker",
+		AgentType:      AgentTypeClaude,
+		WorktreePath:   "/tmp/worktree-path",
+		WorktreeBranch: "feature/test",
+		Status:         AgentStatusRunning,
+		StatusText:     "coding",
+		SessionID:      "sess-999",
+	}
+
+	data, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+	for _, excluded := range []string{"worktree-path", "feature/test", "running", "coding", "sess-999"} {
+		if strings.Contains(jsonStr, excluded) {
+			t.Errorf("runtime field value %q should not appear in JSON output", excluded)
+		}
+	}
+
+	// Unmarshal back — runtime fields should be zero-valued
+	var decoded Agent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.WorktreePath != "" {
+		t.Error("WorktreePath should be empty after round-trip")
+	}
+	if decoded.WorktreeBranch != "" {
+		t.Error("WorktreeBranch should be empty after round-trip")
+	}
+	if decoded.Status != "" {
+		t.Error("Status should be empty after round-trip")
+	}
+}
+
+func TestAgent_JSON_ExploreMode_DefaultFalse(t *testing.T) {
+	a := Agent{
+		ID:        uuid.MustParse("a1000001-0000-0000-0000-000000000004"),
+		Name:      "Default",
+		AgentType: AgentTypeClaude,
+	}
+
+	data, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded Agent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.ExploreMode {
+		t.Error("ExploreMode should default to false")
+	}
+	if decoded.WorktreeIsolation {
+		t.Error("WorktreeIsolation should default to false")
 	}
 }

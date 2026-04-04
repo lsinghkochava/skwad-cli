@@ -1174,11 +1174,415 @@ Deletes `~/.config/skwad/runs/<run-id>/` directories older than the specified du
 
 ---
 
-#### 5.6 — Run Log Rotation & Cleanup
+#### 5.6 — Agent Worktree Isolation & Consolidation
 
-- [ ] Implement log rotation for `internal/runlog/` — cap at N files or M total bytes
-- [ ] Add `--runlog-dir` flag to override default `runlogs/` directory
-- [ ] Consider structured log viewer / analysis tooling
+**Goal**: Each agent that makes code changes works in its own git worktree on an isolated branch. Read-only agents opt out explicitly in team config. On completion, a consolidation branch merges all agent branches sequentially in its own worktree (never touching main's checkout), giving the user a single reviewable branch to merge into main. Main is never touched directly.
+
+**Dependencies**: Phases 0-3 (headless foundation). Builds on existing `internal/git/worktree.go` primitives.
+
+##### 5.6.1 — Extend `WorktreeManager` with Remove, Prune, and configurable timeout
+
+**File**: `internal/git/worktree.go`
+
+Add missing lifecycle methods:
+
+```go
+// Remove removes a worktree by path. Runs: git worktree remove <path>
+func (wm *WorktreeManager) Remove(path string) error
+
+// Prune cleans up stale worktree references. Runs: git worktree prune
+func (wm *WorktreeManager) Prune() error
+```
+
+**File**: `internal/git/cli.go`
+
+Add `RunWithTimeout(timeout time.Duration, args ...string)` method alongside existing `Run()`. The default `commandTimeout` (30s) stays for normal operations. Merge and consolidation operations use 120s via `RunWithTimeout`.
+
+```go
+func (c *CLI) RunWithTimeout(timeout time.Duration, args ...string) (string, error)
+func (c *CLI) RunLinesWithTimeout(timeout time.Duration, args ...string) ([]string, error)
+```
+
+**Tests**: `internal/git/worktree_test.go`
+- Test: Create → Remove → List confirms removal
+- Test: Prune after manual directory deletion cleans stale refs
+- Test: Remove non-existent path → error
+
+**Commit**: `feat: add worktree remove, prune, and configurable timeout to git package`
+
+---
+
+##### 5.6.2 — Add worktree isolation fields to Agent model + team config
+
+**File**: `internal/models/agent.go`
+
+Add fields to `Agent` struct:
+```go
+WorktreeIsolation bool   `json:"worktreeIsolation"`       // config flag — persisted
+WorktreePath      string `json:"-"`                        // runtime only — NOT persisted
+WorktreeBranch    string `json:"-"`                        // runtime only — NOT persisted
+```
+
+`WorktreePath` and `WorktreeBranch` are runtime state that changes per session — they use `json:"-"` to avoid persisting stale paths.
+
+**File**: `internal/config/team.go`
+
+Add fields to `TeamConfig` and `AgentConfig`:
+```go
+// TeamConfig — team-level default
+IsolateAgents bool `json:"isolate_agents,omitempty"` // default: true — all agents get worktrees
+
+// AgentConfig — per-agent explicit control
+Isolate *bool `json:"isolate,omitempty"` // override team default (nil = use team default)
+```
+
+Resolution logic in `createAgentsFromConfig()` — **no heuristics, no role detection**:
+- If agent has `Isolate` explicitly set → use that value
+- Else → use `TeamConfig.IsolateAgents` (default `true`)
+- The user explicitly sets `"isolate": false` for read-only agents in their team config
+
+Example team config:
+```json
+{
+  "isolate_agents": true,
+  "agents": [
+    { "name": "Explorer", "isolate": false },
+    { "name": "Reviewer", "isolate": false },
+    { "name": "Coder" },
+    { "name": "Tester" }
+  ]
+}
+```
+
+**File**: `internal/cli/helpers.go`
+
+Wire isolation flag in `createAgentsFromConfig()`.
+
+**Tests**: Config parsing, isolation resolution logic, explicit override beats default, default is true
+
+**Commit**: `feat: add worktree isolation fields to agent model and team config`
+
+---
+
+##### 5.6.3 — Automatic worktree creation at spawn time
+
+**File**: `internal/daemon/daemon.go`
+
+Generate a session ID on daemon startup:
+```go
+type Daemon struct {
+    // ...existing fields...
+    sessionID  string   // short UUID for this daemon run, e.g. "a1b2c3d4"
+    worktrees  []string // paths to created worktrees, for cleanup
+}
+```
+
+Session ID is generated once in `Start()`: `sessionID = uuid.New().String()[:8]`
+
+In `SpawnAgent()`, before calling `Pool.Spawn()`:
+
+```go
+if a.WorktreeIsolation {
+    branchName := fmt.Sprintf("skwad/%s/%s", d.sessionID, slug(a.Name))
+    // e.g. "skwad/a1b2c3d4/coder"
+    
+    worktreeDir := filepath.Join(d.RepoPath, ".skwad-worktrees", d.sessionID, slug(a.Name))
+    
+    wm := git.NewWorktreeManager(d.RepoPath)
+    
+    // Handle branch-exists edge case (e.g., resume after crash)
+    if branchExists(branchName) && !worktreeExists(worktreeDir) {
+        // Branch exists but no worktree — reuse branch
+        err = wm.CreateFromExisting(branchName, worktreeDir)
+    } else {
+        err = wm.Create(branchName, worktreeDir)
+    }
+    if err != nil {
+        return fmt.Errorf("create worktree for %s: %w", a.Name, err)
+    }
+    
+    a.WorktreePath = worktreeDir
+    a.WorktreeBranch = branchName
+    a.Folder = worktreeDir // agent process runs in the worktree
+    d.worktrees = append(d.worktrees, worktreeDir)
+}
+```
+
+**Worktree directory structure**: `.skwad-worktrees/` inside the repo root, organized by session:
+```
+myproject/
+├── .skwad-worktrees/
+│   └── a1b2c3d4/
+│       ├── coder/       ← Coder's worktree
+│       └── tester/      ← Tester's worktree
+├── src/
+└── ...
+```
+
+Add `.skwad-worktrees/` to the repo's `.gitignore` if not already present.
+
+**File**: `internal/git/worktree.go` — Add `CreateFromExisting()`:
+```go
+// CreateFromExisting creates a worktree for a branch that already exists.
+// Runs: git worktree add <path> <existingBranch> (no -b flag)
+func (wm *WorktreeManager) CreateFromExisting(branchName, destPath string) error
+```
+
+**On startup**: Run `wm.Prune()` to clean up stale worktree refs from previous crashed runs.
+
+**Cleanup method** (called by `skwad merge --cleanup` or `skwad clean`, NOT automatic on Stop):
+```go
+func (d *Daemon) CleanupWorktrees() error {
+    wm := git.NewWorktreeManager(d.RepoPath)
+    for _, path := range d.worktrees {
+        if err := wm.Remove(path); err != nil {
+            slog.Warn("failed to remove worktree", "path", path, "error", err)
+        }
+    }
+    return wm.Prune()
+}
+```
+
+**On `Stop()`**: Print reminder if worktrees exist:
+```
+⚠ 3 worktrees remain in .skwad-worktrees/a1b2c3d4/
+  Run `skwad merge` to consolidate, or `skwad clean` to remove.
+```
+
+**Tests**:
+- Spawn with isolation → worktree created under `.skwad-worktrees/<session>/`, agent Folder updated
+- Spawn without isolation → no worktree, Folder unchanged
+- Branch exists + no worktree → reuses branch via `CreateFromExisting`
+- Branch exists + worktree exists → clear error
+- CleanupWorktrees removes all tracked worktrees
+- Startup prune runs without error
+- .gitignore updated if needed
+
+**Commit**: `feat: automatic worktree creation at agent spawn time`
+
+---
+
+##### 5.6.4 — Consolidation engine
+
+**New file**: `internal/git/consolidate.go`
+
+```go
+type ConsolidateResult struct {
+    Branch          string            // consolidation branch name
+    WorktreePath    string            // path to consolidation worktree
+    MergedFrom      []string          // branches successfully merged
+    Skipped         []string          // branches skipped due to conflicts
+    ConflictDetails map[string]string // branch → conflict description
+    CommitHashes    []string          // merge commit hashes
+}
+
+// Consolidate creates a consolidation branch from baseBranch HEAD, then sequentially
+// merges each agent branch in its own temporary worktree. Main repo checkout is never
+// modified. Stops on conflict per-branch (aborts that merge, continues to next).
+func Consolidate(repoPath, baseBranch string, agentBranches []string, consolidateBranch string) (*ConsolidateResult, error)
+```
+
+**Critical design decision**: Consolidation operates in its **own temporary worktree**, NOT in the main repo checkout. This prevents corrupting the working state of Explorer/Reviewer agents still running in the main repo.
+
+Logic:
+1. Create consolidation branch from `baseBranch` HEAD: `git branch <consolidateBranch> <baseBranch>`
+2. Create a temporary worktree for the consolidation: `git worktree add .skwad-worktrees/<session>/consolidate <consolidateBranch>`
+3. In that worktree, for each agent branch (sorted by name for determinism):
+   - `git merge --no-ff <agentBranch> -m "merge: <agentBranch> into consolidation"` (use 120s timeout via `RunWithTimeout`)
+   - If conflict → `git merge --abort`, add to `Skipped` with conflict details from `git diff --name-only --diff-filter=U`, continue to next
+   - If success → record commit hash, add to `MergedFrom`
+4. Return result (worktree is kept for inspection if there were conflicts, cleaned up by `--cleanup`)
+
+**Tests**: `internal/git/consolidate_test.go`
+- Test: 2 non-conflicting branches → both merged, no skipped
+- Test: 1 conflicting branch → skipped with conflict details, other branches still merged
+- Test: empty branches (no changes from base) → merge is no-op
+- Test: consolidation branch already exists → error
+- Test: consolidation happens in its own worktree, main repo checkout is untouched
+
+**Commit**: `feat: add consolidation engine for merging agent branches`
+
+---
+
+##### 5.6.5 — `skwad merge` CLI command
+
+**New file**: `internal/cli/merge.go`
+
+```go
+var mergeCmd = &cobra.Command{
+    Use:   "merge",
+    Short: "Consolidate agent branches into a single branch",
+}
+```
+
+Flags:
+- `--branch` / `-b` — consolidation branch name (default: `skwad/<session-id>/consolidate`)
+- `--base` — base branch to merge onto (default: current branch)
+- `--cleanup` — remove worktrees after successful consolidation
+- `--dry-run` — list branches that would be merged without merging
+- `--continue` — resume after manual conflict resolution
+
+Flow:
+1. Discover agent branches: `git branch --list 'skwad/<session-id>/*'`
+2. Display branch list with ahead/behind counts
+3. Call `Consolidate()`
+4. **Prominently report result** — clearly separate merged vs skipped:
+
+```
+Consolidating 3 agent branches into skwad/a1b2c3d4/consolidate...
+
+  ✓ skwad/a1b2c3d4/coder      — merged (2 commits)
+  ✓ skwad/a1b2c3d4/tester     — merged (1 commit)
+
+  ✗ SKIPPED: skwad/a1b2c3d4/swift-coder
+    Conflict in: internal/models/agent.go
+    To resolve manually:
+      cd .skwad-worktrees/a1b2c3d4/consolidate
+      git merge skwad/a1b2c3d4/swift-coder
+      # resolve conflicts
+      git commit
+      skwad merge --continue
+
+Result: 2/3 branches merged. 1 SKIPPED (conflicts).
+```
+
+5. If `--cleanup`: remove worktrees for successfully merged branches, delete merged branches
+
+**Tests**: `internal/cli/merge_test.go`
+
+**Commit**: `feat: add skwad merge command for branch consolidation`
+
+---
+
+##### 5.6.6 — `skwad clean` CLI command
+
+**New file**: `internal/cli/clean.go`
+
+```go
+var cleanCmd = &cobra.Command{
+    Use:   "clean",
+    Short: "Remove agent worktrees and optionally their branches",
+}
+```
+
+Flags:
+- `--branches` — also delete the `skwad/*` branches (default: false, only removes worktree directories)
+- `--session` — clean a specific session ID (default: all sessions)
+- `--force` — remove even if worktrees have uncommitted changes
+
+Flow:
+1. List worktrees under `.skwad-worktrees/`
+2. For each: `wm.Remove(path)`
+3. `wm.Prune()`
+4. If `--branches`: delete `skwad/*` branches
+5. Remove `.skwad-worktrees/` directory if empty
+
+**Commit**: `feat: add skwad clean command for worktree cleanup`
+
+---
+
+##### 5.6.7 — Wire auto-merge into `run` mode
+
+**File**: `internal/cli/run.go`
+
+Add flags:
+```go
+cmd.Flags().BoolVar(&autoMerge, "auto-merge", false, "Automatically consolidate agent branches on run completion")
+cmd.Flags().StringVar(&consolidateBranch, "consolidate-branch", "", "Branch name for consolidation (default: skwad/<session-id>/consolidate)")
+```
+
+After all agents exit and report is generated:
+1. If `--auto-merge` is set:
+   - Collect all agent branches from daemon's worktree tracking
+   - Call `Consolidate()`
+   - Include consolidation result in the report
+   - Cleanup worktrees for merged branches
+   - If any skipped (conflicts): exit code 1, report includes manual resolution instructions
+2. If not set: print reminder with `skwad merge` command
+
+**Commit**: `feat: wire auto-merge consolidation into run command`
+
+---
+
+##### 5.6.8 — MCP merge tool for Manager-initiated consolidation
+
+**File**: `internal/mcp/tools.go`
+
+Add `merge-branches` tool:
+```go
+ToolMergeBranches = "merge-branches"
+// Schema: {branches: []string (optional, default: all skwad/* branches for current session),
+//          consolidateBranch: string (optional),
+//          idleOnly: bool (optional, default: false — if true, only merge branches of idle/exited agents)}
+```
+
+**Safety guard**: Before merging, check agent status. If an agent is still actively running (not idle/exited), include a warning in the result:
+```
+Warning: Agent "Coder" is still active. Its branch may contain incomplete work.
+```
+
+Default behavior: merge all branches but warn about active ones. With `idleOnly: true`: skip active agents' branches entirely.
+
+**Commit**: `feat: add merge-branches mcp tool for runtime consolidation`
+
+---
+
+##### 5.6.9 — System prompt updates for worktree-aware agents
+
+**File**: `internal/agent/command_builder.go` (or `prompt.go` if Phase 5.4 has landed)
+
+Add worktree context to agent system prompt when `WorktreeIsolation` is true:
+
+```
+## Git Worktree Isolation
+You are working in an isolated git worktree on your own branch.
+- Your branch: {branchName}
+- Your worktree path: {worktreePath}
+- Main repo: {repoPath}
+
+Rules:
+- Commit your changes to YOUR branch freely — main is protected.
+- Do NOT run `git checkout`, `git switch`, or `git branch -d` — stay on your assigned branch.
+- Do NOT modify the main repo or other agents' worktrees.
+- When your work is complete, commit all changes and report completion.
+  The consolidation step will merge your branch later.
+- If you need to see what other agents changed, use `list-worktrees`
+  to find their paths, but do NOT modify their files.
+```
+
+**Tests**: Verify prompt includes worktree context when isolation is on, omitted when off. Verify `git checkout`/`git switch` prohibition is present.
+
+**Commit**: `feat: add worktree context to agent system prompt`
+
+---
+
+##### 5.6 Execution Order
+
+```
+5.6.1 — WorktreeManager extensions (Remove, Prune, RunWithTimeout)  — no dependencies
+5.6.2 — Model + config fields                                       — no dependencies
+5.6.3 — Automatic worktree creation at spawn                        — depends on 5.6.1, 5.6.2
+5.6.4 — Consolidation engine                                        — depends on 5.6.1
+5.6.5 — skwad merge CLI command                                     — depends on 5.6.4
+5.6.6 — skwad clean CLI command                                     — depends on 5.6.1
+5.6.7 — Wire auto-merge into run mode                               — depends on 5.6.4, 5.6.3
+5.6.8 — MCP merge tool                                              — depends on 5.6.4
+5.6.9 — System prompt updates                                       — depends on 5.6.3
+
+Parallelization: 5.6.1 and 5.6.2 in parallel. Then 5.6.3 and 5.6.4 in parallel.
+Then 5.6.5, 5.6.6, 5.6.7, 5.6.8 can all run in parallel. 5.6.9 last.
+```
+
+##### 5.6 Known Limitations
+
+- **Branch divergence**: If main receives commits from non-skwad sources during a long run, agent branches diverge and consolidation conflicts increase. Periodic rebase-from-main is deferred to a future enhancement.
+- **Disk space**: Each worktree is a full checkout. For repos with large working trees, 5 agents = 5x working copy disk usage. Mitigated by `.skwad-worktrees/` being inside the repo (shared `.git` directory, only working copy is duplicated).
+
+---
+
+#### 5.7 — ~~Run Log Rotation & Cleanup~~ (RETIRED)
+
+`internal/runlog/` was retired in Phase 5 — superseded by `internal/persistence/eventlog.go`. Event log rotation is handled by `--clean-runs` flag.
 
 ---
 
@@ -1492,6 +1896,68 @@ Include task tool documentation in system prompt for both modes.
 
 ---
 
+### Phase 7 — Run Mode Output Formatting
+
+**Goal**: Make `skwad run` output clean, user-friendly, and configurable. Default to showing only the entry agent's final text output instead of raw JSON from all agents.
+
+**Dependencies**: No hard dependency on Phase 6. Builds on the run command foundation (Phases 2-3) and existing report package.
+
+#### Design Decisions
+
+1. **`--output` controls which agents' results are shown** — `entry` (default), `all`, `raw`. Separates content filtering from presentation formatting.
+2. **`--format` controls presentation** — `text` (default), `json`, `markdown`. Orthogonal to `--output`.
+3. **`--output-file` for file destination** — optional, defaults to stdout.
+4. **Entry agent output IS the answer** — in the skwad model, the Manager synthesizes the final response. Intermediate agent work is internal. Default reflects this.
+5. **`raw` preserves current behavior** — backwards compatibility for debugging and CI pipelines that parse JSON.
+
+---
+
+#### 7.1 — Output filtering: `--output` flag
+
+**File**: `internal/cli/run.go`
+
+Add `--output` flag to `run` command with values:
+- `entry` (default): Only the entry agent's final `result` message text
+- `all`: All agents' final `result` message text
+- `raw`: Full JSON stream output (current behavior)
+
+Track each agent's final `result` message text separately during execution. On completion, filter based on `--output` value.
+
+**Tests**: Verify `entry` mode only includes entry agent result. Verify `all` includes all agents. Verify `raw` matches current behavior.
+
+**Commit**: `feat: add --output flag to run command with entry/all/raw modes`
+
+---
+
+#### 7.2 — Output formatting: `--format` flag
+
+**File**: `internal/cli/run.go`, `internal/report/`
+
+Add `--format` flag to `run` command with values:
+- `text` (default): Clean plaintext to terminal
+- `json`: Structured JSON with metadata (`{agents: [], result: "", metadata: {cost, duration, turns}}`)
+- `markdown`: Formatted markdown report (leverage existing `internal/report/`)
+
+Implement formatters for each mode. Text formatter extracts clean text from result messages. JSON formatter wraps with metadata. Markdown formatter integrates with existing report package.
+
+**Tests**: Unit tests for each formatter. Integration test verifying format output structure.
+
+**Commit**: `feat: add --format flag for text/json/markdown output presentation`
+
+---
+
+#### 7.3 — Output destination: `--output-file` flag
+
+**File**: `internal/cli/run.go`
+
+Add `--output-file` flag. Write to file instead of stdout. Combines with `--format` (e.g., `--format json --output-file results.json`).
+
+**Tests**: Verify file output matches stdout output. Verify file is created at specified path.
+
+**Commit**: `feat: add --output-file flag for file output destination`
+
+---
+
 ## Stream JSON Protocol
 
 The bidirectional streaming protocol is the core of this architecture. Understanding it is critical.
@@ -1588,6 +2054,16 @@ Phase 5 (Enhancements — from oh-my-codex analysis) — after headless pivot is
   Parallelization: 5.1, 5.2, 5.4 are independent — can be built in parallel.
   5.3 should land before 5.5 (pipeline events feed into event log).
   5.4.1-5.4.3 can be built in parallel, then 5.4.4-5.4.5 sequentially.
+  5.6 Agent worktree isolation (independent of 5.1-5.5, can run in parallel):
+    5.6.1 WorktreeManager extensions     — no dependencies
+    5.6.2 Model + config fields          — no dependencies
+    5.6.3 Worktree creation at spawn     — depends on 5.6.1, 5.6.2
+    5.6.4 Consolidation engine           — depends on 5.6.1
+    5.6.5 skwad merge CLI                — depends on 5.6.4
+    5.6.6 skwad clean CLI                — depends on 5.6.1
+    5.6.7 Auto-merge in run mode         — depends on 5.6.3, 5.6.4
+    5.6.8 MCP merge tool                 — depends on 5.6.4
+    5.6.9 System prompt updates          — depends on 5.6.3; soft integration with 5.4
 
 Phase 6 (Autonomous Team Coordination) — no hard dependency on Phase 4 or 5:
   6.1 Task model + coordinator    — foundation, no dependencies
@@ -1600,6 +2076,13 @@ Phase 6 (Autonomous Team Coordination) — no hard dependency on Phase 4 or 5:
   Parallelization: 6.2 and 6.3 are independent.
   6.4 can start as soon as 6.1 lands.
   6.6 adapts to whether Phase 5.4 has landed (skwadInstructions vs prompt.go).
+
+Phase 7 (Run Mode Output Formatting) — no hard dependency on Phase 6:
+  7.1 Output filtering (--output flag)    — foundation, no dependencies
+  7.2 Output formatting (--format flag)   — depends on 7.1
+  7.3 Output destination (--output-file)  — depends on 7.1
+
+  Parallelization: 7.2 and 7.3 are independent once 7.1 lands.
 ```
 
 ---
@@ -1642,12 +2125,24 @@ Phase 6 (Autonomous Team Coordination) — no hard dependency on Phase 4 or 5:
 | 32 | `feat: add event log replay for run state reconstruction` | 5.5.2 |
 | 33 | `feat: wire event-sourced state into run command with resume support` | 5.5.3 |
 | 34 | `feat: add run state cleanup for old event logs` | 5.5.4 |
-| 35 | `feat: add task model and coordinator task management` | 6.1 |
-| 36 | `feat: add mcp task tools (create/list/claim/complete/update)` | 6.2 |
-| 37 | `feat: wire allowed-tools from team config to command builder` | 6.3 |
-| 38 | `feat: add coordination mode and task persistence to team config` | 6.4 |
-| 39 | `feat: wire auto-claim for autonomous coordination mode` | 6.5 |
-| 40 | `feat: add coordination mode system prompts for managed and autonomous teams` | 6.6 |
+| 35 | `feat: add worktree remove, prune, and configurable timeout to git package` | 5.6.1 |
+| 36 | `feat: add worktree isolation fields to agent model and team config` | 5.6.2 |
+| 37 | `feat: automatic worktree creation at agent spawn time` | 5.6.3 |
+| 38 | `feat: add consolidation engine for merging agent branches` | 5.6.4 |
+| 39 | `feat: add skwad merge command for branch consolidation` | 5.6.5 |
+| 40 | `feat: add skwad clean command for worktree cleanup` | 5.6.6 |
+| 41 | `feat: wire auto-merge consolidation into run command` | 5.6.7 |
+| 42 | `feat: add merge-branches mcp tool for runtime consolidation` | 5.6.8 |
+| 43 | `feat: add worktree context to agent system prompt` | 5.6.9 |
+| 44 | `feat: add task model and coordinator task management` | 6.1 |
+| 45 | `feat: add mcp task tools (create/list/claim/complete/update)` | 6.2 |
+| 46 | `feat: wire allowed-tools from team config to command builder` | 6.3 |
+| 47 | `feat: add coordination mode and task persistence to team config` | 6.4 |
+| 48 | `feat: wire auto-claim for autonomous coordination mode` | 6.5 |
+| 49 | `feat: add coordination mode system prompts for managed and autonomous teams` | 6.6 |
+| 50 | `feat: add --output flag to run command with entry/all/raw modes` | 7.1 |
+| 51 | `feat: add --format flag for text/json/markdown output presentation` | 7.2 |
+| 52 | `feat: add --output-file flag for file output destination` | 7.3 |
 
 Each commit is buildable and testable. Tests at every step.
 
@@ -1677,6 +2172,15 @@ Each commit is buildable and testable. Tests at every step.
 | Mixed mode confusion — some agents expect assignments, others self-claim | Mode is per-team, not per-agent. All agents get the same coordination instructions. Personas can add nuance on top. |
 | Circular task dependencies — A→B→A permanently blocks both tasks | `CreateTask` walks transitive dependency chain and rejects cycles. O(d) check where d = dependency depth. |
 | `OnAgentIdle` deadlock — callback calls back into coordinator | Callback fired outside the mutex (same unlock/relock pattern as `OnDeliverMessage`). Documented in Phase 6.1. |
+| Orphan worktrees on daemon crash | `wm.Prune()` on startup cleans stale refs. `.skwad-worktrees/` contains all worktrees for easy manual cleanup. `skwad clean` command for explicit removal. |
+| Consolidation corrupts main repo checkout | Consolidation runs in its own temporary worktree, never touches main repo. Explorer/Reviewer agents in main repo are unaffected. |
+| Branch naming collision across runs | Session ID in all branch names (`skwad/<session-id>/<agent-name>`). Each daemon start gets a unique session ID. |
+| `git worktree add -b` fails if branch exists | `CreateFromExisting()` method handles reuse of existing branches without `-b` flag. Checked before create attempt. |
+| 30s git timeout too short for merge operations | `RunWithTimeout(120s)` used for merge/consolidation operations. Default 30s kept for normal git operations. |
+| Agent branches diverge from main over long runs | Known limitation documented. Periodic rebase-from-main deferred to future enhancement. |
+| Disk space from multiple worktrees | Shared `.git` directory — only working copy is duplicated. `.skwad-worktrees/` inside repo for visibility. `skwad clean` for explicit removal. |
+| Agent runs `git checkout` in worktree, breaking isolation | System prompt explicitly prohibits `git checkout`, `git switch`, `git branch -d`. Agents instructed to stay on assigned branch. |
+| MCP merge mid-run with active agents | `merge-branches` tool warns about active agents. `idleOnly: true` option skips active agents entirely. |
 
 ---
 
@@ -1700,28 +2204,43 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Phase 4.2 — Status table panel *(2026-04-02)*
 - [x] Phase 4.3 — Activity log panel *(2026-04-02)*
 - [x] Phase 4.4 — Keyboard shortcuts + status bar *(2026-04-02)*
-- [ ] Phase 5.1.1 — Explore mode: model + config changes
-- [ ] Phase 5.1.2 — Explore mode: command builder flags
-- [ ] Phase 5.1.3 — Explore mode: CLI --explore flag
-- [ ] Phase 5.2.1 — Output summarization: truncation engine
-- [ ] Phase 5.2.2 — Output summarization: report pipeline + CLI wiring
-- [ ] Phase 5.3.1 — Phase-gated CI: pipeline iteration tracking
-- [ ] Phase 5.3.2 — Phase-gated CI: wire into run command
-- [ ] Phase 5.4.1 — System prompts: universal preamble
-- [ ] Phase 5.4.2 — System prompts: team protocol section
-- [ ] Phase 5.4.3 — System prompts: role-specific instructions
-- [ ] Phase 5.4.4 — System prompts: persona layer (move existing)
-- [ ] Phase 5.4.5 — System prompts: wire into command builder + team config
-- [ ] Phase 5.5.1 — Event-sourced state: event log writer
-- [ ] Phase 5.5.2 — Event-sourced state: replay + state reconstruction
-- [ ] Phase 5.5.3 — Event-sourced state: wire into run command with --resume
-- [ ] Phase 5.5.4 — Event-sourced state: run state cleanup
+- [x] Phase 5.1.1 — Explore mode: model + config changes *(2026-04-03)*
+- [x] Phase 5.1.2 — Explore mode: command builder flags *(2026-04-03)*
+- [x] Phase 5.1.3 — Explore mode: CLI --explore flag *(2026-04-03)*
+- [x] Phase 5.2.1 — Output summarization: truncation engine *(2026-04-03)*
+- [x] Phase 5.2.2 — Output summarization: report pipeline + CLI wiring *(2026-04-03)*
+- [x] Phase 5.3.1 — Phase-gated CI: pipeline iteration tracking *(2026-04-03)*
+- [x] Phase 5.3.2 — Phase-gated CI: wire into run command *(2026-04-03)*
+- [x] Phase 5.4.1 — System prompts: universal preamble *(2026-04-03)*
+- [x] Phase 5.4.2 — System prompts: team protocol section *(2026-04-03)*
+- [x] Phase 5.4.3 — System prompts: role-specific instructions *(2026-04-03)*
+- [x] Phase 5.4.4 — System prompts: persona layer (move existing) *(2026-04-03)*
+- [x] Phase 5.4.5 — System prompts: wire into command builder + team config *(2026-04-03)*
+- [x] Phase 5.5.1 — Event-sourced state: event log writer *(2026-04-03)*
+- [x] Phase 5.5.2 — Event-sourced state: replay + state reconstruction *(2026-04-03)*
+- [x] Phase 5.5.3 — Event-sourced state: basic event logging wired into run *(2026-04-03)* (--resume deferred)
+- [x] Phase 5.5.4 — Event-sourced state: run state cleanup *(2026-04-03)*
+- [x] Phase 5.6.1 — Worktree isolation: WorktreeManager extensions (Remove, Prune, RunWithTimeout) *(2026-04-03)*
+- [x] Phase 5.6.2 — Worktree isolation: agent model + team config fields *(2026-04-03)*
+- [x] Phase 5.6.3 — Worktree isolation: automatic worktree creation at spawn *(2026-04-03)*
+- [x] Phase 5.6.4 — Worktree isolation: consolidation engine *(2026-04-03)*
+- [x] Phase 5.6.5 — Worktree isolation: skwad merge CLI command *(2026-04-03)*
+- [x] Phase 5.6.6 — Worktree isolation: skwad clean CLI command *(2026-04-03)*
+- [x] Phase 5.6.7 — Worktree isolation: auto-merge in run mode *(2026-04-03)*
+- [x] Phase 5.6.8 — Worktree isolation: MCP merge tool *(2026-04-03)*
+- [x] Phase 5.6.9 — Worktree isolation: system prompt updates *(2026-04-03)*
+- [x] Bug fix: run command exits after all agents complete (close stdin on result) *(2026-04-04)*
+- [x] Bug fix: team readiness gate — no prompts until all agents initialized *(2026-04-04)*
+- [x] Config fix: entry_agent set to Manager in test team config *(2026-04-04)*
 - [ ] Phase 6.1 — Task model + coordinator task management
 - [ ] Phase 6.2 — MCP task tools (create/list/claim/complete/update)
 - [ ] Phase 6.3 — Wire AllowedTools from team config to command builder
 - [ ] Phase 6.4 — Coordination mode + team config + task persistence
 - [ ] Phase 6.5 — Auto-claim wiring for autonomous mode
 - [ ] Phase 6.6 — Coordination mode system prompts
+- [ ] Phase 7.1 — Output filtering: --output flag (entry/all/raw)
+- [ ] Phase 7.2 — Output formatting: --format flag (text/json/markdown)
+- [ ] Phase 7.3 — Output destination: --output-file flag
 
 ---
 
@@ -1758,6 +2277,22 @@ Plan reviewed by Reviewer agent. Key revisions incorporated:
     - RECOMMENDED: `CompleteTask` verifies completing agent is the assignee
     - RECOMMENDED: `max_tasks` configurable in TeamConfig instead of hardcoded 50
     - RECOMMENDED: `UpdateTask` ownership check — only creator or assignee can update
+
+12. **Phase 5.6 — Agent Worktree Isolation & Consolidation (2026-04-03)**: Each agent works in its own git worktree on an isolated branch. Consolidation merges all agent branches into a single reviewable branch. Main is never touched. Reviewed by Reviewer with 6 must-address items and 6 recommendations, all incorporated:
+    - CRITICAL: Consolidation runs in its own worktree, not main repo checkout (prevents corrupting Explorer/Reviewer)
+    - CRITICAL: Session ID in ALL branch names (`skwad/<session-id>/<agent-name>`) to prevent collisions across runs
+    - CRITICAL: No role-detection heuristics — explicit `isolate` config field, default `true`, user opts out read-only agents
+    - IMPORTANT: `CreateFromExisting()` method for branch-exists edge case (resume after crash)
+    - IMPORTANT: `RunWithTimeout(120s)` for merge operations (default 30s too short)
+    - IMPORTANT: Conflict handling clearly separates merged vs skipped branches with resolution instructions
+    - RECOMMENDED: `skwad clean` command defined (was referenced but missing)
+    - RECOMMENDED: Worktrees in `.skwad-worktrees/` subdirectory (not parent dir pollution)
+    - RECOMMENDED: `WorktreePath`/`WorktreeBranch` use `json:"-"` tags (runtime-only, not persisted)
+    - RECOMMENDED: Branch divergence documented as known limitation
+    - RECOMMENDED: MCP merge tool warns about active agents, `idleOnly` option
+    - RECOMMENDED: System prompt includes `git checkout`/`git switch` prohibition
+
+13. **Phase 5 — Post-implementation review (2026-04-03)**: Full code review by Reviewer — APPROVED with 5 important items. 3 bugs fixed (conflict detection order in consolidate.go, per-agent Prune moved to Start(), .gitignore for .skwad-worktrees). 2 deferred (Pool.Remove for retry re-spawn, MCP merge HEAD detection edge case). Retired `internal/runlog/` package — superseded by eventlog. Nothing read from runlog, all events covered by eventlog + slog.
 
 ---
 

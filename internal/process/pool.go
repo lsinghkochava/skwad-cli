@@ -191,6 +191,19 @@ func (p *Pool) SendPrompt(agentID uuid.UUID, text string) error {
 	}
 }
 
+// CloseStdin closes the stdin pipe for the given agent, causing it to exit naturally.
+func (p *Pool) CloseStdin(agentID uuid.UUID) error {
+	p.mu.RLock()
+	ma, ok := p.agents[agentID]
+	p.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("agent %s not found", agentID)
+	}
+
+	return ma.runner.CloseStdin()
+}
+
 // Stop gracefully stops the agent process (SIGTERM → 5s → SIGKILL).
 func (p *Pool) Stop(agentID uuid.UUID) error {
 	p.mu.RLock()

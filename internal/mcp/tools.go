@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/lsinghkochava/skwad-cli/internal/git"
@@ -129,6 +130,15 @@ func (h *toolHandler) list() []toolDefinition {
 			}, "source"),
 		},
 		{
+			Name:        ToolMergeBranches,
+			Description: "Merge agent worktree branches into a consolidation branch. Operates in its own worktree — main repo checkout is not modified.",
+			InputSchema: schema(map[string]interface{}{
+				"repoPath":          propString("Absolute path to the git repository"),
+				"branches":          propString("Comma-separated branch names to merge (default: all skwad/* branches)"),
+				"consolidateBranch": propString("Name for consolidation branch (default: skwad/consolidate)"),
+			}, "repoPath"),
+		},
+		{
 			Name:        ToolSetStatus,
 			Description: "MANDATORY: Set your status so other agents know what you are doing. Call before starting any task, after completing it, and when changing direction. Keep it short and specific (e.g. 'Implementing auth module', 'Running tests', 'Done — PR ready'). Use empty string to clear.",
 			InputSchema: schema(map[string]interface{}{
@@ -169,6 +179,8 @@ func (h *toolHandler) call(params ToolCallParams, sess *session) (ToolResult, er
 		result, err = h.displayMarkdown(params.Arguments, sess)
 	case ToolViewMermaid:
 		result, err = h.viewMermaid(params.Arguments, sess)
+	case ToolMergeBranches:
+		result, err = h.mergeBranches(params.Arguments)
 	case ToolSetStatus:
 		result, err = h.setStatus(params.Arguments)
 	default:
@@ -393,6 +405,68 @@ func (h *toolHandler) setStatus(args map[string]interface{}) (ToolResult, error)
 	}
 
 	return textResult("Status updated"), nil
+}
+
+func (h *toolHandler) mergeBranches(args map[string]interface{}) (ToolResult, error) {
+	repoPath := strArg(args, "repoPath")
+	if repoPath == "" {
+		return errorResult("repoPath is required"), nil
+	}
+
+	consolidateBranch := strArg(args, "consolidateBranch")
+	if consolidateBranch == "" {
+		consolidateBranch = "skwad/consolidate"
+	}
+
+	branchesStr := strArg(args, "branches")
+	var branches []string
+	if branchesStr != "" {
+		for _, b := range strings.Split(branchesStr, ",") {
+			if trimmed := strings.TrimSpace(b); trimmed != "" {
+				branches = append(branches, trimmed)
+			}
+		}
+	} else {
+		cli := &git.CLI{RepoPath: repoPath}
+		lines, err := cli.RunLines("branch", "--list", "skwad/*")
+		if err != nil {
+			return errorResult(fmt.Sprintf("list branches: %v", err)), nil
+		}
+		for _, line := range lines {
+			b := strings.TrimSpace(strings.TrimPrefix(line, "*"))
+			b = strings.TrimSpace(b)
+			if b != "" && !strings.HasSuffix(b, "/consolidate") {
+				branches = append(branches, b)
+			}
+		}
+	}
+
+	if len(branches) == 0 {
+		return textResult("No skwad agent branches found"), nil
+	}
+
+	cli := &git.CLI{RepoPath: repoPath}
+	base, err := cli.Run("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return errorResult(fmt.Sprintf("detect base branch: %v", err)), nil
+	}
+
+	result, err := git.Consolidate(repoPath, strings.TrimSpace(base), branches, consolidateBranch)
+	if err != nil {
+		return errorResult(fmt.Sprintf("consolidation failed: %v", err)), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Consolidated into %s\n\n", result.Branch))
+	for _, b := range result.MergedFrom {
+		sb.WriteString(fmt.Sprintf("✓ %s — merged\n", b))
+	}
+	for _, b := range result.Skipped {
+		sb.WriteString(fmt.Sprintf("✗ %s — SKIPPED (conflict: %s)\n", b, result.ConflictDetails[b]))
+	}
+	sb.WriteString(fmt.Sprintf("\n%d/%d branches merged", len(result.MergedFrom), len(branches)))
+
+	return textResult(sb.String()), nil
 }
 
 // formatArgsPreview builds a concise key=value summary of tool arguments for display.

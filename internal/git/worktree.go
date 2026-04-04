@@ -52,6 +52,36 @@ func (m *WorktreeManager) Create(branchName, destPath string) error {
 	return err
 }
 
+// Remove removes a worktree by path.
+func (m *WorktreeManager) Remove(path string) error {
+	_, err := m.cli.Run("worktree", "remove", path)
+	return err
+}
+
+// Prune cleans up stale worktree references.
+func (m *WorktreeManager) Prune() error {
+	_, err := m.cli.Run("worktree", "prune")
+	return err
+}
+
+// CreateFromExisting creates a worktree for a branch that already exists (no -b flag).
+func (m *WorktreeManager) CreateFromExisting(branchName, destPath string) error {
+	_, err := m.cli.Run("worktree", "add", destPath, branchName)
+	return err
+}
+
+// BranchExists checks if a branch exists.
+func (m *WorktreeManager) BranchExists(name string) bool {
+	_, err := m.cli.Run("rev-parse", "--verify", "refs/heads/"+name)
+	return err == nil
+}
+
+// DeleteBranch deletes a local branch.
+func (m *WorktreeManager) DeleteBranch(name string) error {
+	_, err := m.cli.Run("branch", "-D", name)
+	return err
+}
+
 // SuggestedPath derives a sibling worktree path from the repo path and branch name.
 // e.g. /home/user/myrepo + "feature/foo" → /home/user/myrepo-feature-foo
 func SuggestedPath(repoPath, branchName string) string {

@@ -49,7 +49,7 @@
       "prompt" : ""
     }
   ],
-  "entry_agent" : "Reviewer",
+  "entry_agent" : "Manager",
   "name" : "Skwad CLI",
   "personas" : [
     {

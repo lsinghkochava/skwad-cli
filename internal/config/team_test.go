@@ -429,3 +429,112 @@ func TestValidate_AvatarField(t *testing.T) {
 		t.Errorf("expected avatar '🦊', got %q", tc.Agents[0].Avatar)
 	}
 }
+
+func TestLoadTeamConfig_IsolateAgents(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Isolated Team",
+		"repo": "`+repo+`",
+		"isolate_agents": true,
+		"agents": [{"name": "Bot", "agent_type": "claude"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !tc.IsolateAgents {
+		t.Error("expected IsolateAgents=true")
+	}
+}
+
+func TestLoadTeamConfig_IsolateAgents_DefaultFalse(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Normal Team",
+		"repo": "`+repo+`",
+		"agents": [{"name": "Bot", "agent_type": "claude"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.IsolateAgents {
+		t.Error("expected IsolateAgents=false when omitted")
+	}
+}
+
+func TestLoadTeamConfig_AgentIsolateOverride(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Mixed Team",
+		"repo": "`+repo+`",
+		"isolate_agents": true,
+		"agents": [
+			{"name": "Isolated", "agent_type": "claude"},
+			{"name": "NotIsolated", "agent_type": "claude", "isolate": false}
+		]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// First agent: no per-agent isolate → should be nil (uses team default)
+	if tc.Agents[0].Isolate != nil {
+		t.Errorf("expected Isolate=nil for agent without override, got %v", *tc.Agents[0].Isolate)
+	}
+
+	// Second agent: explicit false override
+	if tc.Agents[1].Isolate == nil {
+		t.Fatal("expected Isolate to be non-nil for agent with explicit false")
+	}
+	if *tc.Agents[1].Isolate != false {
+		t.Errorf("expected Isolate=false, got %v", *tc.Agents[1].Isolate)
+	}
+}
+
+func TestLoadTeamConfig_AgentIsolateTrue(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Team",
+		"repo": "`+repo+`",
+		"isolate_agents": false,
+		"agents": [
+			{"name": "Special", "agent_type": "claude", "isolate": true}
+		]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if tc.Agents[0].Isolate == nil {
+		t.Fatal("expected Isolate to be non-nil")
+	}
+	if *tc.Agents[0].Isolate != true {
+		t.Errorf("expected Isolate=true, got %v", *tc.Agents[0].Isolate)
+	}
+}
+
+func TestLoadTeamConfig_AgentExploreMode(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Team",
+		"repo": "`+repo+`",
+		"agents": [
+			{"name": "Explorer", "agent_type": "claude", "explore_mode": true},
+			{"name": "Worker", "agent_type": "claude"}
+		]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !tc.Agents[0].ExploreMode {
+		t.Error("expected ExploreMode=true for Explorer")
+	}
+	if tc.Agents[1].ExploreMode {
+		t.Error("expected ExploreMode=false for Worker")
+	}
+}

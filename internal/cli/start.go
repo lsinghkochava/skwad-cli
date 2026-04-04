@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -14,7 +16,6 @@ import (
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
 	"github.com/lsinghkochava/skwad-cli/internal/models"
-	"github.com/lsinghkochava/skwad-cli/internal/runlog"
 	"github.com/lsinghkochava/skwad-cli/internal/tui"
 )
 
@@ -23,6 +24,7 @@ const defaultBootstrapPrompt = "List other agents names and project (no ID) in a
 var (
 	startFlagWatch   bool
 	startFlagDataDir string
+	startFlagExplore bool
 )
 
 var startCmd = &cobra.Command{
@@ -35,6 +37,7 @@ var startCmd = &cobra.Command{
 func init() {
 	startCmd.Flags().BoolVar(&startFlagWatch, "watch", false, "stream agent output to stdout")
 	startCmd.Flags().StringVar(&startFlagDataDir, "data-dir", "", "data directory (default ~/.config/skwad/)")
+	startCmd.Flags().BoolVar(&startFlagExplore, "explore", false, "Start all agents in read-only explore mode")
 	rootCmd.AddCommand(startCmd)
 }
 
@@ -52,21 +55,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 		DataDir:    startFlagDataDir,
 		PluginDir:  findPluginDir(),
 		EntryAgent: tc.EntryAgent,
+		RepoPath:   tc.Repo,
 	}
 	d, err := daemon.New(cfg)
 	if err != nil {
 		return fmt.Errorf("initialize daemon: %w", err)
 	}
 
-	// Create run logger (non-fatal — logging is optional).
-	rl, rlErr := runlog.New("runlogs")
-	if rlErr != nil {
-		slog.Warn("failed to create run logger", "error", rlErr)
-	}
-	d.SetRunLogger(rl)
-
 	// 3. Create agents from team config.
 	agents := createAgentsFromConfig(d, tc)
+
+	if startFlagExplore {
+		for _, a := range agents {
+			a.ExploreMode = true
+		}
+	}
 
 	// 4. Start daemon (MCP server + pool).
 	if err := d.Start(); err != nil {
@@ -95,8 +98,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		d.SpawnAgent(a)
 	}
 
-	// 7. Fire off bootstrap prompts — each goroutine independently waits for
-	// its agent to become ready then sends. Fire-and-forget so the TUI starts immediately.
+	// 7. Set team size and fire off bootstrap prompts — each goroutine independently
+	// waits for its agent to become ready then sends. Fire-and-forget so the TUI starts immediately.
+	d.SetTeamSize(len(agents))
 	for i, a := range agents {
 		agentPrompt := tc.Prompt
 		if tc.Agents[i].Prompt != "" {
@@ -112,6 +116,17 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 		}(a, agentPrompt)
 	}
+
+	// Wait for team readiness in a background goroutine (non-blocking for start mode).
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		if err := d.WaitForTeamReady(ctx); err != nil {
+			slog.Warn("team readiness timeout", "error", err)
+		} else {
+			slog.Info("team ready — all agents initialized")
+		}
+	}()
 
 	// 8. Write PID file.
 	dataDir := startFlagDataDir

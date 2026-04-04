@@ -108,3 +108,67 @@ func TestDaemonNew_UsesDataDir(t *testing.T) {
 		t.Errorf("expected store dir %q, got %q", dir, d.Store.Dir())
 	}
 }
+
+func TestSanitizeName(t *testing.T) {
+	cases := []struct {
+		name string
+		input string
+		want string
+	}{
+		{"simple", "Coder", "coder"},
+		{"spaces", "Lead Coder", "lead-coder"},
+		{"slashes", "feature/test", "feature-test"},
+		{"mixed", "My Agent/v2", "my-agent-v2"},
+		{"already clean", "tester", "tester"},
+		{"multiple spaces", "a  b", "a--b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeName(tc.input)
+			if got != tc.want {
+				t.Errorf("sanitizeName(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDaemonStart_SetsSessionID(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+
+	d, err := New(Config{MCPPort: port, DataDir: dir})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer d.Stop()
+
+	if d.SessionID == "" {
+		t.Error("expected SessionID to be set after Start")
+	}
+	if len(d.SessionID) != 8 {
+		t.Errorf("expected SessionID length 8, got %d (%q)", len(d.SessionID), d.SessionID)
+	}
+}
+
+func TestDaemonStart_InitializesWorktreeMap(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+
+	d, err := New(Config{MCPPort: port, DataDir: dir})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer d.Stop()
+
+	if d.worktrees == nil {
+		t.Error("expected worktrees map to be initialized after Start")
+	}
+}

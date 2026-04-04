@@ -33,3 +33,4 @@ runlogs/
 
 # Reference implementation (macOS source — not part of this repo)
 Skwad-Mac/
+.skwad-worktrees/

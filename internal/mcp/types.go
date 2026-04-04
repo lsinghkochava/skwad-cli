@@ -46,7 +46,8 @@ const (
 	ToolCreateWorktree = "create-worktree"
 	ToolDisplayMD      = "display-markdown"
 	ToolViewMermaid    = "view-mermaid"
-	ToolSetStatus      = "set-status"
+	ToolSetStatus        = "set-status"
+	ToolMergeBranches    = "merge-branches"
 )
 
 // ToolCallParams is the params block for a tools/call request.

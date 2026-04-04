@@ -41,6 +41,14 @@ func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.A
 		if ac.Command != "" {
 			a.ShellCommand = ac.Command
 		}
+		a.ExploreMode = ac.ExploreMode
+
+		// Worktree isolation: per-agent override > team default
+		if ac.Isolate != nil {
+			a.WorktreeIsolation = *ac.Isolate
+		} else {
+			a.WorktreeIsolation = tc.IsolateAgents
+		}
 
 		// Resolve persona — priority order:
 		// 1. persona_instructions (inline instructions, highest priority)

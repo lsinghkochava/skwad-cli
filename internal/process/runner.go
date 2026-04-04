@@ -176,6 +176,20 @@ func (r *Runner) Kill() {
 	r.killGroup(cmd.Process.Pid)
 }
 
+// CloseStdin closes the stdin pipe, causing the process to exit naturally.
+// Safe to call multiple times.
+func (r *Runner) CloseStdin() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.stdin == nil {
+		return nil
+	}
+	err := r.stdin.Close()
+	r.stdin = nil
+	return err
+}
+
 // IsRunning returns true if the process has been started and has not yet exited.
 func (r *Runner) IsRunning() bool {
 	select {

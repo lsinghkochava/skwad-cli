@@ -38,7 +38,8 @@ skwad-cli stop
 - **Headless processes** — agents run as stdin/stdout JSON streaming processes (no PTY, no tmux). Each agent gets a managed subprocess with structured message framing.
 - **MCP coordination** — built-in JSON-RPC 2.0 HTTP server enables agent-to-agent messaging, status broadcasting, and dynamic agent spawning.
 - **TUI dashboard** — optional Bubble Tea v2 terminal UI (`--watch`) provides real-time monitoring with agent status table, scrollable activity log, and tool call visibility.
-- **Structured run logging** — every session produces a JSONL file capturing tool calls, messages, status changes, spawns, exits, and prompts for post-session analysis.
+- **Event-sourced run state** — append-only event log tracks run lifecycle (spawns, exits, prompts, phases, iterations) with state replay and crash detection via `--list-runs`.
+- **Agent worktree isolation** — each writing agent works in its own git worktree on an isolated branch. Changes are consolidated via `skwad merge` into a single reviewable branch. Main is never touched directly.
 
 ## Commands
 
@@ -53,6 +54,8 @@ skwad-cli stop
 | `run` | One-shot mode for CI (start, prompt, wait, report, exit) |
 | `report` | Format output as markdown, JSON, or GitHub PR comment |
 | `convert` | Convert macOS Skwad workspace export to CLI config |
+| `merge` | Consolidate agent worktree branches into a single branch |
+| `clean` | Remove agent worktrees and optionally their branches |
 
 ## Watch Mode
 
@@ -68,17 +71,51 @@ Launches a 3-panel TUI dashboard:
 
 Key bindings: `j/k` scroll, `PgUp/PgDn` page, `Tab` cycle agent filter, `?` help, `q` quit.
 
-## Run Logging
+## Worktree Isolation
 
-Each session creates a `runlogs/<timestamp>.jsonl` file with structured events:
+Agents that write code work in isolated git worktrees:
 
-- **Tool calls** — tool name, arguments, result, and calling agent
-- **Messages** — inter-agent messages and broadcasts with sender/recipient
-- **Status changes** — agent status text and category updates
-- **Lifecycle** — agent spawn (with args), exit (with code), and prompt delivery
-- **Hook events** — status transitions from plugin hook scripts
+```bash
+# Agents auto-create worktrees on spawn (branch: skwad/<session>/<agent>)
+skwad-cli start --config team.json
 
-Useful for debugging agent behavior, auditing coordination patterns, and post-session analysis.
+# After agents finish, consolidate all branches
+skwad-cli merge
+
+# Or auto-merge in CI mode
+skwad-cli run --config team.json --prompt "Fix the auth bug" --auto-merge
+
+# Clean up worktrees
+skwad-cli clean --branches
+```
+
+Isolation is controlled via team config: `isolate_agents: true` (default) with per-agent `isolate: false` override for read-only agents.
+
+## Explore Mode
+
+Run agents in read-only mode for safe codebase analysis:
+
+```bash
+skwad-cli run --config team.json --explore --prompt "Analyze the payment service"
+skwad-cli start --config team.json --explore --watch
+```
+
+Explore mode sets `--permission-mode plan` and restricts tools to read-only (Read, Glob, Grep, Agent). Can also be set per-agent via `explore_mode: true` in team config.
+
+## Run History
+
+Each `skwad run` session is tracked with an event log at `~/.config/skwad/runs/<runID>/`:
+
+```bash
+# List past runs with status
+skwad-cli run --list-runs
+
+# Clean up old run state
+skwad-cli run --clean-runs 7d    # older than 7 days
+skwad-cli run --clean-runs all   # all runs
+```
+
+Events tracked: run start/complete/fail, agent spawn/exit, prompts sent, phase transitions, iterations.
 
 ## Team Configuration
 
@@ -87,30 +124,39 @@ Useful for debugging agent behavior, auditing coordination patterns, and post-se
   "name": "My Team",
   "repo": "/path/to/repo",
   "prompt": "Review the latest changes",
+  "isolate_agents": true,
   "agents": [
     {
       "name": "Reviewer",
       "agent_type": "claude",
       "persona_instructions": "You are a code reviewer focused on correctness.",
-      "avatar": "🔍"
+      "avatar": "🔍",
+      "isolate": false
+    },
+    {
+      "name": "Coder",
+      "agent_type": "claude",
+      "persona": "Senior Dev"
     },
     {
       "name": "Tester",
       "agent_type": "claude",
-      "persona": "Bug Hunter",
-      "prompt": "Write tests for the auth module"
+      "prompt": "Write tests for the auth module",
+      "explore_mode": true
     }
   ],
   "personas": [
     {
-      "name": "Bug Hunter",
-      "instructions": "Find correctness bugs. Report file, line, and how to trigger."
+      "name": "Senior Dev",
+      "instructions": "Write clean, tested code. Follow existing patterns."
     }
   ]
 }
 ```
 
-**Agent fields:** `name` (required), `agent_type` (required: claude, codex, gemini, copilot, opencode, custom), `persona` (name match), `persona_instructions` (inline), `persona_id` (UUID), `avatar`, `command` (custom shell), `allowed_tools`, `prompt` (per-agent).
+**Agent fields:** `name` (required), `agent_type` (required: claude, codex, gemini, copilot, opencode, custom), `persona` (name match), `persona_instructions` (inline), `persona_id` (UUID), `avatar`, `command` (custom shell), `allowed_tools`, `prompt` (per-agent), `explore_mode` (read-only), `isolate` (worktree isolation override).
+
+**Team fields:** `isolate_agents` (default: true — agents work in isolated worktrees).
 
 **Persona resolution priority:** `persona_instructions` > `persona_id` > `persona` name > team-level `personas[]` matching agent name.
 
@@ -225,11 +271,11 @@ skwad-cli status
 
 Built-in MCP server on port 8766 (configurable via `--port`). Agents coordinate via JSON-RPC 2.0 at `/mcp`. Compatible with the Swift Skwad app's plugin scripts.
 
-**Tools:** `register-agent`, `list-agents`, `send-message`, `check-messages`, `broadcast-message`, `set-status`, `list-repos`, `list-worktrees`, `create-worktree`, `create-agent`, `close-agent`, `display-markdown`, `view-mermaid`.
+**Tools:** `register-agent`, `list-agents`, `send-message`, `check-messages`, `broadcast-message`, `set-status`, `list-repos`, `list-worktrees`, `create-worktree`, `create-agent`, `close-agent`, `display-markdown`, `view-mermaid`, `merge-branches`.
 
 **REST endpoints:** `GET /health`, `GET /` (agent list), `POST /api/v1/agent/register`, `POST /api/v1/agent/status`, `POST /api/v1/agent/send`, `POST /api/v1/agent/broadcast`.
 
-Agents coordinate through messages, status updates, and tool calls. All MCP activity is captured in the JSONL run log for debugging and analysis.
+Agents coordinate through messages, status updates, and tool calls. Run lifecycle events are captured in the event log for state tracking and analysis.
 
 ## Development
 
@@ -243,18 +289,18 @@ make help       # Show all targets
 
 The race detector (`make test-race`) is recommended for development — the agent coordinator and process pool use concurrent goroutines extensively.
 
-## Roadmap
+## Features
 
-The following enhancements are planned:
-
-| Feature | Description |
-|---------|-------------|
-| Explore mode | Sandboxed read-only agents with `--permission-mode plan` |
-| Output summarization | Head/tail truncation for large agent outputs |
-| CI pipeline iteration | Phase-gated pipelines with `--max-iterations` and retry logic |
-| Enriched system prompts | Layered team protocol with role-specific behavioral rules |
-| Event-sourced run state | Append-only event log with `--resume` for long-running CI |
-| Run log rotation | Automatic cleanup of old JSONL log files |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Explore mode | ✅ | Read-only agents with `--explore` flag and `--permission-mode plan` |
+| Output summarization | ✅ | Head/tail truncation for large agent outputs in reports |
+| CI pipeline iteration | ✅ | `--max-iterations` with retryable exit code classification |
+| Enriched system prompts | ✅ | 5-layer prompt: preamble, team protocol, role instructions, persona, worktree context |
+| Event-sourced run state | ✅ | Append-only event log with `--list-runs` and `--clean-runs` |
+| Worktree isolation | ✅ | Per-agent git worktrees with `skwad merge` consolidation |
+| Run resume | Planned | `--resume` flag for crash recovery of long-running CI runs |
+| Autonomous coordination | Planned | Task management with managed/autonomous modes (Phase 6) |
 
 ## License
 

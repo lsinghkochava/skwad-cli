@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +185,48 @@ func TestParsePRRef_Invalid(t *testing.T) {
 	_, _, _, err := parsePRRef("invalid/ref/without/hash")
 	if err == nil {
 		t.Error("expected error for invalid PR ref")
+	}
+}
+
+func TestFormatMarkdown_LongOutputTruncated(t *testing.T) {
+	// Generate output with 600 lines (over default MaxLines=500)
+	lines := make([]string, 600)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("output line %d", i+1)
+	}
+	r := &RunReport{
+		Agents: []AgentResult{
+			{Name: "Verbose", Type: "claude", Output: strings.Join(lines, "\n")},
+		},
+	}
+
+	md := FormatMarkdown(r)
+
+	if !strings.Contains(md, "lines truncated") {
+		t.Error("expected truncation marker in markdown for output over 500 lines")
+	}
+	// Should still contain head and tail
+	if !strings.Contains(md, "output line 1") {
+		t.Error("expected head lines in truncated output")
+	}
+	if !strings.Contains(md, "output line 600") {
+		t.Error("expected tail lines in truncated output")
+	}
+}
+
+func TestFormatMarkdown_ShortOutputUnchanged(t *testing.T) {
+	r := &RunReport{
+		Agents: []AgentResult{
+			{Name: "Brief", Type: "claude", Output: "line1\nline2\nline3"},
+		},
+	}
+
+	md := FormatMarkdown(r)
+
+	if strings.Contains(md, "truncated") {
+		t.Error("short output should NOT be truncated")
+	}
+	if !strings.Contains(md, "line1") || !strings.Contains(md, "line3") {
+		t.Error("expected all lines present in output")
 	}
 }

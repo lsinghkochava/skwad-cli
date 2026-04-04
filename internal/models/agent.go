@@ -55,8 +55,12 @@ type Agent struct {
 	PersonaID    *uuid.UUID `json:"personaId,omitempty"`
 	CreatedBy    *uuid.UUID `json:"createdBy,omitempty"`
 	IsCompanion  bool       `json:"isCompanion"`
+	ExploreMode       bool       `json:"exploreMode"`
+	WorktreeIsolation bool       `json:"worktreeIsolation"`
 
 	// Runtime state — not persisted.
+	WorktreePath   string `json:"-"`
+	WorktreeBranch string `json:"-"`
 	Status          AgentStatus      `json:"-"`
 	StatusText      string           `json:"-"`
 	StatusCategory  string           `json:"-"`

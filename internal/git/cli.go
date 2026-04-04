@@ -23,7 +23,12 @@ func NewCLI(repoPath string) *CLI {
 
 // Run executes a git command and returns stdout.
 func (c *CLI) Run(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	return c.RunWithTimeout(commandTimeout, args...)
+}
+
+// RunWithTimeout executes a git command with a custom timeout.
+func (c *CLI) RunWithTimeout(timeout time.Duration, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", args...)
@@ -35,7 +40,7 @@ func (c *CLI) Run(args ...string) (string, error) {
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("git %s: timeout after %s", strings.Join(args, " "), commandTimeout)
+			return "", fmt.Errorf("git %s: timeout after %s", strings.Join(args, " "), timeout)
 		}
 		return "", fmt.Errorf("git %s: %w — %s", strings.Join(args, " "), err, stderr.String())
 	}
@@ -45,7 +50,12 @@ func (c *CLI) Run(args ...string) (string, error) {
 
 // RunLines executes a git command and returns output split by newline.
 func (c *CLI) RunLines(args ...string) ([]string, error) {
-	out, err := c.Run(args...)
+	return c.RunLinesWithTimeout(commandTimeout, args...)
+}
+
+// RunLinesWithTimeout executes a git command with a custom timeout and returns lines.
+func (c *CLI) RunLinesWithTimeout(timeout time.Duration, args ...string) ([]string, error) {
+	out, err := c.RunWithTimeout(timeout, args...)
 	if err != nil {
 		return nil, err
 	}

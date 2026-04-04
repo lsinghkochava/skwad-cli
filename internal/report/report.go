@@ -51,8 +51,10 @@ func FormatMarkdown(r *RunReport) string {
 	for _, a := range r.Agents {
 		fmt.Fprintf(&sb, "## %s (%s)\n", a.Name, a.Type)
 		sb.WriteString("```\n")
-		sb.WriteString(a.Output)
-		if !strings.HasSuffix(a.Output, "\n") {
+		cfg := DefaultSummaryConfig()
+		output, _ := Truncate(a.Output, cfg)
+		sb.WriteString(output)
+		if !strings.HasSuffix(output, "\n") {
 			sb.WriteString("\n")
 		}
 		sb.WriteString("```\n\n")
