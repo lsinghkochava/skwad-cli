@@ -2236,7 +2236,7 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Phase 6.2 — MCP task tools (create/list/claim/complete/update) *(2026-04-05)*
 - [x] Phase 6.3 — Wire AllowedTools from team config to command builder *(2026-04-05)*
 - [x] Phase 6.4 — Coordination mode + team config + task persistence *(2026-04-05)*
-- [ ] Phase 6.5 — Auto-claim wiring for autonomous mode
+- [x] Phase 6.5 — Auto-claim wiring for autonomous mode *(2026-04-05)*
 - [ ] Phase 6.6 — Coordination mode system prompts
 - [ ] Phase 7.1 — Output filtering: --output flag (entry/all/raw)
 - [ ] Phase 7.2 — Output formatting: --format flag (text/json/markdown)

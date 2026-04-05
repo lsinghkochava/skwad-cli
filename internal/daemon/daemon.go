@@ -201,6 +201,27 @@ func (d *Daemon) ApplyTeamConfig(tc *config.TeamConfig) {
 		d.Coordinator.OnTaskCreated = func(task *models.Task) { saveTasks() }
 		d.Coordinator.OnTaskCompleted = func(task *models.Task) { saveTasks() }
 	}
+
+	// Auto-claim: when an agent goes idle in autonomous mode, assign the next
+	// pending task and deliver it as a prompt.
+	d.Coordinator.OnAgentIdle = func(agentID uuid.UUID) {
+		if d.CoordinationMode != "autonomous" {
+			return
+		}
+		tasks := d.Coordinator.ListTasks()
+		for _, t := range tasks {
+			if t.Status != models.TaskStatusPending || t.AssigneeID != nil {
+				continue
+			}
+			if err := d.Coordinator.ClaimTask(agentID, t.ID); err != nil {
+				continue // another agent beat us, try next
+			}
+			prompt := fmt.Sprintf("Task assigned to you:\n\nTitle: %s\nDescription: %s\nTask ID: %s\n\nWhen complete, call complete-task with this task ID.",
+				t.Title, t.Description, t.ID)
+			d.Pool.SendPrompt(agentID, prompt)
+			return
+		}
+	}
 }
 
 // Stop gracefully shuts down all services: terminal pool, MCP server.
