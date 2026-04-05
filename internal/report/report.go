@@ -104,6 +104,40 @@ func FormatResultTextJSON(agents []AgentResult) (string, error) {
 	return string(data) + "\n", nil
 }
 
+// FormatText renders the report as clean plaintext (no markdown syntax).
+func FormatText(r *RunReport) string {
+	var sb strings.Builder
+	sb.WriteString("Skwad Run Report\n\n")
+	for i, a := range r.Agents {
+		fmt.Fprintf(&sb, "--- %s (%s) ---\n", a.Name, a.Type)
+		cfg := DefaultSummaryConfig()
+		output, _ := Truncate(a.Output, cfg)
+		sb.WriteString(output)
+		if !strings.HasSuffix(output, "\n") {
+			sb.WriteString("\n")
+		}
+		if i < len(r.Agents)-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
+// FormatResultTextPlain renders only the ResultText for the given agents as plain text.
+func FormatResultTextPlain(agents []AgentResult) string {
+	var sb strings.Builder
+	for _, a := range agents {
+		if len(agents) > 1 {
+			fmt.Fprintf(&sb, "--- %s ---\n", a.Name)
+		}
+		sb.WriteString(a.ResultText)
+		if a.ResultText != "" && !strings.HasSuffix(a.ResultText, "\n") {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
 // CommentMarker is prepended to PR comments so we can find and replace them.
 const CommentMarker = "<!-- skwad-review -->"
 

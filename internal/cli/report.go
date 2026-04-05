@@ -17,7 +17,7 @@ var (
 var reportCmd = &cobra.Command{
 	Use:   "report",
 	Short: "Format and output an agent run report",
-	Long:  "Reads a JSON run report (from `skwad run --output-format json`) and formats it as markdown, JSON, or posts it as a GitHub PR comment.",
+	Long:  "Reads a JSON run report (from `skwad run --format json`) and formats it as markdown, JSON, or posts it as a GitHub PR comment.",
 	RunE:  runReport,
 }
 

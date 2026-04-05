@@ -30,12 +30,13 @@ var (
 	runFlagPrompt       string
 	runFlagPromptFile   string
 	runFlagTimeout      string
-	runFlagOutputFormat  string
-	runFlagOutput            string
+	runFlagFormat        string
+	runFlagOutput        string
 	runFlagExplore           bool
 	runFlagMaxIterations     int
 	runFlagAutoMerge         bool
 	runFlagConsolidateBranch string
+	runFlagOutputFile        string
 	runFlagCleanRuns         string
 	runFlagListRuns          bool
 )
@@ -51,12 +52,13 @@ func init() {
 	runCmd.Flags().StringVar(&runFlagPrompt, "prompt", "", "initial prompt to send to all agents")
 	runCmd.Flags().StringVar(&runFlagPromptFile, "prompt-file", "", "file containing initial prompt")
 	runCmd.Flags().StringVar(&runFlagTimeout, "timeout", "10m", "maximum time to wait for agents")
-	runCmd.Flags().StringVar(&runFlagOutputFormat, "output-format", "markdown", "output format: markdown or json")
+	runCmd.Flags().StringVar(&runFlagFormat, "format", "text", "output format: text, json, or markdown")
 	runCmd.Flags().StringVar(&runFlagOutput, "output", "entry", "output mode: entry (entry agent result), all (all agent results), raw (full stream)")
 	runCmd.Flags().BoolVar(&runFlagExplore, "explore", false, "Run all agents in read-only explore mode")
 	runCmd.Flags().IntVar(&runFlagMaxIterations, "max-iterations", 1, "Max fix→verify cycles before stopping (0=unlimited)")
 	runCmd.Flags().BoolVar(&runFlagAutoMerge, "auto-merge", false, "Automatically consolidate agent branches on run completion")
 	runCmd.Flags().StringVar(&runFlagConsolidateBranch, "consolidate-branch", "", "Branch name for consolidation (default: skwad/<session-id>/consolidate)")
+	runCmd.Flags().StringVar(&runFlagOutputFile, "output-file", "", "write output to file instead of stdout")
 	runCmd.Flags().StringVar(&runFlagCleanRuns, "clean-runs", "", "Delete run state older than duration (e.g., '7d', '24h', 'all')")
 	runCmd.Flags().BoolVar(&runFlagListRuns, "list-runs", false, "List previous run states and exit")
 	rootCmd.AddCommand(runCmd)
@@ -378,26 +380,39 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Filter and print output based on --output mode.
+	// Filter and format output based on --output and --format flags.
+	var output string
 	filtered := filterRunOutput(runFlagOutput, rr.Agents, tc.EntryAgent)
 	if filtered != nil {
 		// entry or all mode — print only result text.
-		switch runFlagOutputFormat {
+		switch runFlagFormat {
 		case "json":
-			out, _ := report.FormatResultTextJSON(filtered)
-			fmt.Print(out)
-		default:
-			fmt.Print(report.FormatResultText(filtered))
+			output, _ = report.FormatResultTextJSON(filtered)
+		case "markdown":
+			output = report.FormatResultText(filtered)
+		default: // "text"
+			output = report.FormatResultTextPlain(filtered)
 		}
 	} else {
 		// raw mode — full report.
-		switch runFlagOutputFormat {
+		switch runFlagFormat {
 		case "json":
-			out, _ := report.FormatJSON(rr)
-			fmt.Print(out)
-		default:
-			fmt.Print(report.FormatMarkdown(rr))
+			output, _ = report.FormatJSON(rr)
+		case "markdown":
+			output = report.FormatMarkdown(rr)
+		default: // "text"
+			output = report.FormatText(rr)
 		}
+	}
+
+	// Write output to file or stdout.
+	if runFlagOutputFile != "" {
+		if err := os.WriteFile(runFlagOutputFile, []byte(output), 0o644); err != nil {
+			return fmt.Errorf("write output file: %w", err)
+		}
+		slog.Info("output written to file", "path", runFlagOutputFile)
+	} else {
+		fmt.Print(output)
 	}
 
 	slog.Info("run complete", "duration", time.Since(startTime).Round(time.Second))
