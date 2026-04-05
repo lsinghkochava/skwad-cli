@@ -94,6 +94,24 @@ func TestBuildArgs_ClaudeMCPConfig(t *testing.T) {
 	}
 }
 
+func TestBuildArgs_MCPURLContainsAgentID(t *testing.T) {
+	b := defaultBuilder()
+	agentID := uuid.MustParse("dddddddd-1111-2222-3333-444444444444")
+	a := &models.Agent{ID: agentID, Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	mcpIdx := argIndex(args, "--mcp-config")
+	if mcpIdx < 0 || mcpIdx+1 >= len(args) {
+		t.Fatal("--mcp-config flag missing value")
+	}
+	mcpConfig := args[mcpIdx+1]
+	if !strings.Contains(mcpConfig, "?agent="+agentID.String()) {
+		t.Errorf("MCP URL should contain agent ID query param, got: %s", mcpConfig)
+	}
+}
+
 func TestBuildArgs_ClaudeNoMCP(t *testing.T) {
 	b := &CommandBuilder{MCPServerURL: "", PluginDir: "/tmp/plugins"}
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}

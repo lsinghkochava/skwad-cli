@@ -31,7 +31,7 @@ func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, set
 
 	// MCP config
 	if b.MCPServerURL != "" {
-		mcpConfig := fmt.Sprintf(`{"mcpServers":{"skwad":{"type":"http","url":"%s"}}}`, b.MCPServerURL)
+		mcpConfig := fmt.Sprintf(`{"mcpServers":{"skwad":{"type":"http","url":"%s?agent=%s"}}}`, b.MCPServerURL, a.ID.String())
 		args = append(args, "--mcp-config", mcpConfig)
 		if a.ExploreMode {
 			args = append(args, "--permission-mode", "plan")

@@ -515,6 +515,15 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.Header.Get("Mcp-Session-Id")
 	session := s.sessions.getOrCreate(sessionID)
 
+	// Auto-bind agent ID from URL query param.
+	if session.agentID == uuid.Nil {
+		if agentStr := r.URL.Query().Get("agent"); agentStr != "" {
+			if parsed, err := uuid.Parse(agentStr); err == nil {
+				session.agentID = parsed
+			}
+		}
+	}
+
 	resp := s.dispatch(req, session)
 	writeResponse(w, resp)
 }

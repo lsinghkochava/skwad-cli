@@ -188,9 +188,13 @@ func (d *Daemon) ApplyTeamConfig(tc *config.TeamConfig) {
 			d.Coordinator.LoadTasks(tasks)
 			slog.Info("restored tasks from disk", "count", len(tasks))
 		}
+	}
 
-		var taskSaveMu sync.Mutex
-		saveTasks := func() {
+	// Save + nudge helpers shared by OnTaskCreated and OnTaskCompleted.
+	var taskSaveMu sync.Mutex
+	saveTasks := func() {}
+	if tc.PersistTasks {
+		saveTasks = func() {
 			taskSaveMu.Lock()
 			defer taskSaveMu.Unlock()
 			tasks := d.Coordinator.ListTasks()
@@ -198,8 +202,27 @@ func (d *Daemon) ApplyTeamConfig(tc *config.TeamConfig) {
 				slog.Error("failed to save tasks", "error", err)
 			}
 		}
-		d.Coordinator.OnTaskCreated = func(task *models.Task) { saveTasks() }
-		d.Coordinator.OnTaskCompleted = func(task *models.Task) { saveTasks() }
+	}
+
+	nudgeIdleAgents := func() {
+		if d.CoordinationMode != "autonomous" {
+			return
+		}
+		for _, info := range d.Coordinator.ListAgents() {
+			if a, ok := d.Manager.Agent(info.ID); ok && a.Status == models.AgentStatusIdle {
+				d.Coordinator.NotifyIdleAgent(info.ID)
+			}
+		}
+	}
+
+	d.Coordinator.OnTaskCreated = func(task *models.Task) {
+		saveTasks()
+		nudgeIdleAgents()
+	}
+
+	d.Coordinator.OnTaskCompleted = func(task *models.Task) {
+		saveTasks()
+		nudgeIdleAgents()
 	}
 
 	// Auto-claim: when an agent goes idle in autonomous mode, assign the next
