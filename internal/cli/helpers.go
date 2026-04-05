@@ -42,6 +42,7 @@ func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.A
 			a.ShellCommand = ac.Command
 		}
 		a.ExploreMode = ac.ExploreMode
+		a.AllowedTools = ac.AllowedTools
 
 		// Worktree isolation: per-agent override > team default
 		if ac.Isolate != nil {

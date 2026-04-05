@@ -36,6 +36,13 @@ func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, set
 		if a.ExploreMode {
 			args = append(args, "--permission-mode", "plan")
 			args = append(args, "--allowedTools", "mcp__skwad__*", "Read", "Glob", "Grep", "Agent", "WebSearch", "WebFetch")
+		} else if len(a.AllowedTools) > 0 {
+			// Custom allowed tools from team config — always include skwad MCP tools.
+			args = append(args, "--permission-mode", "auto")
+			toolArgs := []string{"mcp__skwad__*"}
+			toolArgs = append(toolArgs, a.AllowedTools...)
+			args = append(args, "--allowedTools")
+			args = append(args, toolArgs...)
 		} else {
 			args = append(args, "--permission-mode", "auto")
 			args = append(args, "--allowedTools", "mcp__skwad__*", "Read", "Write", "Edit", "Glob", "Grep", "Bash(*)", "Agent")

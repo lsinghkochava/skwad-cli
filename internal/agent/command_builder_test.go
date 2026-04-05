@@ -425,6 +425,95 @@ func TestBuildArgs_RoleInstructionsInPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildArgs_AllowedToolsFromConfig(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{
+		ID:           uuid.New(),
+		Name:         "Coder",
+		Folder:       "/tmp",
+		AgentType:    models.AgentTypeClaude,
+		AllowedTools: []string{"Read", "Grep"},
+	}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have custom tools + mcp__skwad__*
+	for _, tool := range []string{"mcp__skwad__*", "Read", "Grep"} {
+		if !containsArg(args, tool) {
+			t.Errorf("expected tool %q in args", tool)
+		}
+	}
+	// Should NOT have default tools that weren't specified
+	for _, tool := range []string{"Write", "Edit", "Bash(*)"} {
+		if containsArg(args, tool) {
+			t.Errorf("should not have default tool %q when AllowedTools is set", tool)
+		}
+	}
+	// Should still have auto permission mode
+	pmIdx := argIndex(args, "--permission-mode")
+	if pmIdx < 0 || pmIdx+1 >= len(args) {
+		t.Fatal("missing --permission-mode")
+	}
+	if args[pmIdx+1] != "auto" {
+		t.Errorf("expected --permission-mode auto, got %s", args[pmIdx+1])
+	}
+}
+
+func TestBuildArgs_NoAllowedToolsUsesDefaults(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Coder", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have all default tools
+	for _, tool := range []string{"mcp__skwad__*", "Read", "Write", "Edit", "Glob", "Grep", "Bash(*)", "Agent"} {
+		if !containsArg(args, tool) {
+			t.Errorf("expected default tool %q in args", tool)
+		}
+	}
+}
+
+func TestBuildArgs_ExploreModeOverridesAllowedTools(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{
+		ID:           uuid.New(),
+		Name:         "Explorer",
+		Folder:       "/tmp",
+		AgentType:    models.AgentTypeClaude,
+		ExploreMode:  true,
+		AllowedTools: []string{"Write", "Edit", "Bash(*)"},
+	}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// ExploreMode should win — plan mode, explore tools
+	pmIdx := argIndex(args, "--permission-mode")
+	if pmIdx < 0 || pmIdx+1 >= len(args) {
+		t.Fatal("missing --permission-mode")
+	}
+	if args[pmIdx+1] != "plan" {
+		t.Errorf("expected --permission-mode plan (explore mode), got %s", args[pmIdx+1])
+	}
+	// Should NOT have the AllowedTools values since explore mode wins
+	for _, tool := range []string{"Write", "Edit", "Bash(*)"} {
+		if containsArg(args, tool) {
+			t.Errorf("explore mode should override AllowedTools — should not have %q", tool)
+		}
+	}
+	// Should have explore tools
+	for _, tool := range []string{"Read", "Glob", "Grep", "WebSearch", "WebFetch"} {
+		if !containsArg(args, tool) {
+			t.Errorf("explore mode should have tool %q", tool)
+		}
+	}
+}
+
 // helpers for BuildArgs tests
 
 func containsArg(args []string, target string) bool {

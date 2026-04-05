@@ -59,7 +59,8 @@ type Agent struct {
 	WorktreeIsolation bool       `json:"worktreeIsolation"`
 
 	// Runtime state — not persisted.
-	WorktreePath   string `json:"-"`
+	AllowedTools   []string `json:"-"` // from team config, not persisted
+	WorktreePath   string   `json:"-"`
 	WorktreeBranch string `json:"-"`
 	Status          AgentStatus      `json:"-"`
 	StatusText      string           `json:"-"`
