@@ -199,6 +199,65 @@ func TestStore_LoadPersonas_ReturnsDefaultsWhenMissing(t *testing.T) {
 	}
 }
 
+func TestStore_TasksRoundTrip(t *testing.T) {
+	s := newTempStore(t)
+
+	id1 := uuid.New()
+	id2 := uuid.New()
+	tasks := []*models.Task{
+		{
+			ID:          id1,
+			Title:       "First task",
+			Description: "Do the first thing",
+			Status:      models.TaskStatusPending,
+			CreatedBy:   uuid.New(),
+		},
+		{
+			ID:           id2,
+			Title:        "Second task",
+			Description:  "Do the second thing",
+			Status:       models.TaskStatusBlocked,
+			CreatedBy:    uuid.New(),
+			Dependencies: []uuid.UUID{id1},
+		},
+	}
+
+	if err := s.SaveTasks(tasks); err != nil {
+		t.Fatalf("SaveTasks: %v", err)
+	}
+
+	loaded, err := s.LoadTasks()
+	if err != nil {
+		t.Fatalf("LoadTasks: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(loaded))
+	}
+	if loaded[0].ID != id1 {
+		t.Errorf("ID mismatch: got %s, want %s", loaded[0].ID, id1)
+	}
+	if loaded[0].Title != "First task" {
+		t.Errorf("Title mismatch: got %q", loaded[0].Title)
+	}
+	if loaded[1].Status != models.TaskStatusBlocked {
+		t.Errorf("Status mismatch: got %q", loaded[1].Status)
+	}
+	if len(loaded[1].Dependencies) != 1 || loaded[1].Dependencies[0] != id1 {
+		t.Errorf("Dependencies mismatch: got %v", loaded[1].Dependencies)
+	}
+}
+
+func TestStore_LoadTasks_MissingFile(t *testing.T) {
+	s := newTempStore(t)
+	tasks, err := s.LoadTasks()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tasks != nil {
+		t.Errorf("expected nil tasks from missing file, got %v", tasks)
+	}
+}
+
 func TestStore_RecentRepos(t *testing.T) {
 	s := newTempStore(t)
 

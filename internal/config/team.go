@@ -27,6 +27,9 @@ type TeamConfig struct {
 	Prompt   string          `json:"prompt,omitempty"`
 	EntryAgent string          `json:"entry_agent,omitempty"`
 	IsolateAgents bool            `json:"isolate_agents,omitempty"`
+	Coordination  string          `json:"coordination,omitempty"`   // "managed" (default) or "autonomous"
+	PersistTasks  bool            `json:"persist_tasks,omitempty"`  // save tasks to disk for crash recovery
+	MaxTasks      int             `json:"max_tasks,omitempty"`      // max task count (default 50)
 	Agents        []AgentConfig   `json:"agents"`
 	Personas   []PersonaConfig `json:"personas,omitempty"`
 }

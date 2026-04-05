@@ -516,6 +516,53 @@ func TestLoadTeamConfig_AgentIsolateTrue(t *testing.T) {
 	}
 }
 
+func TestLoadTeamConfig_CoordinationFields(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Task Team",
+		"repo": "`+repo+`",
+		"coordination": "autonomous",
+		"persist_tasks": true,
+		"max_tasks": 100,
+		"agents": [{"name": "Bot", "agent_type": "claude"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Coordination != "autonomous" {
+		t.Errorf("expected coordination 'autonomous', got %q", tc.Coordination)
+	}
+	if !tc.PersistTasks {
+		t.Error("expected PersistTasks=true")
+	}
+	if tc.MaxTasks != 100 {
+		t.Errorf("expected MaxTasks=100, got %d", tc.MaxTasks)
+	}
+}
+
+func TestLoadTeamConfig_CoordinationDefaults(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "Default Team",
+		"repo": "`+repo+`",
+		"agents": [{"name": "Bot", "agent_type": "claude"}]
+	}`)
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Coordination != "" {
+		t.Errorf("expected empty coordination (default), got %q", tc.Coordination)
+	}
+	if tc.PersistTasks {
+		t.Error("expected PersistTasks=false when omitted")
+	}
+	if tc.MaxTasks != 0 {
+		t.Errorf("expected MaxTasks=0 (default), got %d", tc.MaxTasks)
+	}
+}
+
 func TestLoadTeamConfig_AgentExploreMode(t *testing.T) {
 	repo := t.TempDir()
 	cfg := writeConfig(t, `{

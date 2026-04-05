@@ -145,6 +145,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	if err := d.Start(); err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
+	d.ApplyTeamConfig(tc)
 	defer d.Stop()
 
 	startTime := time.Now()

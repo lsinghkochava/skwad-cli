@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lsinghkochava/skwad-cli/internal/agent"
+	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/git"
 	"github.com/lsinghkochava/skwad-cli/internal/mcp"
 	"github.com/lsinghkochava/skwad-cli/internal/models"
@@ -41,6 +42,9 @@ type Daemon struct {
 	Builder     *agent.CommandBuilder
 	Config      Config
 	SessionID   string // unique per daemon run
+
+	// CoordinationMode is "managed" (default) or "autonomous".
+	CoordinationMode string
 
 	// activities tracks the ActivityController per agent for stream-based status.
 	activities map[uuid.UUID]*agent.ActivityController
@@ -165,6 +169,38 @@ func (d *Daemon) Start() error {
 	}
 
 	return nil
+}
+
+// ApplyTeamConfig applies team-level settings from the config: coordination mode,
+// max tasks, and task persistence.
+func (d *Daemon) ApplyTeamConfig(tc *config.TeamConfig) {
+	d.CoordinationMode = tc.Coordination
+	if d.CoordinationMode == "" {
+		d.CoordinationMode = "managed"
+	}
+
+	if tc.MaxTasks > 0 {
+		d.Coordinator.SetMaxTasks(tc.MaxTasks)
+	}
+
+	if tc.PersistTasks {
+		if tasks, err := d.Store.LoadTasks(); err == nil && len(tasks) > 0 {
+			d.Coordinator.LoadTasks(tasks)
+			slog.Info("restored tasks from disk", "count", len(tasks))
+		}
+
+		var taskSaveMu sync.Mutex
+		saveTasks := func() {
+			taskSaveMu.Lock()
+			defer taskSaveMu.Unlock()
+			tasks := d.Coordinator.ListTasks()
+			if err := d.Store.SaveTasks(tasks); err != nil {
+				slog.Error("failed to save tasks", "error", err)
+			}
+		}
+		d.Coordinator.OnTaskCreated = func(task *models.Task) { saveTasks() }
+		d.Coordinator.OnTaskCompleted = func(task *models.Task) { saveTasks() }
+	}
 }
 
 // Stop gracefully shuts down all services: terminal pool, MCP server.

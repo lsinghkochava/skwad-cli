@@ -75,6 +75,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if err := d.Start(); err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
+	d.ApplyTeamConfig(tc)
 
 	// 5. Wire TUI callbacks BEFORE spawning agents (so early messages aren't dropped).
 	var p *tea.Program

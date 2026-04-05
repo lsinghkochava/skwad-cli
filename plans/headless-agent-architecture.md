@@ -2233,9 +2233,9 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Bug fix: team readiness gate — no prompts until all agents initialized *(2026-04-04)*
 - [x] Config fix: entry_agent set to Manager in test team config *(2026-04-04)*
 - [x] Phase 6.1 — Task model + coordinator task management *(2026-04-05)*
-- [ ] Phase 6.2 — MCP task tools (create/list/claim/complete/update)
-- [ ] Phase 6.3 — Wire AllowedTools from team config to command builder
-- [ ] Phase 6.4 — Coordination mode + team config + task persistence
+- [x] Phase 6.2 — MCP task tools (create/list/claim/complete/update) *(2026-04-05)*
+- [x] Phase 6.3 — Wire AllowedTools from team config to command builder *(2026-04-05)*
+- [x] Phase 6.4 — Coordination mode + team config + task persistence *(2026-04-05)*
 - [ ] Phase 6.5 — Auto-claim wiring for autonomous mode
 - [ ] Phase 6.6 — Coordination mode system prompts
 - [ ] Phase 7.1 — Output filtering: --output flag (entry/all/raw)

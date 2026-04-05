@@ -22,6 +22,7 @@ const (
 	settingsFile   = "config.json"
 	stateFile      = "state.json"
 	recentReposFile = "recent-repos.json"
+	tasksFile       = "tasks.json"
 )
 
 // Store handles all JSON-file persistence under ~/.config/skwad/.
@@ -214,6 +215,20 @@ func (s *Store) AddRecentRepo(path string) error {
 		filtered = filtered[:5]
 	}
 	return s.save(recentReposFile, filtered)
+}
+
+// --- Tasks ---
+
+func (s *Store) LoadTasks() ([]*models.Task, error) {
+	var tasks []*models.Task
+	if err := s.load(tasksFile, &tasks); err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *Store) SaveTasks(tasks []*models.Task) error {
+	return s.save(tasksFile, tasks)
 }
 
 // --- helpers ---
