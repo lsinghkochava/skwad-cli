@@ -277,8 +277,8 @@ func TestMCP_ToolsList(t *testing.T) {
 	}
 	result := resp.Result.(map[string]interface{})
 	tools := result["tools"].([]interface{})
-	if len(tools) < 12 {
-		t.Errorf("expected at least 12 tools, got %d", len(tools))
+	if len(tools) < 17 {
+		t.Errorf("expected at least 17 tools, got %d", len(tools))
 	}
 }
 
@@ -1145,5 +1145,565 @@ func TestSendEndpoint_ExplicitTo_IgnoresEntryAgent(t *testing.T) {
 	text := result["content"].([]interface{})[0].(map[string]interface{})["text"].(string)
 	if !strings.Contains(text, "direct message to Bob") {
 		t.Errorf("Bob should receive the direct message, got: %s", text)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6.2: MCP Task Tool Integration Tests
+// ---------------------------------------------------------------------------
+
+// extractText pulls the text content from a tool call response.
+func extractText(t *testing.T, resp Response) string {
+	t.Helper()
+	result := resp.Result.(map[string]interface{})
+	content := result["content"].([]interface{})
+	return content[0].(map[string]interface{})["text"].(string)
+}
+
+// extractTaskID parses the task JSON response and returns the task ID.
+func extractTaskID(t *testing.T, resp Response) string {
+	t.Helper()
+	text := extractText(t, resp)
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &task); err != nil {
+		t.Fatalf("unmarshal task JSON: %v (text: %s)", err, text)
+	}
+	id, ok := task["id"].(string)
+	if !ok || id == "" {
+		t.Fatalf("missing task ID in response: %s", text)
+	}
+	return id
+}
+
+func TestTaskCreateTool_HappyPath(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	sess := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	toolCall(t, env.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+
+	resp := toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title":       "Implement feature X",
+		"description": "Build the new widget",
+	})
+	if resp.Error != nil {
+		t.Fatalf("create-task error: %v", resp.Error)
+	}
+
+	text := extractText(t, resp)
+	if strings.HasPrefix(text, "Error") {
+		t.Fatalf("unexpected error: %s", text)
+	}
+
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &task); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if task["title"] != "Implement feature X" {
+		t.Errorf("title = %v, want 'Implement feature X'", task["title"])
+	}
+	if task["status"] != "pending" {
+		t.Errorf("status = %v, want 'pending'", task["status"])
+	}
+	if task["id"] == nil || task["id"] == "" {
+		t.Error("task should have an ID")
+	}
+}
+
+func TestTaskCreateTool_WithDependencies_Blocked(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	sess := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	toolCall(t, env.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+
+	// Create dep task.
+	depResp := toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title":       "Setup",
+		"description": "Setup environment",
+	})
+	depID := extractTaskID(t, depResp)
+
+	// Create task with incomplete dependency → should be blocked.
+	resp := toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title":        "Build",
+		"description":  "Build the thing",
+		"dependencies": []interface{}{depID},
+	})
+	if resp.Error != nil {
+		t.Fatalf("create-task error: %v", resp.Error)
+	}
+
+	text := extractText(t, resp)
+	var task map[string]interface{}
+	json.Unmarshal([]byte(text), &task)
+	if task["status"] != "blocked" {
+		t.Errorf("status = %v, want 'blocked' (dep is pending)", task["status"])
+	}
+}
+
+func TestTaskCreateTool_InvalidDependency(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	sess := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	toolCall(t, env.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+
+	resp := toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title":        "Orphan",
+		"description":  "No valid dep",
+		"dependencies": []interface{}{"not-a-uuid"},
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error for invalid dep UUID, got: %s", text)
+	}
+}
+
+func TestTaskListTool_NoFilters(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	sess := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	toolCall(t, env.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+
+	// Create two tasks.
+	toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title": "Task A", "description": "First",
+	})
+	toolCall(t, env.ts, sess, ToolCreateTask, map[string]interface{}{
+		"title": "Task B", "description": "Second",
+	})
+
+	resp := toolCall(t, env.ts, sess, ToolListTasks, map[string]interface{}{})
+	if resp.Error != nil {
+		t.Fatalf("list-tasks error: %v", resp.Error)
+	}
+
+	text := extractText(t, resp)
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &tasks); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("expected 2 tasks, got %d", len(tasks))
+	}
+}
+
+func TestTaskListTool_FilterByStatus(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+
+	// Register agents in their respective sessions so sess.agentID is set.
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	// Create a task and claim it (making it in_progress).
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Claimed", "description": "Will be in_progress",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{
+		"taskId": taskID,
+	})
+
+	// Create another task (stays pending).
+	toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Unclaimed", "description": "Still pending",
+	})
+
+	// Filter by pending — should only get 1.
+	resp := toolCall(t, env.ts, sessMgr, ToolListTasks, map[string]interface{}{
+		"status": "pending",
+	})
+	text := extractText(t, resp)
+	var tasks []map[string]interface{}
+	json.Unmarshal([]byte(text), &tasks)
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 pending task, got %d", len(tasks))
+	}
+	if len(tasks) > 0 && tasks[0]["title"] != "Unclaimed" {
+		t.Errorf("expected 'Unclaimed', got %v", tasks[0]["title"])
+	}
+}
+
+func TestTaskListTool_FilterByAssignee(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	// Create and claim a task as Coder.
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Coder task", "description": "Assigned to Coder",
+	})
+	taskID := extractTaskID(t, createResp)
+	toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{"taskId": taskID})
+
+	// Create another unclaimed task.
+	toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Nobody task", "description": "Unassigned",
+	})
+
+	// Filter by assignee name.
+	resp := toolCall(t, env.ts, sessMgr, ToolListTasks, map[string]interface{}{
+		"assignee": "Coder",
+	})
+	text := extractText(t, resp)
+	var tasks []map[string]interface{}
+	json.Unmarshal([]byte(text), &tasks)
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 task assigned to Coder, got %d", len(tasks))
+	}
+}
+
+func TestTaskClaimTool_HappyPath(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Claimable", "description": "Ready to claim",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	resp := toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{
+		"taskId": taskID,
+	})
+	if resp.Error != nil {
+		t.Fatalf("claim-task error: %v", resp.Error)
+	}
+	text := extractText(t, resp)
+	if text != "Task claimed" {
+		t.Errorf("expected 'Task claimed', got %q", text)
+	}
+
+	// Verify task is now in_progress via list.
+	listResp := toolCall(t, env.ts, sessMgr, ToolListTasks, map[string]interface{}{
+		"status": "in_progress",
+	})
+	listText := extractText(t, listResp)
+	var tasks []map[string]interface{}
+	json.Unmarshal([]byte(listText), &tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 in_progress task, got %d", len(tasks))
+	}
+	if tasks[0]["assigneeName"] != "Coder" {
+		t.Errorf("assigneeName = %v, want 'Coder'", tasks[0]["assigneeName"])
+	}
+}
+
+func TestTaskClaimTool_BlockedTask_Error(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	depResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Dep", "description": "Dependency",
+	})
+	depID := extractTaskID(t, depResp)
+
+	blockedResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Blocked", "description": "Blocked task", "dependencies": []interface{}{depID},
+	})
+	blockedID := extractTaskID(t, blockedResp)
+
+	resp := toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{
+		"taskId": blockedID,
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error claiming blocked task, got: %s", text)
+	}
+}
+
+func TestTaskClaimTool_AlreadyClaimed_Error(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	testerID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	sessTester := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+	env.addManagedAgent(t, testerID, "Tester", "/tmp/t", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+	toolCall(t, env.ts, sessTester, ToolRegisterAgent, map[string]interface{}{
+		"agentId": testerID.String(), "name": "Tester", "folder": "/tmp/t",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Work", "description": "Some work",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	// Coder claims first.
+	toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{"taskId": taskID})
+
+	// Tester tries to claim — should fail.
+	resp := toolCall(t, env.ts, sessTester, ToolClaimTask, map[string]interface{}{
+		"taskId": taskID,
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error for double-claim, got: %s", text)
+	}
+}
+
+func TestTaskCompleteTool_HappyPath(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Finish me", "description": "Complete this",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{"taskId": taskID})
+
+	resp := toolCall(t, env.ts, sessCoder, ToolCompleteTask, map[string]interface{}{
+		"taskId": taskID,
+	})
+	if resp.Error != nil {
+		t.Fatalf("complete-task error: %v", resp.Error)
+	}
+	text := extractText(t, resp)
+	if text != "Task completed" {
+		t.Errorf("expected 'Task completed', got %q", text)
+	}
+
+	// Verify via list.
+	listResp := toolCall(t, env.ts, sessMgr, ToolListTasks, map[string]interface{}{
+		"status": "completed",
+	})
+	listText := extractText(t, listResp)
+	var tasks []map[string]interface{}
+	json.Unmarshal([]byte(listText), &tasks)
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 completed task, got %d", len(tasks))
+	}
+}
+
+func TestTaskCompleteTool_NonAssignee_Error(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	coderID := uuid.New()
+	testerID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessCoder := uuid.NewString()
+	sessTester := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+	env.addManagedAgent(t, testerID, "Tester", "/tmp/t", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessCoder, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+	toolCall(t, env.ts, sessTester, ToolRegisterAgent, map[string]interface{}{
+		"agentId": testerID.String(), "name": "Tester", "folder": "/tmp/t",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Owned", "description": "Coder owns this",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	toolCall(t, env.ts, sessCoder, ToolClaimTask, map[string]interface{}{"taskId": taskID})
+
+	// Tester tries to complete — should fail.
+	resp := toolCall(t, env.ts, sessTester, ToolCompleteTask, map[string]interface{}{
+		"taskId": taskID,
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error for non-assignee completing, got: %s", text)
+	}
+}
+
+func TestTaskCompleteTool_InvalidTaskID(t *testing.T) {
+	env := newTestEnv(t)
+	coderID := uuid.New()
+	sess := uuid.NewString()
+	env.addManagedAgent(t, coderID, "Coder", "/tmp/c", models.AgentTypeClaude)
+	toolCall(t, env.ts, sess, ToolRegisterAgent, map[string]interface{}{
+		"agentId": coderID.String(), "name": "Coder", "folder": "/tmp/c",
+	})
+
+	resp := toolCall(t, env.ts, sess, ToolCompleteTask, map[string]interface{}{
+		"taskId": uuid.NewString(),
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error for unknown task ID, got: %s", text)
+	}
+}
+
+func TestTaskUpdateTool_ByCreator(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	sessMgr := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Original", "description": "Original desc",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	resp := toolCall(t, env.ts, sessMgr, ToolUpdateTask, map[string]interface{}{
+		"taskId":      taskID,
+		"title":       "Updated title",
+		"description": "Updated desc",
+	})
+	if resp.Error != nil {
+		t.Fatalf("update-task error: %v", resp.Error)
+	}
+	text := extractText(t, resp)
+	if text != "Task updated" {
+		t.Errorf("expected 'Task updated', got %q", text)
+	}
+
+	// Verify update via list.
+	listResp := toolCall(t, env.ts, sessMgr, ToolListTasks, map[string]interface{}{})
+	listText := extractText(t, listResp)
+	var tasks []map[string]interface{}
+	json.Unmarshal([]byte(listText), &tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0]["title"] != "Updated title" {
+		t.Errorf("title = %v, want 'Updated title'", tasks[0]["title"])
+	}
+	if tasks[0]["description"] != "Updated desc" {
+		t.Errorf("description = %v, want 'Updated desc'", tasks[0]["description"])
+	}
+}
+
+func TestTaskUpdateTool_ByNonOwner_Error(t *testing.T) {
+	env := newTestEnv(t)
+	managerID := uuid.New()
+	testerID := uuid.New()
+	sessMgr := uuid.NewString()
+	sessTester := uuid.NewString()
+	env.addManagedAgent(t, managerID, "Manager", "/tmp/m", models.AgentTypeClaude)
+	env.addManagedAgent(t, testerID, "Tester", "/tmp/t", models.AgentTypeClaude)
+
+	toolCall(t, env.ts, sessMgr, ToolRegisterAgent, map[string]interface{}{
+		"agentId": managerID.String(), "name": "Manager", "folder": "/tmp/m",
+	})
+	toolCall(t, env.ts, sessTester, ToolRegisterAgent, map[string]interface{}{
+		"agentId": testerID.String(), "name": "Tester", "folder": "/tmp/t",
+	})
+
+	createResp := toolCall(t, env.ts, sessMgr, ToolCreateTask, map[string]interface{}{
+		"title": "Protected", "description": "Only creator can update",
+	})
+	taskID := extractTaskID(t, createResp)
+
+	// Tester tries to update — should fail (not creator, not assignee).
+	resp := toolCall(t, env.ts, sessTester, ToolUpdateTask, map[string]interface{}{
+		"taskId": taskID,
+		"title":  "Hacked",
+	})
+	text := extractText(t, resp)
+	if !strings.HasPrefix(text, "Error") {
+		t.Errorf("expected error for non-owner update, got: %s", text)
+	}
+}
+
+func TestTaskToolsInToolsList(t *testing.T) {
+	_, ts := newTestServer(t)
+	resp := mcpCall(t, ts, "", MethodToolsList, nil)
+	if resp.Error != nil {
+		t.Fatalf("tools/list error: %v", resp.Error)
+	}
+
+	result := resp.Result.(map[string]interface{})
+	tools := result["tools"].([]interface{})
+
+	toolNames := make(map[string]bool)
+	for _, tool := range tools {
+		td := tool.(map[string]interface{})
+		toolNames[td["name"].(string)] = true
+	}
+
+	for _, expected := range []string{ToolCreateTask, ToolListTasks, ToolClaimTask, ToolCompleteTask, ToolUpdateTask} {
+		if !toolNames[expected] {
+			t.Errorf("tool %q not found in tools/list", expected)
+		}
 	}
 }

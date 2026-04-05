@@ -48,6 +48,11 @@ const (
 	ToolViewMermaid    = "view-mermaid"
 	ToolSetStatus        = "set-status"
 	ToolMergeBranches    = "merge-branches"
+	ToolCreateTask       = "create-task"
+	ToolListTasks        = "list-tasks"
+	ToolClaimTask        = "claim-task"
+	ToolCompleteTask     = "complete-task"
+	ToolUpdateTask       = "update-task"
 )
 
 // ToolCallParams is the params block for a tools/call request.

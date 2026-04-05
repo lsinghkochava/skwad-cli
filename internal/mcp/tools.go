@@ -147,6 +147,46 @@ func (h *toolHandler) list() []toolDefinition {
 				"category": propString("The category of action you are about to perform. Predefined categories: code, test, explore, review, plan, delegate, coordinate. Custom categories are also accepted."),
 			}, "agentId", "status"),
 		},
+		{
+			Name:        ToolCreateTask,
+			Description: "Create a new task for the team. Tasks can have dependencies on other tasks.",
+			InputSchema: schema(map[string]interface{}{
+				"title":        propString("Task title (required)"),
+				"description":  propString("Task description (required)"),
+				"dependencies": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Optional list of task IDs this task depends on"},
+			}, "title", "description"),
+		},
+		{
+			Name:        ToolListTasks,
+			Description: "List all tasks. Optionally filter by status or assignee.",
+			InputSchema: schema(map[string]interface{}{
+				"status":   propString("Filter by status: pending, in_progress, completed, blocked (optional)"),
+				"assignee": propString("Filter by assignee name or ID (optional)"),
+			}),
+		},
+		{
+			Name:        ToolClaimTask,
+			Description: "Claim an unassigned pending task. Sets you as the assignee and marks it in-progress.",
+			InputSchema: schema(map[string]interface{}{
+				"taskId": propString("The task ID to claim"),
+			}, "taskId"),
+		},
+		{
+			Name:        ToolCompleteTask,
+			Description: "Mark a task as completed. You must be the assignee.",
+			InputSchema: schema(map[string]interface{}{
+				"taskId": propString("The task ID to complete"),
+			}, "taskId"),
+		},
+		{
+			Name:        ToolUpdateTask,
+			Description: "Update a task's title or description. You must be the creator or assignee.",
+			InputSchema: schema(map[string]interface{}{
+				"taskId":      propString("The task ID to update"),
+				"title":       propString("New title (optional)"),
+				"description": propString("New description (optional)"),
+			}, "taskId"),
+		},
 	}
 }
 
@@ -183,6 +223,16 @@ func (h *toolHandler) call(params ToolCallParams, sess *session) (ToolResult, er
 		result, err = h.mergeBranches(params.Arguments)
 	case ToolSetStatus:
 		result, err = h.setStatus(params.Arguments)
+	case ToolCreateTask:
+		result, err = h.createTask(params.Arguments, sess)
+	case ToolListTasks:
+		result, err = h.listTasks(params.Arguments)
+	case ToolClaimTask:
+		result, err = h.claimTask(params.Arguments, sess)
+	case ToolCompleteTask:
+		result, err = h.completeTask(params.Arguments, sess)
+	case ToolUpdateTask:
+		result, err = h.updateTask(params.Arguments, sess)
 	default:
 		return errorResult("unknown tool: " + params.Name), nil
 	}
@@ -467,6 +517,95 @@ func (h *toolHandler) mergeBranches(args map[string]interface{}) (ToolResult, er
 	sb.WriteString(fmt.Sprintf("\n%d/%d branches merged", len(result.MergedFrom), len(branches)))
 
 	return textResult(sb.String()), nil
+}
+
+func (h *toolHandler) createTask(args map[string]interface{}, sess *session) (ToolResult, error) {
+	title := strArg(args, "title")
+	description := strArg(args, "description")
+
+	var deps []uuid.UUID
+	if depsRaw, ok := args["dependencies"].([]interface{}); ok {
+		for _, d := range depsRaw {
+			if s, ok := d.(string); ok {
+				id, err := uuid.Parse(s)
+				if err != nil {
+					return errorResult("invalid dependency ID: " + s), nil
+				}
+				deps = append(deps, id)
+			}
+		}
+	}
+
+	task, err := h.server.coordinator.CreateTask(sess.agentID, title, description, deps)
+	if err != nil {
+		return errorResult(err.Error()), nil
+	}
+	data, _ := json.Marshal(task)
+	return textResult(string(data)), nil
+}
+
+func (h *toolHandler) listTasks(args map[string]interface{}) (ToolResult, error) {
+	tasks := h.server.coordinator.ListTasks()
+
+	status := strArg(args, "status")
+	assignee := strArg(args, "assignee")
+
+	if status != "" || assignee != "" {
+		var filtered []*models.Task
+		for _, t := range tasks {
+			if status != "" && string(t.Status) != status {
+				continue
+			}
+			if assignee != "" && t.AssigneeName != assignee {
+				if t.AssigneeID == nil || t.AssigneeID.String() != assignee {
+					continue
+				}
+			}
+			filtered = append(filtered, t)
+		}
+		tasks = filtered
+	}
+
+	data, _ := json.Marshal(tasks)
+	return textResult(string(data)), nil
+}
+
+func (h *toolHandler) claimTask(args map[string]interface{}, sess *session) (ToolResult, error) {
+	taskIDStr := strArg(args, "taskId")
+	taskID, err := uuid.Parse(taskIDStr)
+	if err != nil {
+		return errorResult("invalid task ID: " + taskIDStr), nil
+	}
+	if err := h.server.coordinator.ClaimTask(sess.agentID, taskID); err != nil {
+		return errorResult(err.Error()), nil
+	}
+	return textResult("Task claimed"), nil
+}
+
+func (h *toolHandler) completeTask(args map[string]interface{}, sess *session) (ToolResult, error) {
+	taskIDStr := strArg(args, "taskId")
+	taskID, err := uuid.Parse(taskIDStr)
+	if err != nil {
+		return errorResult("invalid task ID: " + taskIDStr), nil
+	}
+	if err := h.server.coordinator.CompleteTask(sess.agentID, taskID); err != nil {
+		return errorResult(err.Error()), nil
+	}
+	return textResult("Task completed"), nil
+}
+
+func (h *toolHandler) updateTask(args map[string]interface{}, sess *session) (ToolResult, error) {
+	taskIDStr := strArg(args, "taskId")
+	taskID, err := uuid.Parse(taskIDStr)
+	if err != nil {
+		return errorResult("invalid task ID: " + taskIDStr), nil
+	}
+	title := strArg(args, "title")
+	description := strArg(args, "description")
+	if err := h.server.coordinator.UpdateTask(sess.agentID, taskID, title, description); err != nil {
+		return errorResult(err.Error()), nil
+	}
+	return textResult("Task updated"), nil
 }
 
 // formatArgsPreview builds a concise key=value summary of tool arguments for display.
