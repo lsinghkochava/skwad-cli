@@ -230,3 +230,132 @@ func TestFormatMarkdown_ShortOutputUnchanged(t *testing.T) {
 		t.Error("expected all lines present in output")
 	}
 }
+
+func TestFormatResultText_SingleAgent(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Builder", ResultText: "All tasks completed successfully."},
+	}
+	out := FormatResultText(agents)
+	if !strings.Contains(out, "All tasks completed successfully.") {
+		t.Error("expected result text in output")
+	}
+	// Single agent should NOT have a header.
+	if strings.Contains(out, "## Builder") {
+		t.Error("single agent should not have section header")
+	}
+}
+
+func TestFormatResultText_MultipleAgents(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Builder", ResultText: "Built the feature."},
+		{Name: "QA", ResultText: "Tests all pass."},
+	}
+	out := FormatResultText(agents)
+	if !strings.Contains(out, "## Builder") {
+		t.Error("expected Builder header")
+	}
+	if !strings.Contains(out, "## QA") {
+		t.Error("expected QA header")
+	}
+	if !strings.Contains(out, "Built the feature.") {
+		t.Error("expected Builder result text")
+	}
+	if !strings.Contains(out, "Tests all pass.") {
+		t.Error("expected QA result text")
+	}
+}
+
+func TestFormatResultText_EmptyResultText(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Silent", ResultText: ""},
+	}
+	out := FormatResultText(agents)
+	// Should not crash, just produce empty or minimal output.
+	if strings.Contains(out, "## Silent") {
+		t.Error("single agent with empty text should not have header")
+	}
+}
+
+func TestFormatResultText_TrailingNewline(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Bot", ResultText: "no trailing newline"},
+	}
+	out := FormatResultText(agents)
+	if !strings.HasSuffix(out, "\n") {
+		t.Error("expected trailing newline to be added")
+	}
+}
+
+func TestFormatResultText_AlreadyHasNewline(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Bot", ResultText: "has newline\n"},
+	}
+	out := FormatResultText(agents)
+	if strings.HasSuffix(out, "\n\n") {
+		t.Error("should not double the trailing newline")
+	}
+}
+
+func TestFormatResultTextJSON(t *testing.T) {
+	agents := []AgentResult{
+		{Name: "Builder", ResultText: "Done."},
+		{Name: "QA", ResultText: "Verified."},
+	}
+	out, err := FormatResultTextJSON(agents)
+	if err != nil {
+		t.Fatalf("FormatResultTextJSON: %v", err)
+	}
+
+	// Verify valid JSON.
+	var parsed []struct {
+		Name       string `json:"name"`
+		ResultText string `json:"result_text"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if len(parsed) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(parsed))
+	}
+	if parsed[0].Name != "Builder" || parsed[0].ResultText != "Done." {
+		t.Errorf("unexpected first entry: %+v", parsed[0])
+	}
+	if parsed[1].Name != "QA" || parsed[1].ResultText != "Verified." {
+		t.Errorf("unexpected second entry: %+v", parsed[1])
+	}
+}
+
+func TestFormatResultTextJSON_Empty(t *testing.T) {
+	agents := []AgentResult{}
+	out, err := FormatResultTextJSON(agents)
+	if err != nil {
+		t.Fatalf("FormatResultTextJSON: %v", err)
+	}
+	var parsed []any
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if len(parsed) != 0 {
+		t.Errorf("expected empty array, got %d entries", len(parsed))
+	}
+}
+
+func TestFormatResultTextJSON_OnlyNameAndResultText(t *testing.T) {
+	// Verify the JSON output only includes name and result_text, not other AgentResult fields.
+	agents := []AgentResult{
+		{Name: "Bot", Type: "claude", ExitCode: 1, Output: "stream output", ResultText: "final result"},
+	}
+	out, err := FormatResultTextJSON(agents)
+	if err != nil {
+		t.Fatalf("FormatResultTextJSON: %v", err)
+	}
+	if strings.Contains(out, "exit_code") {
+		t.Error("JSON should not contain exit_code")
+	}
+	if strings.Contains(out, "output") && !strings.Contains(out, "result_text") {
+		t.Error("JSON should not contain output field")
+	}
+	if strings.Contains(out, `"type"`) {
+		t.Error("JSON should not contain type field")
+	}
+}

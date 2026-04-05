@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -30,6 +31,7 @@ var (
 	runFlagPromptFile   string
 	runFlagTimeout      string
 	runFlagOutputFormat  string
+	runFlagOutput            string
 	runFlagExplore           bool
 	runFlagMaxIterations     int
 	runFlagAutoMerge         bool
@@ -50,6 +52,7 @@ func init() {
 	runCmd.Flags().StringVar(&runFlagPromptFile, "prompt-file", "", "file containing initial prompt")
 	runCmd.Flags().StringVar(&runFlagTimeout, "timeout", "10m", "maximum time to wait for agents")
 	runCmd.Flags().StringVar(&runFlagOutputFormat, "output-format", "markdown", "output format: markdown or json")
+	runCmd.Flags().StringVar(&runFlagOutput, "output", "entry", "output mode: entry (entry agent result), all (all agent results), raw (full stream)")
 	runCmd.Flags().BoolVar(&runFlagExplore, "explore", false, "Run all agents in read-only explore mode")
 	runCmd.Flags().IntVar(&runFlagMaxIterations, "max-iterations", 1, "Max fix→verify cycles before stopping (0=unlimited)")
 	runCmd.Flags().BoolVar(&runFlagAutoMerge, "auto-merge", false, "Automatically consolidate agent branches on run completion")
@@ -135,6 +138,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	// 6. Set up output collection.
 	outputMu := &sync.Mutex{}
 	outputBufs := make(map[uuid.UUID]*bytes.Buffer)
+	resultTexts := make(map[uuid.UUID]string)
 	for _, a := range agents {
 		outputBufs[a.ID] = &bytes.Buffer{}
 	}
@@ -191,6 +195,13 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			prevOnStream(agentID, msg)
 		}
 		if msg.Type == "result" {
+			// Capture final result text for --output filtering.
+			if text := parseResultText(msg.Raw); text != "" {
+				outputMu.Lock()
+				resultTexts[agentID] = text
+				outputMu.Unlock()
+			}
+
 			select {
 			case <-workDispatched:
 				slog.Debug("work result received, closing all agent stdin", "agentID", agentID)
@@ -359,19 +370,34 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			output = buf.String()
 		}
 		rr.Agents = append(rr.Agents, report.AgentResult{
-			Name:     a.Name,
-			Type:     string(a.AgentType),
-			ExitCode: agentExitCodes[a.ID],
-			Output:   output,
+			Name:       a.Name,
+			Type:       string(a.AgentType),
+			ExitCode:   agentExitCodes[a.ID],
+			Output:     output,
+			ResultText: resultTexts[a.ID],
 		})
 	}
 
-	switch runFlagOutputFormat {
-	case "json":
-		out, _ := report.FormatJSON(rr)
-		fmt.Print(out)
-	default:
-		fmt.Print(report.FormatMarkdown(rr))
+	// Filter and print output based on --output mode.
+	filtered := filterRunOutput(runFlagOutput, rr.Agents, tc.EntryAgent)
+	if filtered != nil {
+		// entry or all mode — print only result text.
+		switch runFlagOutputFormat {
+		case "json":
+			out, _ := report.FormatResultTextJSON(filtered)
+			fmt.Print(out)
+		default:
+			fmt.Print(report.FormatResultText(filtered))
+		}
+	} else {
+		// raw mode — full report.
+		switch runFlagOutputFormat {
+		case "json":
+			out, _ := report.FormatJSON(rr)
+			fmt.Print(out)
+		default:
+			fmt.Print(report.FormatMarkdown(rr))
+		}
 	}
 
 	slog.Info("run complete", "duration", time.Since(startTime).Round(time.Second))
@@ -520,6 +546,42 @@ func cleanOldRuns(spec string) error {
 	}
 	fmt.Printf("Cleaned %d run(s) older than %s.\n", cleaned, spec)
 	return nil
+}
+
+// parseResultText extracts the Result field from a raw result stream message.
+func parseResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var rm process.ResultMessage
+	if err := json.Unmarshal(raw, &rm); err != nil {
+		return ""
+	}
+	return rm.Result
+}
+
+// filterRunOutput returns the subset of agents to display based on the --output mode.
+// Returns nil for "raw" mode, signaling the caller to use the full report.
+func filterRunOutput(mode string, agents []report.AgentResult, entryAgent string) []report.AgentResult {
+	switch mode {
+	case "all":
+		return agents
+	case "entry":
+		// Find the entry agent by name.
+		for _, a := range agents {
+			if a.Name == entryAgent {
+				return []report.AgentResult{a}
+			}
+		}
+		// Fall back to first agent if no entry agent configured or not found.
+		if len(agents) > 0 {
+			return []report.AgentResult{agents[0]}
+		}
+		return nil
+	default:
+		// "raw" or unrecognized — full report.
+		return nil
+	}
 }
 
 // parseDurationSpec parses a duration string, supporting "Nd" for days.

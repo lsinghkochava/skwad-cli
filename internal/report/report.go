@@ -11,10 +11,11 @@ import (
 
 // AgentResult holds the output and exit status for a single agent run.
 type AgentResult struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	ExitCode int    `json:"exit_code"`
-	Output   string `json:"output"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	ExitCode   int    `json:"exit_code"`
+	Output     string `json:"output"`
+	ResultText string `json:"result_text,omitempty"`
 }
 
 // RunReport is the top-level report structure output by `skwad run`.
@@ -67,6 +68,38 @@ func FormatJSON(r *RunReport) (string, error) {
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal report: %w", err)
+	}
+	return string(data) + "\n", nil
+}
+
+// FormatResultText renders only the ResultText for the given agents as markdown.
+func FormatResultText(agents []AgentResult) string {
+	var sb strings.Builder
+	for _, a := range agents {
+		if len(agents) > 1 {
+			fmt.Fprintf(&sb, "## %s\n\n", a.Name)
+		}
+		sb.WriteString(a.ResultText)
+		if a.ResultText != "" && !strings.HasSuffix(a.ResultText, "\n") {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
+// FormatResultTextJSON renders only the ResultText for the given agents as JSON.
+func FormatResultTextJSON(agents []AgentResult) (string, error) {
+	type resultEntry struct {
+		Name       string `json:"name"`
+		ResultText string `json:"result_text"`
+	}
+	entries := make([]resultEntry, len(agents))
+	for i, a := range agents {
+		entries[i] = resultEntry{Name: a.Name, ResultText: a.ResultText}
+	}
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal result text: %w", err)
 	}
 	return string(data) + "\n", nil
 }
