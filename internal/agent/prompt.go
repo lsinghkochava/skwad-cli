@@ -21,18 +21,24 @@ func BuildSystemPrompt(agent *models.Agent, persona *models.Persona, teammates [
 		b.WriteString(buildTeamProtocol(agent, teammates))
 	}
 
-	// Layer 3: Role-specific instructions
+	// Layer 3: Coordination mode
+	if agent.CoordinationMode != "" {
+		b.WriteString("\n\n")
+		b.WriteString(buildCoordinationPrompt(agent.CoordinationMode))
+	}
+
+	// Layer 4: Role-specific instructions
 	if rolePrompt := matchRoleInstructions(agent, persona); rolePrompt != "" {
 		b.WriteString("\n\n")
 		b.WriteString(rolePrompt)
 	}
 
-	// Layer 4: Persona instructions (user-customizable)
+	// Layer 5: Persona instructions (user-customizable)
 	if persona != nil && persona.Instructions != "" {
 		b.WriteString("\n\n## Persona: " + persona.Name + "\n" + persona.Instructions)
 	}
 
-	// Layer 5: Worktree isolation context
+	// Layer 6: Worktree isolation context
 	if agent.WorktreePath != "" {
 		b.WriteString("\n\n## Git Worktree Isolation\n")
 		b.WriteString("You are working in an isolated git worktree on your own branch.\n")
@@ -49,6 +55,30 @@ func BuildSystemPrompt(agent *models.Agent, persona *models.Persona, teammates [
 	}
 
 	return b.String()
+}
+
+// buildCoordinationPrompt returns the task coordination instructions for the given mode.
+func buildCoordinationPrompt(mode string) string {
+	switch mode {
+	case "autonomous":
+		return `## Task Coordination (Autonomous Mode)
+You work in an autonomous team. There is no central manager — agents self-organize.
+- Proactively check ` + "`list-tasks`" + ` for available work
+- Use ` + "`claim-task`" + ` to pick up unassigned tasks that match your skills
+- Use ` + "`complete-task`" + ` when done, then immediately check for more work
+- Use ` + "`create-task`" + ` to break down complex work into subtasks for teammates
+- Coordinate with teammates via ` + "`send-message`" + ` when tasks overlap or need handoff
+- If you see no available tasks and have ideas for what needs doing, create new tasks
+- When blocked, message the teammate whose task is blocking yours`
+	default: // "managed" or any other value
+		return `## Task Coordination (Managed Mode)
+You work in a managed team. The Manager agent coordinates work and assigns tasks.
+- Wait for task assignments via messages from the Manager
+- Use ` + "`complete-task`" + ` to mark assigned tasks as done
+- Use ` + "`list-tasks`" + ` to see the team's task board
+- Do not use ` + "`claim-task`" + ` unless explicitly instructed by the Manager
+- Focus on your assigned persona role and wait for direction`
+	}
 }
 
 // buildPreamble returns the universal preamble injected into every agent's system prompt.

@@ -268,6 +268,55 @@ func TestBuildSystemPrompt_WorktreeIsolation(t *testing.T) {
 	}
 }
 
+func TestBuildCoordinationPrompt_Managed(t *testing.T) {
+	prompt := buildCoordinationPrompt("managed")
+	if !strings.Contains(prompt, "Managed Mode") {
+		t.Error("expected 'Managed Mode' in prompt")
+	}
+	if !strings.Contains(prompt, "Wait for task assignments") {
+		t.Error("expected 'Wait for task assignments' in managed prompt")
+	}
+	if strings.Contains(prompt, "claim-task") && !strings.Contains(prompt, "Do not use") {
+		t.Error("managed mode should discourage claim-task usage")
+	}
+}
+
+func TestBuildCoordinationPrompt_Autonomous(t *testing.T) {
+	prompt := buildCoordinationPrompt("autonomous")
+	if !strings.Contains(prompt, "Autonomous Mode") {
+		t.Error("expected 'Autonomous Mode' in prompt")
+	}
+	if !strings.Contains(prompt, "claim-task") {
+		t.Error("autonomous mode should mention claim-task")
+	}
+	if !strings.Contains(prompt, "create-task") {
+		t.Error("autonomous mode should mention create-task")
+	}
+}
+
+func TestBuildSystemPrompt_WithCoordinationMode(t *testing.T) {
+	agent := &models.Agent{
+		ID:               uuid.New(),
+		Name:             "Coder",
+		CoordinationMode: "autonomous",
+	}
+	prompt := BuildSystemPrompt(agent, nil, nil)
+	if !strings.Contains(prompt, "Autonomous Mode") {
+		t.Error("prompt should contain coordination section for autonomous mode")
+	}
+}
+
+func TestBuildSystemPrompt_EmptyCoordinationMode(t *testing.T) {
+	agent := &models.Agent{
+		ID:   uuid.New(),
+		Name: "Coder",
+	}
+	prompt := BuildSystemPrompt(agent, nil, nil)
+	if strings.Contains(prompt, "Task Coordination") {
+		t.Error("prompt should NOT contain coordination section when mode is empty")
+	}
+}
+
 func TestBuildSystemPrompt_NoWorktree(t *testing.T) {
 	agent := &models.Agent{
 		ID:   uuid.New(),
