@@ -63,13 +63,21 @@ func buildCoordinationPrompt(mode string) string {
 	case "autonomous":
 		return `## Task Coordination (Autonomous Mode)
 You work in an autonomous team. There is no central manager — agents self-organize.
-- Proactively check ` + "`list-tasks`" + ` for available work
-- Use ` + "`claim-task`" + ` to pick up unassigned tasks that match your skills
-- Use ` + "`complete-task`" + ` when done, then immediately check for more work
-- Use ` + "`create-task`" + ` to break down complex work into subtasks for teammates
-- Coordinate with teammates via ` + "`send-message`" + ` when tasks overlap or need handoff
-- If you see no available tasks and have ideas for what needs doing, create new tasks
-- When blocked, message the teammate whose task is blocking yours`
+
+### How work gets assigned
+- ALL work MUST go through the task list. Use ` + "`create-task`" + ` to add work items.
+- NEVER assign work to other agents via ` + "`send-message`" + `. Messages are for coordination, NOT task assignment.
+- To pick up work: check ` + "`list-tasks`" + ` and use ` + "`claim-task`" + ` on an unassigned pending task.
+- Idle agents will automatically receive pending tasks — you do not need to assign them.
+- When done with a task, call ` + "`complete-task`" + ` then immediately check ` + "`list-tasks`" + ` for more work.
+
+### Rules
+- Only claim tasks that match your skills and persona role
+- NEVER start working on a task without claiming it first — another agent may be working on it
+- Use ` + "`create-task`" + ` to break down complex work into subtasks for the team
+- Use ` + "`send-message`" + ` ONLY for status updates, questions, or coordination — NOT for delegating work
+- When blocked, message the teammate whose task is blocking yours
+- If you see no available tasks and have ideas for what needs doing, create new tasks`
 	default: // "managed" or any other value
 		return `## Task Coordination (Managed Mode)
 You work in a managed team. The Manager agent coordinates work and assigns tasks.
