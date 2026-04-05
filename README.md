@@ -102,6 +102,53 @@ skwad-cli start --config team.json --explore --watch
 
 Explore mode sets `--permission-mode plan` and restricts tools to read-only (Read, Glob, Grep, Agent). Can also be set per-agent via `explore_mode: true` in team config.
 
+## Coordination Modes
+
+Teams can operate in two coordination modes:
+
+**Managed mode** (default) — a Manager agent coordinates work and assigns tasks to teammates via messages. Agents wait for direction.
+
+**Autonomous mode** — agents self-organize. They create tasks, claim work from a shared task list, and coordinate directly. Idle agents automatically receive pending tasks.
+
+```json
+{
+  "name": "Autonomous Team",
+  "repo": "/path/to/repo",
+  "coordination": "autonomous",
+  "max_tasks": 20,
+  "agents": [
+    { "name": "Lead", "agent_type": "claude" },
+    { "name": "Builder", "agent_type": "claude" },
+    { "name": "QA", "agent_type": "claude" }
+  ]
+}
+```
+
+Task tools available to agents: `create-task`, `list-tasks`, `claim-task`, `complete-task`, `update-task`. Tasks support dependencies (`blocked_by`), ownership checks, and circular dependency detection.
+
+## Output Formatting
+
+Control what `skwad run` outputs:
+
+```bash
+# Show only entry agent's result (default)
+skwad-cli run --config team.json --prompt "..." --output entry
+
+# Show all agents' results
+skwad-cli run --config team.json --prompt "..." --output all
+
+# Full JSON stream (raw, for debugging)
+skwad-cli run --config team.json --prompt "..." --output raw
+
+# Format as JSON and write to file
+skwad-cli run --config team.json --prompt "..." --format json --output-file results.json
+
+# Format as markdown
+skwad-cli run --config team.json --prompt "..." --format markdown
+```
+
+Flags: `--output` (entry/all/raw), `--format` (text/json/markdown), `--output-file` (write to file instead of stdout).
+
 ## Run History
 
 Each `skwad run` session is tracked with an event log at `~/.config/skwad/runs/<runID>/`:
@@ -156,7 +203,7 @@ Events tracked: run start/complete/fail, agent spawn/exit, prompts sent, phase t
 
 **Agent fields:** `name` (required), `agent_type` (required: claude, codex, gemini, copilot, opencode, custom), `persona` (name match), `persona_instructions` (inline), `persona_id` (UUID), `avatar`, `command` (custom shell), `allowed_tools`, `prompt` (per-agent), `explore_mode` (read-only), `isolate` (worktree isolation override).
 
-**Team fields:** `isolate_agents` (default: true — agents work in isolated worktrees).
+**Team fields:** `isolate_agents` (default: true — agents work in isolated worktrees), `coordination` (`managed` or `autonomous`), `persist_tasks` (save tasks to disk), `max_tasks` (default: 50), `entry_agent` (agent whose output is shown by default).
 
 **Persona resolution priority:** `persona_instructions` > `persona_id` > `persona` name > team-level `personas[]` matching agent name.
 
@@ -213,7 +260,7 @@ jobs:
             --set repo=. \
             --set prompt="Review this PR for architecture, security, and test coverage" \
             --timeout 10m \
-            --output-format json | \
+            --format json | \
           skwad-cli report --format github-pr-comment --pr ${{ github.event.pull_request.number }}
 ```
 
@@ -250,7 +297,7 @@ done
   --set repo=/opt/main-app \
   --set prompt="Full security and quality audit of recent changes" \
   --timeout 30m \
-  --output-format json | \
+  --format json | \
   skwad-cli report --format markdown > /reports/nightly-$(date +\%F).md
 ```
 
@@ -271,7 +318,7 @@ skwad-cli status
 
 Built-in MCP server on port 8766 (configurable via `--port`). Agents coordinate via JSON-RPC 2.0 at `/mcp`. Compatible with the Swift Skwad app's plugin scripts.
 
-**Tools:** `register-agent`, `list-agents`, `send-message`, `check-messages`, `broadcast-message`, `set-status`, `list-repos`, `list-worktrees`, `create-worktree`, `create-agent`, `close-agent`, `display-markdown`, `view-mermaid`, `merge-branches`.
+**Tools:** `register-agent`, `list-agents`, `send-message`, `check-messages`, `broadcast-message`, `set-status`, `list-repos`, `list-worktrees`, `create-worktree`, `create-agent`, `close-agent`, `display-markdown`, `view-mermaid`, `merge-branches`, `create-task`, `list-tasks`, `claim-task`, `complete-task`, `update-task`.
 
 **REST endpoints:** `GET /health`, `GET /` (agent list), `POST /api/v1/agent/register`, `POST /api/v1/agent/status`, `POST /api/v1/agent/send`, `POST /api/v1/agent/broadcast`.
 
@@ -299,8 +346,9 @@ The race detector (`make test-race`) is recommended for development — the agen
 | Enriched system prompts | ✅ | 5-layer prompt: preamble, team protocol, role instructions, persona, worktree context |
 | Event-sourced run state | ✅ | Append-only event log with `--list-runs` and `--clean-runs` |
 | Worktree isolation | ✅ | Per-agent git worktrees with `skwad merge` consolidation |
+| Autonomous coordination | ✅ | Task management with managed/autonomous modes, auto-claim, idle nudging |
+| Output formatting | ✅ | `--output` (entry/all/raw), `--format` (text/json/markdown), `--output-file` |
 | Run resume | Planned | `--resume` flag for crash recovery of long-running CI runs |
-| Autonomous coordination | Planned | Task management with managed/autonomous modes (Phase 6) |
 
 ## License
 

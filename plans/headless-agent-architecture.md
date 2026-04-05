@@ -2239,8 +2239,8 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Phase 6.5 — Auto-claim wiring for autonomous mode *(2026-04-05)*
 - [x] Phase 6.6 — Coordination mode system prompts *(2026-04-05)*
 - [x] Phase 7.1 — Output filtering: --output flag (entry/all/raw) *(2026-04-05, autonomous team)*
-- [ ] Phase 7.2 — Output formatting: --format flag (text/json/markdown)
-- [ ] Phase 7.3 — Output destination: --output-file flag
+- [x] Phase 7.2 — Output formatting: --format flag (text/json/markdown) *(2026-04-05)*
+- [x] Phase 7.3 — Output destination: --output-file flag *(2026-04-05)*
 
 ---
 
