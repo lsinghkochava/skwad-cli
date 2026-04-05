@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -38,6 +39,10 @@ type Coordinator struct {
 	// registered holds agents that have called register-agent.
 	registered map[uuid.UUID]*registeredAgent
 
+	// Task management
+	tasks    map[uuid.UUID]*models.Task
+	maxTasks int
+
 	// OnDeliverMessage is called when a message should be injected into a terminal.
 	OnDeliverMessage func(agentID uuid.UUID, text string)
 
@@ -47,6 +52,16 @@ type Coordinator struct {
 	OnBroadcast func(fromID, fromName, content string)
 	// OnStatusChanged is called after an agent's status text is updated.
 	OnStatusChanged func(agentID, agentName, status, category string)
+
+	// OnAgentIdle is fired asynchronously via goroutine when an agent goes idle
+	// and has no unread messages. Ordering is best-effort, not guaranteed.
+	OnAgentIdle func(agentID uuid.UUID)
+	// OnTaskCreated is fired asynchronously via goroutine after a new task is
+	// created. Ordering is best-effort, not guaranteed.
+	OnTaskCreated func(task *models.Task)
+	// OnTaskCompleted is fired asynchronously via goroutine after a task is
+	// marked completed. Ordering is best-effort, not guaranteed.
+	OnTaskCompleted func(task *models.Task)
 }
 
 type registeredAgent struct {
@@ -59,6 +74,8 @@ func NewCoordinator(mgr *Manager) *Coordinator {
 	return &Coordinator{
 		manager:    mgr,
 		registered: make(map[uuid.UUID]*registeredAgent),
+		tasks:      make(map[uuid.UUID]*models.Task),
+		maxTasks:   50,
 	}
 }
 
@@ -250,6 +267,12 @@ func (c *Coordinator) NotifyIdleAgent(agentID uuid.UUID) {
 			return
 		}
 	}
+
+	// No unread messages — fire idle callback in a goroutine to avoid deadlock.
+	if c.OnAgentIdle != nil {
+		cb := c.OnAgentIdle
+		go cb(agentID)
+	}
 }
 
 // SetStatusText sets a human-readable status text and category on an agent.
@@ -272,6 +295,241 @@ func (c *Coordinator) UnregisterAgent(id uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.registered, id)
+}
+
+// ---------------------------------------------------------------------------
+// Task management
+// ---------------------------------------------------------------------------
+
+// CreateTask creates a new task, validates dependencies, and checks for cycles.
+func (c *Coordinator) CreateTask(createdBy uuid.UUID, title, description string, deps []uuid.UUID) (*models.Task, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.tasks) >= c.maxTasks {
+		return nil, fmt.Errorf("task limit reached (%d)", c.maxTasks)
+	}
+
+	for _, depID := range deps {
+		if _, ok := c.tasks[depID]; !ok {
+			return nil, fmt.Errorf("dependency task %s not found", depID)
+		}
+	}
+
+	taskID := uuid.New()
+	if c.hasCircularDep(taskID, deps) {
+		return nil, fmt.Errorf("circular dependency detected")
+	}
+
+	status := models.TaskStatusPending
+	for _, depID := range deps {
+		if dep := c.tasks[depID]; dep.Status != models.TaskStatusCompleted {
+			status = models.TaskStatusBlocked
+			break
+		}
+	}
+
+	task := &models.Task{
+		ID:           taskID,
+		Title:        title,
+		Description:  description,
+		Status:       status,
+		CreatedBy:    createdBy,
+		Dependencies: deps,
+		CreatedAt:    time.Now(),
+	}
+	c.tasks[taskID] = task
+
+	if c.OnTaskCreated != nil {
+		cb := c.OnTaskCreated
+		taskCopy := *task
+		go cb(&taskCopy)
+	}
+
+	return task, nil
+}
+
+// hasCircularDep performs a BFS walk to detect cycles. Completed tasks are
+// skipped since their dependency chains are already resolved.
+func (c *Coordinator) hasCircularDep(taskID uuid.UUID, deps []uuid.UUID) bool {
+	visited := map[uuid.UUID]bool{taskID: true}
+	queue := make([]uuid.UUID, len(deps))
+	copy(queue, deps)
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		if visited[cur] {
+			return true
+		}
+		visited[cur] = true
+
+		if t, ok := c.tasks[cur]; ok && t.Status != models.TaskStatusCompleted {
+			queue = append(queue, t.Dependencies...)
+		}
+	}
+	return false
+}
+
+// ListTasks returns all tasks sorted by CreatedAt ascending (FIFO).
+func (c *Coordinator) ListTasks() []*models.Task {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	list := make([]*models.Task, 0, len(c.tasks))
+	for _, t := range c.tasks {
+		list = append(list, t)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].CreatedAt.Before(list[j].CreatedAt)
+	})
+	return list
+}
+
+// GetTask returns a task by ID.
+func (c *Coordinator) GetTask(taskID uuid.UUID) (*models.Task, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	t, ok := c.tasks[taskID]
+	if !ok {
+		return nil, fmt.Errorf("task %s not found", taskID)
+	}
+	return t, nil
+}
+
+// ClaimTask assigns a pending task to a registered agent.
+func (c *Coordinator) ClaimTask(agentID uuid.UUID, taskID uuid.UUID) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ra, ok := c.registered[agentID]
+	if !ok {
+		return fmt.Errorf("agent %s is not registered", agentID)
+	}
+
+	t, ok := c.tasks[taskID]
+	if !ok {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+	if t.Status != models.TaskStatusPending {
+		return fmt.Errorf("task %s is not pending (status: %s)", taskID, t.Status)
+	}
+	if t.AssigneeID != nil {
+		return fmt.Errorf("task %s is already assigned", taskID)
+	}
+
+	t.AssigneeID = &agentID
+	t.AssigneeName = ra.info.Name
+	t.Status = models.TaskStatusInProgress
+	return nil
+}
+
+// CompleteTask marks a task as completed and auto-unblocks dependent tasks.
+func (c *Coordinator) CompleteTask(agentID uuid.UUID, taskID uuid.UUID) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	t, ok := c.tasks[taskID]
+	if !ok {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+	if t.AssigneeID == nil || *t.AssigneeID != agentID {
+		return fmt.Errorf("agent %s is not the assignee of task %s", agentID, taskID)
+	}
+
+	now := time.Now()
+	t.Status = models.TaskStatusCompleted
+	t.CompletedAt = &now
+
+	// O(n) scan over all tasks — acceptable at maxTasks=50. Consider reverse index if maxTasks grows.
+	for _, other := range c.tasks {
+		if other.Status != models.TaskStatusBlocked {
+			continue
+		}
+		remaining := make([]uuid.UUID, 0, len(other.Dependencies))
+		for _, depID := range other.Dependencies {
+			if depID != taskID {
+				remaining = append(remaining, depID)
+			}
+		}
+		other.Dependencies = remaining
+
+		if len(other.Dependencies) == 0 {
+			other.Status = models.TaskStatusPending
+		}
+	}
+
+	if c.OnTaskCompleted != nil {
+		cb := c.OnTaskCompleted
+		taskCopy := *t
+		go cb(&taskCopy)
+	}
+
+	return nil
+}
+
+// UpdateTask updates the title and/or description of a task. Only the creator
+// or current assignee may update.
+func (c *Coordinator) UpdateTask(callerID uuid.UUID, taskID uuid.UUID, title, description string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	t, ok := c.tasks[taskID]
+	if !ok {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+
+	isCreator := callerID == t.CreatedBy
+	isAssignee := t.AssigneeID != nil && *t.AssigneeID == callerID
+	if !isCreator && !isAssignee {
+		return fmt.Errorf("agent %s is not authorized to update task %s", callerID, taskID)
+	}
+
+	if title != "" {
+		t.Title = title
+	}
+	if description != "" {
+		t.Description = description
+	}
+	return nil
+}
+
+// SetMaxTasks sets the maximum number of tasks the coordinator will accept.
+func (c *Coordinator) SetMaxTasks(max int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.maxTasks = max
+}
+
+// LoadTasks bulk-loads tasks into the coordinator (e.g., for persistence restore).
+// Blocked tasks are re-evaluated: if all dependencies are completed, they are
+// promoted to Pending.
+func (c *Coordinator) LoadTasks(tasks []*models.Task) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, t := range tasks {
+		c.tasks[t.ID] = t
+	}
+
+	// Re-evaluate blocked tasks for consistency after load.
+	for _, t := range c.tasks {
+		if t.Status != models.TaskStatusBlocked {
+			continue
+		}
+		allComplete := true
+		for _, depID := range t.Dependencies {
+			if dep, ok := c.tasks[depID]; !ok || dep.Status != models.TaskStatusCompleted {
+				allComplete = false
+				break
+			}
+		}
+		if allComplete {
+			t.Status = models.TaskStatusPending
+		}
+	}
 }
 
 func buildNotificationText(m Message) string {
