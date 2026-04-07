@@ -54,6 +54,7 @@ skwad-cli stop
 | `run` | One-shot mode for CI (start, prompt, wait, report, exit) |
 | `report` | Format output as markdown, JSON, or GitHub PR comment |
 | `convert` | Convert macOS Skwad workspace export to CLI config |
+| `watch` | Alias for `start --watch` — monitor running session |
 | `merge` | Consolidate agent worktree branches into a single branch |
 | `clean` | Remove agent worktrees and optionally their branches |
 
@@ -328,9 +329,14 @@ Agents coordinate through messages, status updates, and tool calls. Run lifecycl
 
 ```bash
 make build      # Build binary
+make install    # Install binary
 make test       # Run tests
 make test-race  # Run tests with race detector (recommended)
 make lint       # Run linters
+make tidy       # Run go mod tidy
+make fmt        # Format code
+make vet        # Run go vet
+make clean      # Clean build artifacts
 make help       # Show all targets
 ```
 
@@ -348,7 +354,7 @@ The race detector (`make test-race`) is recommended for development — the agen
 | Worktree isolation | ✅ | Per-agent git worktrees with `skwad merge` consolidation |
 | Autonomous coordination | ✅ | Task management with managed/autonomous modes, auto-claim, idle nudging |
 | Output formatting | ✅ | `--output` (entry/all/raw), `--format` (text/json/markdown), `--output-file` |
-| Run resume | Planned | `--resume` flag for crash recovery of long-running CI runs |
+| Run resume | ✅ | `--resume` flag for crash recovery of long-running CI runs |
 
 ## License
 

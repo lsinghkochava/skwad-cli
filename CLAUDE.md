@@ -36,7 +36,9 @@ Headless multi-agent CLI orchestrator written in Go. Spawns AI coding agents (Cl
 | `internal/cli/` | Cobra command tree, global flags, structured logging |
 | `internal/daemon/` | Lifecycle orchestrator — wires Store + Manager + Coordinator + MCP + Pool |
 | `internal/mcp/` | JSON-RPC 2.0 MCP HTTP server, tool handlers, session manager, hook handler |
-| `internal/terminal/` | PTY session management, terminal pool, activity controller, text cleaner |
+| `internal/tui/` | Bubble Tea v2 TUI dashboard (status table, activity log, status bar) |
+| `internal/pipeline/` | Run pipeline orchestration |
+| `internal/process/` | Process pool, runner, and stream management (replaced old terminal package) |
 | `internal/agent/` | Agent manager (CRUD, lifecycle), coordinator (message queue), command builder |
 | `internal/models/` | Pure data types — Agent, Workspace, Persona, BenchAgent, AppSettings |
 | `internal/config/` | Team config loader, built-in templates (go:embed), macOS converter |
@@ -47,7 +49,7 @@ Headless multi-agent CLI orchestrator written in Go. Spawns AI coding agents (Cl
 | `internal/report/` | Markdown/JSON report formatter, GitHub PR comment poster |
 | `internal/search/` | Fuzzy file search scorer |
 | `internal/notifications/` | Desktop notification service (notify-send) |
-| `plugin/` | Hook scripts for Claude and Codex agent integration |
+| `plugin/` | Hook scripts for Codex agent integration |
 | `examples/` | Example team config files |
 
 ## Technology
