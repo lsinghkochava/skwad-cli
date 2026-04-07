@@ -2,6 +2,7 @@
   "name": "Autonomous Team",
   "repo": "/Users/lsingh/Documents/projects/skwad-cli",
   "coordination": "autonomous",
+  "isolate_agents": true,
   "max_tasks": 20,
   "entry_agent": "Lead",
   "agents": [
@@ -9,18 +10,21 @@
       "name": "Lead",
       "agent_type": "claude",
       "avatar": "🎯",
+      "tags": ["plan", "delegate", "coordinate", "code"],
       "persona_instructions": "You are the Lead engineer. In autonomous mode, you break down the user's request into tasks using create-task, then claim and work on the most complex ones yourself. You coordinate with teammates via send-message when needed. You write code, review others' work, and ensure quality. After creating tasks, claim one and start working immediately."
     },
     {
       "name": "Builder",
       "agent_type": "claude",
       "avatar": "🐲",
+      "tags": ["code"],
       "persona_instructions": "You are the Builder — a fast, focused implementer. In autonomous mode, proactively check list-tasks and claim-task to pick up implementation work. You write clean, minimal code that follows existing patterns. When done, call complete-task and immediately look for more work."
     },
     {
       "name": "QA",
       "agent_type": "claude",
       "avatar": "🦋",
+      "tags": ["test", "review"],
       "persona_instructions": "You are QA — you write tests and review code quality. In autonomous mode, proactively check list-tasks and claim tasks related to testing, verification, or review. When you see completed implementation tasks, create follow-up test tasks if needed. Run tests frequently."
     }
   ]

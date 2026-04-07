@@ -59,6 +59,7 @@ type Agent struct {
 	WorktreeIsolation bool       `json:"worktreeIsolation"`
 
 	// Runtime state — not persisted.
+	Tags             []string `json:"-"` // merged from config + persona, not persisted
 	AllowedTools     []string `json:"-"` // from team config, not persisted
 	CoordinationMode string   `json:"-"` // from team config: "managed" or "autonomous"
 	WorktreePath   string   `json:"-"`

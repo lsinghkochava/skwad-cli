@@ -77,8 +77,9 @@ func TestNotifyIdleAgent_NoReplay(t *testing.T) {
 	injectMessage(t, c, senderID, "Coder", receiverID, "fix the tests")
 
 	var deliverCount atomic.Int32
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		deliverCount.Add(1)
+		return nil
 	}
 
 	// First NotifyIdleAgent should deliver the message.
@@ -112,9 +113,10 @@ func TestNotifyIdleAgent_DeliversUnreadMessage(t *testing.T) {
 
 	var deliveredText string
 	var deliveredTo uuid.UUID
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		deliveredTo = agentID
 		deliveredText = text
+		return nil
 	}
 
 	c.NotifyIdleAgent(receiverID)
@@ -173,8 +175,9 @@ func TestNotifyIdleAgent_MultipleMessages_OnePerCall(t *testing.T) {
 	}
 
 	var deliverCount atomic.Int32
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		deliverCount.Add(1)
+		return nil
 	}
 
 	// First notify delivers msg1.
@@ -214,8 +217,9 @@ func TestBroadcast_NotifyIdleAgent_MarksRead(t *testing.T) {
 	injectMessage(t, c, senderID, "Manager", receiverID, "all hands meeting")
 
 	var deliverCount atomic.Int32
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		deliverCount.Add(1)
+		return nil
 	}
 
 	// NotifyIdleAgent should deliver.
@@ -248,8 +252,9 @@ func TestNotifyIdleAgent_SkipsAlreadyReadMessages(t *testing.T) {
 	c.CheckMessages(receiverID, true)
 
 	var deliveredMessages []string
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		deliveredMessages = append(deliveredMessages, text)
+		return nil
 	}
 
 	// NotifyIdleAgent should NOT deliver anything — all already read.
@@ -317,8 +322,9 @@ func TestSendMessage_QueuesAndNotifiesAsync(t *testing.T) {
 	// Track async delivery.
 	var delivered sync.WaitGroup
 	delivered.Add(1)
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		delivered.Done()
+		return nil
 	}
 
 	err := c.SendMessage(senderID, receiverID.String(), "async delivery test")
@@ -390,7 +396,7 @@ func TestCreateTask_NoDeps_StatusPending(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	task, err := c.CreateTask(creator, "Build feature", "Implement the widget", nil)
+	task, err := c.CreateTask(creator, "Build feature", "Implement the widget", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -420,7 +426,7 @@ func TestCreateTask_CompletedDeps_StatusPending(t *testing.T) {
 	worker := registerAgent(t, c, "Coder")
 
 	// Create and complete a dependency task.
-	dep, err := c.CreateTask(creator, "Setup", "Setup env", nil)
+	dep, err := c.CreateTask(creator, "Setup", "Setup env", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask dep: %v", err)
 	}
@@ -432,7 +438,7 @@ func TestCreateTask_CompletedDeps_StatusPending(t *testing.T) {
 	}
 
 	// Create task with completed dep → should be Pending.
-	task, err := c.CreateTask(creator, "Build", "Build it", []uuid.UUID{dep.ID})
+	task, err := c.CreateTask(creator, "Build", "Build it", []uuid.UUID{dep.ID}, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -445,13 +451,13 @@ func TestCreateTask_IncompleteDeps_StatusBlocked(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	dep, err := c.CreateTask(creator, "Setup", "Setup env", nil)
+	dep, err := c.CreateTask(creator, "Setup", "Setup env", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask dep: %v", err)
 	}
 
 	// Create task with incomplete dep → should be Blocked.
-	task, err := c.CreateTask(creator, "Build", "Build it", []uuid.UUID{dep.ID})
+	task, err := c.CreateTask(creator, "Build", "Build it", []uuid.UUID{dep.ID}, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -466,20 +472,20 @@ func TestListTasks_FIFOOrder(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	t1, err := c.CreateTask(creator, "First", "", nil)
+	t1, err := c.CreateTask(creator, "First", "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask 1: %v", err)
 	}
 	// Ensure different CreatedAt timestamps.
 	time.Sleep(time.Millisecond)
 
-	t2, err := c.CreateTask(creator, "Second", "", nil)
+	t2, err := c.CreateTask(creator, "Second", "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask 2: %v", err)
 	}
 	time.Sleep(time.Millisecond)
 
-	t3, err := c.CreateTask(creator, "Third", "", nil)
+	t3, err := c.CreateTask(creator, "Third", "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask 3: %v", err)
 	}
@@ -501,7 +507,7 @@ func TestGetTask_Found(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	created, err := c.CreateTask(creator, "My task", "desc", nil)
+	created, err := c.CreateTask(creator, "My task", "desc", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -534,7 +540,7 @@ func TestClaimTask_Pending_Success(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	task, err := c.CreateTask(creator, "Do work", "", nil)
+	task, err := c.CreateTask(creator, "Do work", "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -560,8 +566,8 @@ func TestClaimTask_Blocked_Error(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	dep, _ := c.CreateTask(creator, "Dep", "", nil)
-	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep.ID})
+	dep, _ := c.CreateTask(creator, "Dep", "", nil, false, "", nil)
+	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep.ID}, false, "", nil)
 
 	err := c.ClaimTask(worker, blocked.ID)
 	if err == nil {
@@ -575,7 +581,7 @@ func TestClaimTask_AlreadyClaimed_Error(t *testing.T) {
 	worker1 := registerAgent(t, c, "Coder")
 	worker2 := registerAgent(t, c, "Tester")
 
-	task, _ := c.CreateTask(creator, "Work", "", nil)
+	task, _ := c.CreateTask(creator, "Work", "", nil, false, "", nil)
 	if err := c.ClaimTask(worker1, task.ID); err != nil {
 		t.Fatalf("first ClaimTask: %v", err)
 	}
@@ -590,7 +596,7 @@ func TestClaimTask_UnregisteredAgent_Error(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	task, _ := c.CreateTask(creator, "Work", "", nil)
+	task, _ := c.CreateTask(creator, "Work", "", nil, false, "", nil)
 
 	err := c.ClaimTask(uuid.New(), task.ID)
 	if err == nil {
@@ -602,7 +608,7 @@ func TestClaimTask_AtomicConcurrency(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	task, _ := c.CreateTask(creator, "Race", "", nil)
+	task, _ := c.CreateTask(creator, "Race", "", nil, false, "", nil)
 
 	const numWorkers = 10
 	workers := make([]uuid.UUID, numWorkers)
@@ -636,7 +642,7 @@ func TestCompleteTask_Success(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	task, _ := c.CreateTask(creator, "Work", "", nil)
+	task, _ := c.CreateTask(creator, "Work", "", nil, false, "", nil)
 	c.ClaimTask(worker, task.ID)
 
 	if err := c.CompleteTask(worker, task.ID); err != nil {
@@ -658,7 +664,7 @@ func TestCompleteTask_NonAssignee_Error(t *testing.T) {
 	worker := registerAgent(t, c, "Coder")
 	other := registerAgent(t, c, "Tester")
 
-	task, _ := c.CreateTask(creator, "Work", "", nil)
+	task, _ := c.CreateTask(creator, "Work", "", nil, false, "", nil)
 	c.ClaimTask(worker, task.ID)
 
 	err := c.CompleteTask(other, task.ID)
@@ -683,7 +689,7 @@ func TestUpdateTask_ByCreator(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	task, _ := c.CreateTask(creator, "Original", "Original desc", nil)
+	task, _ := c.CreateTask(creator, "Original", "Original desc", nil, false, "", nil)
 
 	if err := c.UpdateTask(creator, task.ID, "Updated", "Updated desc"); err != nil {
 		t.Fatalf("UpdateTask by creator: %v", err)
@@ -703,7 +709,7 @@ func TestUpdateTask_ByAssignee(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	task, _ := c.CreateTask(creator, "Original", "Original desc", nil)
+	task, _ := c.CreateTask(creator, "Original", "Original desc", nil, false, "", nil)
 	c.ClaimTask(worker, task.ID)
 
 	if err := c.UpdateTask(worker, task.ID, "Assignee update", ""); err != nil {
@@ -725,7 +731,7 @@ func TestUpdateTask_Unauthorized_Error(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	other := registerAgent(t, c, "Tester")
 
-	task, _ := c.CreateTask(creator, "Work", "desc", nil)
+	task, _ := c.CreateTask(creator, "Work", "desc", nil, false, "", nil)
 
 	err := c.UpdateTask(other, task.ID, "Hacked", "Hacked desc")
 	if err == nil {
@@ -758,13 +764,13 @@ func TestCreateTask_MaxTasksEnforcement(t *testing.T) {
 	c.SetMaxTasks(3)
 
 	for i := 0; i < 3; i++ {
-		_, err := c.CreateTask(creator, fmt.Sprintf("Task %d", i), "", nil)
+		_, err := c.CreateTask(creator, fmt.Sprintf("Task %d", i), "", nil, false, "", nil)
 		if err != nil {
 			t.Fatalf("CreateTask %d: %v", i, err)
 		}
 	}
 
-	_, err := c.CreateTask(creator, "One too many", "", nil)
+	_, err := c.CreateTask(creator, "One too many", "", nil, false, "", nil)
 	if err == nil {
 		t.Error("CreateTask beyond maxTasks should return error")
 	}
@@ -776,16 +782,16 @@ func TestCreateTask_CircularDep_Direct(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	taskA, _ := c.CreateTask(creator, "A", "", nil)
+	taskA, _ := c.CreateTask(creator, "A", "", nil, false, "", nil)
 
 	// B depends on A — valid.
-	taskB, err := c.CreateTask(creator, "B", "", []uuid.UUID{taskA.ID})
+	taskB, err := c.CreateTask(creator, "B", "", []uuid.UUID{taskA.ID}, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask B: %v", err)
 	}
 
 	// Try to create C that depends on B, while B depends on A — no cycle.
-	_, err = c.CreateTask(creator, "C", "", []uuid.UUID{taskB.ID})
+	_, err = c.CreateTask(creator, "C", "", []uuid.UUID{taskB.ID}, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask C (valid chain): %v", err)
 	}
@@ -795,9 +801,9 @@ func TestCreateTask_CircularDep_Transitive(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	taskA, _ := c.CreateTask(creator, "A", "", nil)
-	taskB, _ := c.CreateTask(creator, "B", "", []uuid.UUID{taskA.ID})
-	taskC, _ := c.CreateTask(creator, "C", "", []uuid.UUID{taskB.ID})
+	taskA, _ := c.CreateTask(creator, "A", "", nil, false, "", nil)
+	taskB, _ := c.CreateTask(creator, "B", "", []uuid.UUID{taskA.ID}, false, "", nil)
+	taskC, _ := c.CreateTask(creator, "C", "", []uuid.UUID{taskB.ID}, false, "", nil)
 
 	// Now try to make A depend on C — this creates A→B→C→A cycle.
 	// But we can't add deps to existing tasks, so we test by trying to create a
@@ -809,7 +815,7 @@ func TestCreateTask_CircularDep_Transitive(t *testing.T) {
 	// Instead, verify the valid chain works.
 	_ = taskC
 	// Valid: D depends on C (chain D→C→B→A, no cycle).
-	_, err := c.CreateTask(creator, "D", "", []uuid.UUID{taskC.ID})
+	_, err := c.CreateTask(creator, "D", "", []uuid.UUID{taskC.ID}, false, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTask D (valid chain A→B→C→D): %v", err)
 	}
@@ -819,7 +825,7 @@ func TestCreateTask_NonexistentDep_Error(t *testing.T) {
 	c := newTestCoordinator(t)
 	creator := registerAgent(t, c, "Manager")
 
-	_, err := c.CreateTask(creator, "Orphan", "", []uuid.UUID{uuid.New()})
+	_, err := c.CreateTask(creator, "Orphan", "", []uuid.UUID{uuid.New()}, false, "", nil)
 	if err == nil {
 		t.Error("CreateTask with nonexistent dependency should return error")
 	}
@@ -832,8 +838,8 @@ func TestCompleteTask_AutoUnblocksSingleDep(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	dep, _ := c.CreateTask(creator, "Dependency", "", nil)
-	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep.ID})
+	dep, _ := c.CreateTask(creator, "Dependency", "", nil, false, "", nil)
+	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep.ID}, false, "", nil)
 
 	if blocked.Status != models.TaskStatusBlocked {
 		t.Fatalf("blocked.Status = %s, want blocked", blocked.Status)
@@ -855,9 +861,9 @@ func TestCompleteTask_AutoUnblock_MultipleDeps_AllMustComplete(t *testing.T) {
 	creator := registerAgent(t, c, "Manager")
 	worker := registerAgent(t, c, "Coder")
 
-	dep1, _ := c.CreateTask(creator, "Dep1", "", nil)
-	dep2, _ := c.CreateTask(creator, "Dep2", "", nil)
-	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep1.ID, dep2.ID})
+	dep1, _ := c.CreateTask(creator, "Dep1", "", nil, false, "", nil)
+	dep2, _ := c.CreateTask(creator, "Dep2", "", nil, false, "", nil)
+	blocked, _ := c.CreateTask(creator, "Blocked", "", []uuid.UUID{dep1.ID, dep2.ID}, false, "", nil)
 
 	if blocked.Status != models.TaskStatusBlocked {
 		t.Fatalf("blocked.Status = %s, want blocked", blocked.Status)
@@ -959,7 +965,7 @@ func TestOnTaskCreated_Fires(t *testing.T) {
 		callbackCount.Add(1)
 	}
 
-	c.CreateTask(creator, "Callback test", "", nil)
+	c.CreateTask(creator, "Callback test", "", nil, false, "", nil)
 
 	// Wait briefly for the goroutine to fire.
 	time.Sleep(50 * time.Millisecond)
@@ -984,7 +990,7 @@ func TestOnTaskCompleted_Fires(t *testing.T) {
 		callbackCount.Add(1)
 	}
 
-	task, _ := c.CreateTask(creator, "Complete me", "", nil)
+	task, _ := c.CreateTask(creator, "Complete me", "", nil, false, "", nil)
 	c.ClaimTask(worker, task.ID)
 	c.CompleteTask(worker, task.ID)
 
@@ -1014,6 +1020,200 @@ func TestOnAgentIdle_FiresWhenNoUnread(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// HasUnreadMessages tests
+// ---------------------------------------------------------------------------
+
+func TestHasUnreadMessages_NoMessages(t *testing.T) {
+	c := newTestCoordinator(t)
+	registerAgent(t, c, "Coder")
+
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return false when no messages exist")
+	}
+}
+
+func TestHasUnreadMessages_NoRegisteredAgents(t *testing.T) {
+	c := newTestCoordinator(t)
+
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return false with no registered agents")
+	}
+}
+
+func TestHasUnreadMessages_AllRead(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Coder")
+	receiverID := registerAgent(t, c, "Tester")
+
+	injectMessage(t, c, senderID, "Coder", receiverID, "hello")
+	c.CheckMessages(receiverID, true) // mark as read
+
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return false when all messages are read")
+	}
+}
+
+func TestHasUnreadMessages_UnreadExists(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Coder")
+	receiverID := registerAgent(t, c, "Tester")
+
+	injectMessage(t, c, senderID, "Coder", receiverID, "unread msg")
+
+	if !c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return true when unread messages exist")
+	}
+}
+
+func TestHasUnreadMessages_MultipleAgents_MixedReadState(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Manager")
+	agent1 := registerAgent(t, c, "Coder")
+	agent2 := registerAgent(t, c, "Tester")
+
+	// Send to both agents.
+	injectMessage(t, c, senderID, "Manager", agent1, "msg for coder")
+	injectMessage(t, c, senderID, "Manager", agent2, "msg for tester")
+
+	// Mark agent1's messages as read, leave agent2's unread.
+	c.CheckMessages(agent1, true)
+
+	if !c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return true when agent2 still has unread messages")
+	}
+
+	// Now mark agent2's as read too.
+	c.CheckMessages(agent2, true)
+
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return false after all messages read")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Delivery failure tests
+// ---------------------------------------------------------------------------
+
+func TestNotifyIdleAgent_DeliveryFailure_KeepsUnread(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Coder")
+	receiverID := registerAgent(t, c, "Tester")
+
+	injectMessage(t, c, senderID, "Coder", receiverID, "important msg")
+
+	// Delivery always fails.
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
+		return fmt.Errorf("terminal busy")
+	}
+
+	c.NotifyIdleAgent(receiverID)
+
+	// Message should still be unread.
+	msgs := c.CheckMessages(receiverID, false)
+	unread := 0
+	for _, m := range msgs {
+		if !m.Read {
+			unread++
+		}
+	}
+	if unread != 1 {
+		t.Errorf("unread = %d, want 1 (delivery failed, message should stay unread)", unread)
+	}
+
+	// HasUnreadMessages should confirm.
+	if !c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should return true after failed delivery")
+	}
+}
+
+func TestNotifyIdleAgent_DeliveryFailure_RetrySucceeds(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Coder")
+	receiverID := registerAgent(t, c, "Tester")
+
+	injectMessage(t, c, senderID, "Coder", receiverID, "retry msg")
+
+	callCount := 0
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
+		callCount++
+		if callCount == 1 {
+			return fmt.Errorf("terminal busy")
+		}
+		return nil // succeeds on second attempt
+	}
+
+	// First attempt fails.
+	c.NotifyIdleAgent(receiverID)
+	if callCount != 1 {
+		t.Errorf("callCount = %d, want 1", callCount)
+	}
+
+	// Message should still be unread.
+	if !c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should be true after failed delivery")
+	}
+
+	// Second attempt succeeds.
+	c.NotifyIdleAgent(receiverID)
+	if callCount != 2 {
+		t.Errorf("callCount = %d, want 2", callCount)
+	}
+
+	// Message should now be read.
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should be false after successful retry")
+	}
+}
+
+func TestNotifyIdleAgent_DeliveryFailure_MultipleMessagesAccumulate(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Manager")
+	receiverID := registerAgent(t, c, "Coder")
+
+	// Inject 3 messages.
+	for _, msg := range []string{"msg1", "msg2", "msg3"} {
+		injectMessage(t, c, senderID, "Manager", receiverID, msg)
+	}
+
+	// Delivery always fails — all 3 should accumulate as unread.
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
+		return fmt.Errorf("agent offline")
+	}
+
+	// NotifyIdleAgent tries first unread, fails, returns early.
+	c.NotifyIdleAgent(receiverID)
+	c.NotifyIdleAgent(receiverID)
+	c.NotifyIdleAgent(receiverID)
+
+	msgs := c.CheckMessages(receiverID, false)
+	unread := 0
+	for _, m := range msgs {
+		if !m.Read {
+			unread++
+		}
+	}
+	if unread != 3 {
+		t.Errorf("unread = %d, want 3 (all deliveries failed, all should stay unread)", unread)
+	}
+}
+
+func TestNotifyIdleAgent_NilCallback_MarksRead(t *testing.T) {
+	c := newTestCoordinator(t)
+	senderID := registerAgent(t, c, "Coder")
+	receiverID := registerAgent(t, c, "Tester")
+
+	injectMessage(t, c, senderID, "Coder", receiverID, "hello")
+
+	c.OnDeliverMessage = nil
+	c.NotifyIdleAgent(receiverID)
+
+	// With nil callback, message should still be marked as read (backward compat).
+	if c.HasUnreadMessages() {
+		t.Error("HasUnreadMessages should be false — nil callback should still mark messages read")
+	}
+}
+
 func TestOnAgentIdle_DoesNotFireWhenUnread(t *testing.T) {
 	c := newTestCoordinator(t)
 	senderID := registerAgent(t, c, "Manager")
@@ -1028,7 +1228,7 @@ func TestOnAgentIdle_DoesNotFireWhenUnread(t *testing.T) {
 	injectMessage(t, c, senderID, "Manager", receiverID, "you have work")
 
 	// Suppress message delivery to focus on idle callback.
-	c.OnDeliverMessage = func(agentID uuid.UUID, text string) {}
+	c.OnDeliverMessage = func(agentID uuid.UUID, text string) error { return nil }
 
 	c.NotifyIdleAgent(receiverID)
 
@@ -1036,5 +1236,69 @@ func TestOnAgentIdle_DoesNotFireWhenUnread(t *testing.T) {
 
 	if idleCount.Load() != 0 {
 		t.Errorf("OnAgentIdle count = %d, want 0 (has unread messages)", idleCount.Load())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tag-based task tests
+// ---------------------------------------------------------------------------
+
+func TestCreateTask_WithTags_StoresTags(t *testing.T) {
+	c := newTestCoordinator(t)
+	creator := registerAgent(t, c, "Manager")
+
+	tags := []string{"code", "backend"}
+	task, err := c.CreateTask(creator, "Tagged task", "Has tags", nil, false, "", tags)
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if len(task.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(task.Tags))
+	}
+	if task.Tags[0] != "code" || task.Tags[1] != "backend" {
+		t.Errorf("tags = %v, want [code backend]", task.Tags)
+	}
+}
+
+func TestCreateTask_WithoutTags_TagsEmpty(t *testing.T) {
+	c := newTestCoordinator(t)
+	creator := registerAgent(t, c, "Manager")
+
+	task, err := c.CreateTask(creator, "No tags", "No tags here", nil, false, "", nil)
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if len(task.Tags) != 0 {
+		t.Errorf("expected empty tags, got %v", task.Tags)
+	}
+}
+
+func TestCreateTask_TagsPreservedThroughLifecycle(t *testing.T) {
+	c := newTestCoordinator(t)
+	creator := registerAgent(t, c, "Manager")
+	worker := registerAgent(t, c, "Coder")
+
+	tags := []string{"code", "test"}
+	task, err := c.CreateTask(creator, "Lifecycle tags", "desc", nil, false, "", tags)
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	// Claim task
+	if err := c.ClaimTask(worker, task.ID); err != nil {
+		t.Fatalf("ClaimTask: %v", err)
+	}
+	got, _ := c.GetTask(task.ID)
+	if len(got.Tags) != 2 || got.Tags[0] != "code" || got.Tags[1] != "test" {
+		t.Errorf("tags after claim = %v, want [code test]", got.Tags)
+	}
+
+	// Complete task
+	if err := c.CompleteTask(worker, task.ID); err != nil {
+		t.Fatalf("CompleteTask: %v", err)
+	}
+	got, _ = c.GetTask(task.ID)
+	if len(got.Tags) != 2 || got.Tags[0] != "code" || got.Tags[1] != "test" {
+		t.Errorf("tags after complete = %v, want [code test]", got.Tags)
 	}
 }

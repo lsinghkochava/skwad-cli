@@ -277,6 +277,113 @@ func TestPoolOnExit(t *testing.T) {
 	}
 }
 
+func TestPoolOnSessionID_FiresOnInitMessage(t *testing.T) {
+	p := NewPool("http://localhost:8080/mcp")
+	id := uuid.New()
+
+	var gotID uuid.UUID
+	var gotSessionID string
+	var mu sync.Mutex
+	callCount := 0
+	p.OnSessionID = func(agentID uuid.UUID, sessionID string) {
+		mu.Lock()
+		gotID = agentID
+		gotSessionID = sessionID
+		callCount++
+		mu.Unlock()
+	}
+
+	// Emit an init message with session_id.
+	script := `echo '{"type":"system","subtype":"init","session_id":"sess-abc-123","cwd":"/tmp"}'
+sleep 0.2`
+
+	err := p.Spawn(id, "test-agent", []string{"sh", "-c", script}, nil, "")
+	if err != nil {
+		t.Fatalf("Spawn() error: %v", err)
+	}
+	defer p.Kill(id)
+
+	time.Sleep(500 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if callCount != 1 {
+		t.Fatalf("OnSessionID called %d times, want 1", callCount)
+	}
+	if gotID != id {
+		t.Errorf("OnSessionID agentID = %s, want %s", gotID, id)
+	}
+	if gotSessionID != "sess-abc-123" {
+		t.Errorf("OnSessionID sessionID = %q, want %q", gotSessionID, "sess-abc-123")
+	}
+}
+
+func TestPoolOnSessionID_FiresOnlyOnce(t *testing.T) {
+	p := NewPool("http://localhost:8080/mcp")
+	id := uuid.New()
+
+	var mu sync.Mutex
+	callCount := 0
+	p.OnSessionID = func(agentID uuid.UUID, sessionID string) {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+	}
+
+	// Emit two init messages — callback should only fire for the first.
+	script := `echo '{"type":"system","subtype":"init","session_id":"sess-first"}'
+echo '{"type":"system","subtype":"init","session_id":"sess-second"}'
+sleep 0.2`
+
+	err := p.Spawn(id, "test-agent", []string{"sh", "-c", script}, nil, "")
+	if err != nil {
+		t.Fatalf("Spawn() error: %v", err)
+	}
+	defer p.Kill(id)
+
+	time.Sleep(500 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if callCount != 1 {
+		t.Errorf("OnSessionID called %d times, want exactly 1 (should fire only once)", callCount)
+	}
+}
+
+func TestPoolOnSessionID_NoFireWithoutSessionID(t *testing.T) {
+	p := NewPool("http://localhost:8080/mcp")
+	id := uuid.New()
+
+	var mu sync.Mutex
+	callCount := 0
+	p.OnSessionID = func(agentID uuid.UUID, sessionID string) {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+	}
+
+	// Emit an init message without session_id field.
+	script := `echo '{"type":"system","subtype":"init","cwd":"/tmp"}'
+sleep 0.2`
+
+	err := p.Spawn(id, "test-agent", []string{"sh", "-c", script}, nil, "")
+	if err != nil {
+		t.Fatalf("Spawn() error: %v", err)
+	}
+	defer p.Kill(id)
+
+	time.Sleep(500 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if callCount != 0 {
+		t.Errorf("OnSessionID called %d times, want 0 (no session_id in init message)", callCount)
+	}
+}
+
 func TestPoolIsRunningNotFound(t *testing.T) {
 	p := NewPool("http://localhost:8080/mcp")
 	if p.IsRunning(uuid.New()) {

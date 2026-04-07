@@ -2,6 +2,7 @@ package cli
 
 import (
 	"log/slog"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -60,6 +61,29 @@ func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.A
 		pid := resolveAgentPersona(ac, tc, personas, d)
 		if pid != nil {
 			a.PersonaID = pid
+		}
+
+		// Merge tags from AgentConfig.Tags + persona AllowedCategories.
+		tagSet := make(map[string]bool)
+		for _, t := range ac.Tags {
+			if k := strings.ToLower(strings.TrimSpace(t)); k != "" {
+				tagSet[k] = true
+			}
+		}
+		if a.PersonaID != nil {
+			if persona := d.Manager.Persona(*a.PersonaID); persona != nil {
+				for _, t := range persona.AllowedCategories {
+					if k := strings.ToLower(strings.TrimSpace(t)); k != "" {
+						tagSet[k] = true
+					}
+				}
+			}
+		}
+		if len(tagSet) > 0 {
+			for t := range tagSet {
+				a.Tags = append(a.Tags, t)
+			}
+			sort.Strings(a.Tags)
 		}
 
 		d.Manager.AddAgent(a, nil)

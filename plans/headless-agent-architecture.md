@@ -2218,7 +2218,7 @@ Each commit is buildable and testable. Tests at every step.
 - [x] Phase 5.4.5 — System prompts: wire into command builder + team config *(2026-04-03)*
 - [x] Phase 5.5.1 — Event-sourced state: event log writer *(2026-04-03)*
 - [x] Phase 5.5.2 — Event-sourced state: replay + state reconstruction *(2026-04-03)*
-- [x] Phase 5.5.3 — Event-sourced state: basic event logging wired into run *(2026-04-03)* (--resume deferred)
+- [x] Phase 5.5.3 — Event-sourced state: event logging + --resume wired into run *(2026-04-06)*
 - [x] Phase 5.5.4 — Event-sourced state: run state cleanup *(2026-04-03)*
 - [x] Phase 5.6.1 — Worktree isolation: WorktreeManager extensions (Remove, Prune, RunWithTimeout) *(2026-04-03)*
 - [x] Phase 5.6.2 — Worktree isolation: agent model + team config fields *(2026-04-03)*

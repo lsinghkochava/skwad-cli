@@ -71,20 +71,33 @@ You work in an autonomous team. There is no central manager — agents self-orga
 - Idle agents will automatically receive pending tasks — you do not need to assign them.
 - When done with a task, call ` + "`complete-task`" + ` then immediately check ` + "`list-tasks`" + ` for more work.
 
+### Tags
+- Tasks may have tags (e.g. 'code', 'test', 'review'). Prefer claiming tasks whose tags match your own capabilities.
+- When creating tasks, add relevant tags to help the right agent pick them up (e.g. tags: 'code' for implementation, 'test' for testing).
+
 ### Rules
+- NEVER start working on a task without claiming it first via ` + "`claim-task`" + ` or ` + "`selfAssign: true`" + ` on ` + "`create-task`" + `
+- If you create a task you intend to work on yourself, set ` + "`selfAssign: true`" + ` — this claims it atomically
+- If you create a task for the team, leave ` + "`selfAssign`" + ` unset so other agents can claim it
 - Only claim tasks that match your skills and persona role
-- NEVER start working on a task without claiming it first — another agent may be working on it
 - Use ` + "`create-task`" + ` to break down complex work into subtasks for the team
 - Use ` + "`send-message`" + ` ONLY for status updates, questions, or coordination — NOT for delegating work
 - When blocked, message the teammate whose task is blocking yours
-- If you see no available tasks and have ideas for what needs doing, create new tasks`
+- If you see no available tasks and have ideas for what needs doing, create new tasks
+
+### Completion Message Format
+When completing a task, include in your completion message:
+1. What you changed (file:line references)
+2. Whether it was new code or verification of existing code
+3. Build/test status (did you run tests? did they pass?)`
 	default: // "managed" or any other value
 		return `## Task Coordination (Managed Mode)
 You work in a managed team. The Manager agent coordinates work and assigns tasks.
 - Wait for task assignments via messages from the Manager
+- Always use ` + "`claim-task`" + ` before starting work on any task
 - Use ` + "`complete-task`" + ` to mark assigned tasks as done
 - Use ` + "`list-tasks`" + ` to see the team's task board
-- Do not use ` + "`claim-task`" + ` unless explicitly instructed by the Manager
+- When creating tasks, use tags to indicate which type of agent should handle the work (e.g. tags: 'code' for implementation, 'test' for testing, 'review' for code review)
 - Focus on your assigned persona role and wait for direction`
 	}
 }
@@ -107,6 +120,7 @@ coordinate — if you do not update it, the team cannot function. This is not op
 - Prefer evidence over assumption — verify before claiming completion.
 - Proceed automatically on clear, low-risk, reversible steps.
 - Default to compact, information-dense responses.
+- Before implementing any change, verify the current state of the codebase. Read the relevant files and grep for the feature/function you're about to implement. If it already exists, report it as already done instead of re-implementing.
 
 ## Verification Protocol
 Before claiming any task is complete, verify:
@@ -135,10 +149,14 @@ func buildTeamProtocol(agent *models.Agent, teammates []models.Agent) string {
 	b.WriteString("## Team Protocol\n\n")
 	b.WriteString(fmt.Sprintf("You are **%s** (ID: %s).\n\n", agent.Name, agent.ID.String()))
 	b.WriteString("### Team Roster\n")
-	b.WriteString("| Agent | Role | ID |\n")
-	b.WriteString("|-------|------|----|\n")
+	b.WriteString("| Agent | Role | Tags | ID |\n")
+	b.WriteString("|-------|------|------|----|\n")
 	for _, t := range teammates {
-		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", t.Name, t.Name, t.ID.String()))
+		tags := ""
+		if len(t.Tags) > 0 {
+			tags = strings.Join(t.Tags, ", ")
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", t.Name, t.Name, tags, t.ID.String()))
 	}
 
 	b.WriteString(`

@@ -55,6 +55,7 @@ type AgentConfig struct {
 	Prompt              string   `json:"prompt,omitempty"`
 	ExploreMode         bool     `json:"explore_mode,omitempty"`
 	Isolate             *bool    `json:"isolate,omitempty"`
+	Tags                []string `json:"tags,omitempty"`
 }
 
 // LoadTeamConfig reads a JSON file and returns a validated TeamConfig.

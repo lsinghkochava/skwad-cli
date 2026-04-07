@@ -151,9 +151,12 @@ func (h *toolHandler) list() []toolDefinition {
 			Name:        ToolCreateTask,
 			Description: "Create a new task for the team. Tasks can have dependencies on other tasks.",
 			InputSchema: schema(map[string]interface{}{
-				"title":        propString("Task title (required)"),
-				"description":  propString("Task description (required)"),
-				"dependencies": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Optional list of task IDs this task depends on"},
+				"title":          propString("Task title (required)"),
+				"description":    propString("Task description (required)"),
+				"dependencies":   map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Optional list of task IDs this task depends on"},
+				"selfAssign":     map[string]interface{}{"type": "boolean", "description": "If true, atomically assign this task to yourself and mark it in-progress (default: false)"},
+				"preferred_role": propString("Optional agent name hint for auto-assignment (exact match, case-insensitive)"),
+				"tags":           propString("Comma-separated tags for role-based task matching (e.g. 'code,test')"),
 			}, "title", "description"),
 		},
 		{
@@ -522,6 +525,17 @@ func (h *toolHandler) mergeBranches(args map[string]interface{}) (ToolResult, er
 func (h *toolHandler) createTask(args map[string]interface{}, sess *session) (ToolResult, error) {
 	title := strArg(args, "title")
 	description := strArg(args, "description")
+	preferredRole := strArg(args, "preferred_role")
+	tagsStr := strArg(args, "tags")
+
+	var tags []string
+	if tagsStr != "" {
+		for _, t := range strings.Split(tagsStr, ",") {
+			if trimmed := strings.ToLower(strings.TrimSpace(t)); trimmed != "" {
+				tags = append(tags, trimmed)
+			}
+		}
+	}
 
 	var deps []uuid.UUID
 	if depsRaw, ok := args["dependencies"].([]interface{}); ok {
@@ -536,7 +550,9 @@ func (h *toolHandler) createTask(args map[string]interface{}, sess *session) (To
 		}
 	}
 
-	task, err := h.server.coordinator.CreateTask(sess.agentID, title, description, deps)
+	selfAssign, _ := args["selfAssign"].(bool)
+
+	task, err := h.server.coordinator.CreateTask(sess.agentID, title, description, deps, selfAssign, preferredRole, tags)
 	if err != nil {
 		return errorResult(err.Error()), nil
 	}

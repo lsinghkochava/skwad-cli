@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -44,7 +45,8 @@ type Coordinator struct {
 	maxTasks int
 
 	// OnDeliverMessage is called when a message should be injected into a terminal.
-	OnDeliverMessage func(agentID uuid.UUID, text string)
+	// Returns an error if delivery failed; the message will remain unread.
+	OnDeliverMessage func(agentID uuid.UUID, text string) error
 
 	// OnMessageSent is called after a message is successfully queued.
 	OnMessageSent func(fromID, fromName, toID, content string)
@@ -259,11 +261,14 @@ func (c *Coordinator) NotifyIdleAgent(agentID uuid.UUID) {
 
 	for i := range ra.inbox {
 		if !ra.inbox[i].Read {
-			ra.inbox[i].Read = true
 			if c.OnDeliverMessage != nil {
 				text := buildNotificationText(ra.inbox[i])
-				c.OnDeliverMessage(agentID, text)
+				if err := c.OnDeliverMessage(agentID, text); err != nil {
+					slog.Debug("message delivery failed, keeping unread", "agentID", agentID, "error", err)
+					return
+				}
 			}
+			ra.inbox[i].Read = true
 			return
 		}
 	}
@@ -290,6 +295,20 @@ func (c *Coordinator) SetStatusText(agentID uuid.UUID, status, category string) 
 	}
 }
 
+// HasUnreadMessages returns true if any registered agent has unread inbox messages.
+func (c *Coordinator) HasUnreadMessages() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, entry := range c.registered {
+		for _, msg := range entry.inbox {
+			if !msg.Read {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // UnregisterAgent removes an agent from the registry (e.g., on close).
 func (c *Coordinator) UnregisterAgent(id uuid.UUID) {
 	c.mu.Lock()
@@ -302,7 +321,9 @@ func (c *Coordinator) UnregisterAgent(id uuid.UUID) {
 // ---------------------------------------------------------------------------
 
 // CreateTask creates a new task, validates dependencies, and checks for cycles.
-func (c *Coordinator) CreateTask(createdBy uuid.UUID, title, description string, deps []uuid.UUID) (*models.Task, error) {
+// When selfAssign is true, the task is atomically assigned to the creator and
+// set to in-progress (or blocked if dependencies are incomplete).
+func (c *Coordinator) CreateTask(createdBy uuid.UUID, title, description string, deps []uuid.UUID, selfAssign bool, preferredRole string, tags []string) (*models.Task, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -330,14 +351,27 @@ func (c *Coordinator) CreateTask(createdBy uuid.UUID, title, description string,
 	}
 
 	task := &models.Task{
-		ID:           taskID,
-		Title:        title,
-		Description:  description,
-		Status:       status,
-		CreatedBy:    createdBy,
-		Dependencies: deps,
-		CreatedAt:    time.Now(),
+		ID:            taskID,
+		Title:         title,
+		Description:   description,
+		Status:        status,
+		PreferredRole: preferredRole,
+		Tags:          tags,
+		CreatedBy:     createdBy,
+		Dependencies:  deps,
+		CreatedAt:     time.Now(),
 	}
+
+	if selfAssign {
+		task.AssigneeID = &createdBy
+		if ra, ok := c.registered[createdBy]; ok {
+			task.AssigneeName = ra.info.Name
+		}
+		if task.Status != models.TaskStatusBlocked {
+			task.Status = models.TaskStatusInProgress
+		}
+	}
+
 	c.tasks[taskID] = task
 
 	if c.OnTaskCreated != nil {
@@ -349,24 +383,44 @@ func (c *Coordinator) CreateTask(createdBy uuid.UUID, title, description string,
 	return task, nil
 }
 
-// hasCircularDep performs a BFS walk to detect cycles. Completed tasks are
-// skipped since their dependency chains are already resolved.
+// hasCircularDep uses DFS with a recursion stack to detect cycles. It catches
+// both cycles back to the new taskID and pre-existing cycles in the dependency
+// graph. Diamond DAGs are handled correctly: a node visited via one path is
+// skipped via the visited set without triggering a false positive, since only
+// nodes currently on the recursion stack indicate a real cycle.
 func (c *Coordinator) hasCircularDep(taskID uuid.UUID, deps []uuid.UUID) bool {
-	visited := map[uuid.UUID]bool{taskID: true}
-	queue := make([]uuid.UUID, len(deps))
-	copy(queue, deps)
+	visited := make(map[uuid.UUID]bool)
+	onStack := make(map[uuid.UUID]bool)
 
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-
-		if visited[cur] {
+	var dfs func(id uuid.UUID) bool
+	dfs = func(id uuid.UUID) bool {
+		if id == taskID {
 			return true
 		}
-		visited[cur] = true
+		if onStack[id] {
+			return true
+		}
+		if visited[id] {
+			return false
+		}
+		visited[id] = true
+		onStack[id] = true
 
-		if t, ok := c.tasks[cur]; ok && t.Status != models.TaskStatusCompleted {
-			queue = append(queue, t.Dependencies...)
+		if t, ok := c.tasks[id]; ok && t.Status != models.TaskStatusCompleted {
+			for _, dep := range t.Dependencies {
+				if dfs(dep) {
+					return true
+				}
+			}
+		}
+
+		onStack[id] = false
+		return false
+	}
+
+	for _, dep := range deps {
+		if dfs(dep) {
+			return true
 		}
 	}
 	return false

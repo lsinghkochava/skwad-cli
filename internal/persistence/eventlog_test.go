@@ -302,6 +302,173 @@ func TestEventLog_Append_SetsRunIDAndTime(t *testing.T) {
 	}
 }
 
+func TestReplay_AgentRegistered_SessionID(t *testing.T) {
+	el := setupTestEventLog(t, "test-registered-session")
+	el.Append(Event{Type: EventRunStarted})
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a1", AgentName: "Coder"})
+
+	regData, _ := json.Marshal(map[string]string{"session_id": "abc-123-def"})
+	el.Append(Event{Type: EventAgentRegistered, AgentID: "a1", AgentName: "Coder", Data: regData})
+	el.Append(Event{Type: EventRunCompleted})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	a1 := state.Agents["a1"]
+	if !a1.Registered {
+		t.Error("agent a1 should be registered")
+	}
+	if a1.SessionID != "abc-123-def" {
+		t.Errorf("expected session_id 'abc-123-def', got %q", a1.SessionID)
+	}
+}
+
+func TestReplay_AgentRegistered_NoData(t *testing.T) {
+	el := setupTestEventLog(t, "test-registered-nodata")
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a1", AgentName: "Coder"})
+	el.Append(Event{Type: EventAgentRegistered, AgentID: "a1"})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	a1 := state.Agents["a1"]
+	if !a1.Registered {
+		t.Error("agent a1 should be registered")
+	}
+	if a1.SessionID != "" {
+		t.Errorf("expected empty session_id, got %q", a1.SessionID)
+	}
+}
+
+func TestReplay_FullResumeTrail(t *testing.T) {
+	el := setupTestEventLog(t, "test-resume-trail")
+
+	// Full event trail as emitted by run.go for resume support.
+	el.Append(Event{Type: EventRunStarted})
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a1", AgentName: "Builder"})
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a2", AgentName: "QA"})
+
+	// Session IDs captured from stream.
+	regData1, _ := json.Marshal(map[string]string{"session_id": "sess-builder-001"})
+	el.Append(Event{Type: EventAgentRegistered, AgentID: "a1", AgentName: "Builder", Data: regData1})
+	regData2, _ := json.Marshal(map[string]string{"session_id": "sess-qa-002"})
+	el.Append(Event{Type: EventAgentRegistered, AgentID: "a2", AgentName: "QA", Data: regData2})
+
+	// Phase transition.
+	phaseData, _ := json.Marshal("execute")
+	el.Append(Event{Type: EventPhaseTransition, Data: phaseData})
+
+	// Iteration.
+	iterData, _ := json.Marshal(1)
+	el.Append(Event{Type: EventIteration, Data: iterData})
+
+	// Prompts sent.
+	promptData, _ := json.Marshal("implement the feature")
+	el.Append(Event{Type: EventPromptSent, AgentID: "a1", Data: promptData})
+
+	// Builder exits successfully, QA exits with error (simulates interrupted run).
+	exitData0, _ := json.Marshal(0)
+	el.Append(Event{Type: EventAgentExited, AgentID: "a1", Data: exitData0})
+	exitData1, _ := json.Marshal(1)
+	el.Append(Event{Type: EventAgentExited, AgentID: "a2", Data: exitData1})
+	el.Append(Event{Type: EventRunFailed})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+
+	// Verify overall state.
+	if !state.Failed {
+		t.Error("run should be marked as failed")
+	}
+	if state.Completed {
+		t.Error("failed run should not be completed")
+	}
+	if state.CurrentPhase != "execute" {
+		t.Errorf("expected phase 'execute', got %q", state.CurrentPhase)
+	}
+	if state.CurrentIteration != 1 {
+		t.Errorf("expected iteration 1, got %d", state.CurrentIteration)
+	}
+
+	// Verify Builder agent.
+	a1 := state.Agents["a1"]
+	if !a1.Registered {
+		t.Error("a1 should be registered")
+	}
+	if a1.SessionID != "sess-builder-001" {
+		t.Errorf("a1 session_id = %q, want %q", a1.SessionID, "sess-builder-001")
+	}
+	if a1.PromptsSent != 1 {
+		t.Errorf("a1 prompts sent = %d, want 1", a1.PromptsSent)
+	}
+	if a1.LastPrompt != "implement the feature" {
+		t.Errorf("a1 last prompt = %q, want %q", a1.LastPrompt, "implement the feature")
+	}
+	if !a1.Exited || a1.ExitCode != 0 {
+		t.Errorf("a1 should have exited with code 0, got exited=%v code=%d", a1.Exited, a1.ExitCode)
+	}
+
+	// Verify QA agent.
+	a2 := state.Agents["a2"]
+	if !a2.Registered {
+		t.Error("a2 should be registered")
+	}
+	if a2.SessionID != "sess-qa-002" {
+		t.Errorf("a2 session_id = %q, want %q", a2.SessionID, "sess-qa-002")
+	}
+	if !a2.Exited || a2.ExitCode != 1 {
+		t.Errorf("a2 should have exited with code 1, got exited=%v code=%d", a2.Exited, a2.ExitCode)
+	}
+}
+
+func TestReplay_PhaseTransition_ClearsOnEmpty(t *testing.T) {
+	el := setupTestEventLog(t, "test-phase-clear")
+	phaseData, _ := json.Marshal("execute")
+	el.Append(Event{Type: EventPhaseTransition, Data: phaseData})
+	emptyPhase, _ := json.Marshal("")
+	el.Append(Event{Type: EventPhaseTransition, Data: emptyPhase})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	if state.CurrentPhase != "" {
+		t.Errorf("expected empty phase after clear, got %q", state.CurrentPhase)
+	}
+}
+
+func TestReplay_MultipleIterations(t *testing.T) {
+	el := setupTestEventLog(t, "test-multi-iter")
+	for i := 1; i <= 3; i++ {
+		iterData, _ := json.Marshal(i)
+		el.Append(Event{Type: EventIteration, Data: iterData})
+	}
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	if state.CurrentIteration != 3 {
+		t.Errorf("expected iteration 3, got %d", state.CurrentIteration)
+	}
+}
+
+func TestReplay_PromptSent_AccumulatesCount(t *testing.T) {
+	el := setupTestEventLog(t, "test-prompt-count")
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a1", AgentName: "Worker"})
+
+	p1, _ := json.Marshal("first prompt")
+	el.Append(Event{Type: EventPromptSent, AgentID: "a1", Data: p1})
+	p2, _ := json.Marshal("second prompt")
+	el.Append(Event{Type: EventPromptSent, AgentID: "a1", Data: p2})
+	p3, _ := json.Marshal("third prompt")
+	el.Append(Event{Type: EventPromptSent, AgentID: "a1", Data: p3})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	a1 := state.Agents["a1"]
+	if a1.PromptsSent != 3 {
+		t.Errorf("expected 3 prompts sent, got %d", a1.PromptsSent)
+	}
+	if a1.LastPrompt != "third prompt" {
+		t.Errorf("expected last prompt 'third prompt', got %q", a1.LastPrompt)
+	}
+}
+
 func TestEventLog_CriticalEventsSync(t *testing.T) {
 	el := setupTestEventLog(t, "test-critical")
 	// Critical events should not error (fsync is called)

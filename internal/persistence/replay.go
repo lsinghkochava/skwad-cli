@@ -24,6 +24,7 @@ type RunState struct {
 type AgentRunState struct {
 	AgentID     string
 	AgentName   string
+	SessionID   string
 	Spawned     bool
 	Registered  bool
 	Exited      bool
@@ -78,6 +79,14 @@ func applyEvent(state *RunState, event Event) {
 	case EventAgentRegistered:
 		as := state.Agents[event.AgentID]
 		as.Registered = true
+		if event.Data != nil {
+			var reg map[string]string
+			if json.Unmarshal(event.Data, &reg) == nil {
+				if sid, ok := reg["session_id"]; ok {
+					as.SessionID = sid
+				}
+			}
+		}
 		state.Agents[event.AgentID] = as
 	case EventPromptSent:
 		as := state.Agents[event.AgentID]

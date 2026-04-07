@@ -20,6 +20,7 @@ import (
 	"github.com/lsinghkochava/skwad-cli/internal/config"
 	"github.com/lsinghkochava/skwad-cli/internal/daemon"
 	"github.com/lsinghkochava/skwad-cli/internal/git"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
 	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 	"github.com/lsinghkochava/skwad-cli/internal/pipeline"
 	"github.com/lsinghkochava/skwad-cli/internal/process"
@@ -39,6 +40,7 @@ var (
 	runFlagOutputFile        string
 	runFlagCleanRuns         string
 	runFlagListRuns          bool
+	runFlagResume            string
 )
 
 var runCmd = &cobra.Command{
@@ -61,6 +63,7 @@ func init() {
 	runCmd.Flags().StringVar(&runFlagOutputFile, "output-file", "", "write output to file instead of stdout")
 	runCmd.Flags().StringVar(&runFlagCleanRuns, "clean-runs", "", "Delete run state older than duration (e.g., '7d', '24h', 'all')")
 	runCmd.Flags().BoolVar(&runFlagListRuns, "list-runs", false, "List previous run states and exit")
+	runCmd.Flags().StringVar(&runFlagResume, "resume", "", "Resume a previous run by ID")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -80,7 +83,7 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			fmt.Println("No run state found.")
 			return nil
 		}
-		fmt.Printf("%-30s %-10s %-6s %s\n", "RUN ID", "STATUS", "AGENTS", "STARTED")
+		fmt.Printf("%-30s %-12s %-8s %-10s %s\n", "RUN ID", "STATUS", "AGENTS", "COMPLETED", "STARTED")
 		for _, r := range runs {
 			status := "running"
 			if r.Completed {
@@ -92,7 +95,14 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			if !r.StartedAt.IsZero() {
 				started = r.StartedAt.Format("2006-01-02 15:04:05")
 			}
-			fmt.Printf("%-30s %-10s %-6d %s\n", r.RunID, status, len(r.Agents), started)
+			completedCount := 0
+			for _, as := range r.Agents {
+				if as.Exited && as.ExitCode == 0 {
+					completedCount++
+				}
+			}
+			fmt.Printf("%-30s %-12s %-8d %-10s %s\n", r.RunID, status, len(r.Agents),
+				fmt.Sprintf("%d/%d", completedCount, len(r.Agents)), started)
 		}
 		return nil
 	}
@@ -137,6 +147,41 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Determine run ID and handle resume state restoration.
+	var runID string
+	var resumePrompts map[uuid.UUID]string // agentID → last prompt to re-send
+	isResume := runFlagResume != ""
+
+	if isResume {
+		runID = runFlagResume
+		state, err := persistence.Replay(runID)
+		if err != nil {
+			return fmt.Errorf("cannot resume run %q: %w (use --list-runs to see available runs)", runID, err)
+		}
+		if state.Failed {
+			slog.Warn("resuming a previously failed run", "runID", runID)
+		}
+
+		rr, err := resolveResumeAgents(state, agents)
+		if err != nil {
+			return err
+		}
+		resumePrompts = rr.resumePrompts
+
+		// Update manager: swap agent IDs to restored UUIDs.
+		for oldID := range rr.idSwaps {
+			d.Manager.RemoveAgent(oldID)
+		}
+		for _, a := range rr.agents {
+			d.Manager.AddAgent(a, nil)
+		}
+
+		agents = rr.agents
+		slog.Info("resuming run", "runID", runID, "resuming", len(agents), "skipped", rr.skippedCount)
+	} else {
+		runID = fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), uuid.New().String()[:8])
+	}
+
 	// 6. Set up output collection.
 	outputMu := &sync.Mutex{}
 	outputBufs := make(map[uuid.UUID]*bytes.Buffer)
@@ -155,13 +200,15 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	defer d.Stop()
 
 	startTime := time.Now()
-	runID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), uuid.New().String()[:8])
-	slog.Info("starting run", "runID", runID, "agents", len(agents), "timeout", timeout)
+	slog.Info("starting run", "runID", runID, "agents", len(agents), "timeout", timeout, "resume", isResume)
+	fmt.Fprintf(os.Stderr, "Run ID: %s\n", runID)
 
-	// Event log for run state persistence.
+	// Event log for run state persistence (appends to existing log on resume).
 	eventLog, _ := persistence.NewEventLog(runID)
 	defer eventLog.Close()
-	eventLog.Append(persistence.Event{Type: persistence.EventRunStarted})
+	if !isResume {
+		eventLog.Append(persistence.Event{Type: persistence.EventRunStarted})
+	}
 
 	// Signal handling — first SIGINT/SIGTERM graceful, second force kills.
 	sigCh := make(chan os.Signal, 1)
@@ -187,33 +234,52 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		outputMu.Unlock()
 	}
 
-	// Close stdin on result message so agents exit naturally (run mode only).
-	// Only close stdin after the team is ready (i.e., after init turns complete),
-	// so that the init turn's result doesn't cause premature exit.
-	workDispatched := make(chan struct{})
+	// Emit EventAgentRegistered when session_id is captured from the stream.
+	// Chain with the daemon's OnSessionID (set in daemon.Start).
+	prevOnSessionID := d.Pool.OnSessionID
+	agentNameMap := make(map[uuid.UUID]string)
+	for _, a := range agents {
+		agentNameMap[a.ID] = a.Name
+	}
+	d.Pool.OnSessionID = func(agentID uuid.UUID, sessionID string) {
+		if prevOnSessionID != nil {
+			prevOnSessionID(agentID, sessionID)
+		}
+		data, _ := json.Marshal(map[string]string{"session_id": sessionID})
+		eventLog.Append(persistence.Event{
+			Type:      persistence.EventAgentRegistered,
+			AgentID:   agentID.String(),
+			AgentName: agentNameMap[agentID],
+			Data:      data,
+		})
+	}
+
+	// Emit EventAgentExited when an agent process exits.
+	prevOnExit := d.Pool.OnExit
+	d.Pool.OnExit = func(agentID uuid.UUID, exitCode int) {
+		if prevOnExit != nil {
+			prevOnExit(agentID, exitCode)
+		}
+		exitData, _ := json.Marshal(exitCode)
+		eventLog.Append(persistence.Event{
+			Type:      persistence.EventAgentExited,
+			AgentID:   agentID.String(),
+			AgentName: agentNameMap[agentID],
+			Data:      exitData,
+		})
+	}
+
+	// Capture result text for --output filtering.
 	prevOnStream := d.Pool.OnStreamMessage
 	d.Pool.OnStreamMessage = func(agentID uuid.UUID, msg process.StreamMessage) {
 		if prevOnStream != nil {
 			prevOnStream(agentID, msg)
 		}
 		if msg.Type == "result" {
-			// Capture final result text for --output filtering.
 			if text := parseResultText(msg.Raw); text != "" {
 				outputMu.Lock()
 				resultTexts[agentID] = text
 				outputMu.Unlock()
-			}
-
-			select {
-			case <-workDispatched:
-				slog.Debug("work result received, closing all agent stdin", "agentID", agentID)
-				for _, a := range agents {
-					if err := d.Pool.CloseStdin(a.ID); err != nil {
-						slog.Debug("close stdin", "agent", a.Name, "error", err)
-					}
-				}
-			default:
-				// Init turn result — don't close stdin yet.
 			}
 		}
 	}
@@ -228,7 +294,11 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	// 10. Send bootstrap prompt to ALL agents (init turn).
 	slog.Info("sending bootstrap prompts", "count", len(agents))
 	for _, a := range agents {
-		if err := d.Pool.SendBootstrapPrompt(a.ID, defaultBootstrapPrompt); err != nil {
+		bootstrapMsg := defaultBootstrapPrompt
+		if isResume {
+			bootstrapMsg += "\n\nNOTE: This is a resumed session. You were previously working on this task but the run was interrupted. Continue where you left off."
+		}
+		if err := d.Pool.SendBootstrapPrompt(a.ID, bootstrapMsg); err != nil {
 			slog.Error("failed to send bootstrap prompt", "agent", a.Name, "error", err)
 		}
 	}
@@ -244,37 +314,67 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// 12. Send work prompt to entry agent (or all agents if no entry_agent).
+	// On resume, re-send the last prompt from the prior run to agents that need it.
 	promptsSent := 0
-	for i, a := range agents {
-		var agentPrompt string
-		if tc.EntryAgent != "" {
-			if tc.Agents[i].Prompt != "" {
-				agentPrompt = tc.Agents[i].Prompt
-			} else if a.Name == tc.EntryAgent {
-				if prompt != "" {
-					agentPrompt = prompt
+	if isResume {
+		for _, a := range agents {
+			if rp, ok := resumePrompts[a.ID]; ok {
+				if err := d.Pool.SendPrompt(a.ID, rp); err != nil {
+					slog.Error("failed to re-send prompt on resume", "agent", a.Name, "error", err)
 				} else {
-					agentPrompt = tc.Prompt
+					promptData, _ := json.Marshal(rp)
+					eventLog.Append(persistence.Event{
+						Type: persistence.EventPromptSent, AgentID: a.ID.String(),
+						AgentName: a.Name, Data: promptData,
+					})
+					promptsSent++
 				}
 			}
-		} else {
-			agentPrompt = resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
 		}
-		if agentPrompt != "" {
-			if err := d.Pool.SendPrompt(a.ID, agentPrompt); err != nil {
-				slog.Error("failed to send work prompt", "agent", a.Name, "error", err)
+	} else {
+		for i, a := range agents {
+			var agentPrompt string
+			if tc.EntryAgent != "" {
+				if tc.Agents[i].Prompt != "" {
+					agentPrompt = tc.Agents[i].Prompt
+				} else if a.Name == tc.EntryAgent {
+					if prompt != "" {
+						agentPrompt = prompt
+					} else {
+						agentPrompt = tc.Prompt
+					}
+				}
+			} else {
+				agentPrompt = resolveAgentPrompt(tc.Agents[i], prompt, tc.Prompt)
 			}
-			promptsSent++
+			if agentPrompt != "" {
+				if err := d.Pool.SendPrompt(a.ID, agentPrompt); err != nil {
+					slog.Error("failed to send work prompt", "agent", a.Name, "error", err)
+				} else {
+					promptData, _ := json.Marshal(agentPrompt)
+					eventLog.Append(persistence.Event{
+						Type:      persistence.EventPromptSent,
+						AgentID:   a.ID.String(),
+						AgentName: a.Name,
+						Data:      promptData,
+					})
+				}
+				promptsSent++
+			}
 		}
 	}
 	if promptsSent > 0 {
 		slog.Info("work prompts sent", "count", promptsSent)
 	}
-	close(workDispatched)
 
 	// 13. Pipeline iteration loop.
 	pl := pipeline.NewPipeline(runFlagMaxIterations, timeout)
 	pl.SetPhase("execute")
+	phaseData, _ := json.Marshal("execute")
+	eventLog.Append(persistence.Event{
+		Type: persistence.EventPhaseTransition,
+		Data: phaseData,
+	})
 
 	timedOut := false
 	for {
@@ -284,6 +384,12 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			pl.RecordEvent("max_iterations", fmt.Sprintf("stopped after %d iterations", pl.Iteration))
 			break
 		}
+
+		iterData, _ := json.Marshal(iter)
+		eventLog.Append(persistence.Event{
+			Type: persistence.EventIteration,
+			Data: iterData,
+		})
 
 		if iter > 1 {
 			// Re-prompt agents for retry.
@@ -300,10 +406,13 @@ func executeRun(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Wait loop: check every 2s if all sessions have exited.
+		// Wait loop: check every 2s for all-exited or team quiescence.
 		deadline := time.Now().Add(timeout)
+		quiescentCycles := 0
 		for time.Now().Before(deadline) && !cancelled {
 			time.Sleep(2 * time.Second)
+
+			// Check if all processes have exited (fast path).
 			allExited := true
 			for _, a := range agents {
 				if d.Pool.IsRunning(a.ID) {
@@ -312,6 +421,36 @@ func executeRun(cmd *cobra.Command, args []string) error {
 				}
 			}
 			if allExited {
+				break
+			}
+
+			// Check team quiescence: all agents idle/errored + no pending messages.
+			teamQuiescent := true
+			for _, a := range agents {
+				ag, ok := d.Manager.Agent(a.ID)
+				if !ok {
+					continue
+				}
+				if ag.Status != models.AgentStatusIdle && ag.Status != models.AgentStatusError {
+					teamQuiescent = false
+					break
+				}
+			}
+			if teamQuiescent && !d.Coordinator.HasUnreadMessages() {
+				quiescentCycles++
+			} else {
+				quiescentCycles = 0
+			}
+
+			if quiescentCycles >= 2 {
+				slog.Info("team quiescent, closing agent stdin")
+				for _, a := range agents {
+					if err := d.Pool.CloseStdin(a.ID); err != nil {
+						slog.Debug("close stdin", "agent", a.Name, "error", err)
+					}
+				}
+				// Brief wait for graceful process exit.
+				time.Sleep(3 * time.Second)
 				break
 			}
 		}
@@ -349,6 +488,11 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	}
 
 	pl.SetPhase("")
+	endPhaseData, _ := json.Marshal("")
+	eventLog.Append(persistence.Event{
+		Type: persistence.EventPhaseTransition,
+		Data: endPhaseData,
+	})
 	pl.RecordEvent("complete", fmt.Sprintf("finished after %d iterations", pl.Iteration))
 
 	// Small delay to collect final output.
@@ -597,6 +741,77 @@ func filterRunOutput(mode string, agents []report.AgentResult, entryAgent string
 		// "raw" or unrecognized — full report.
 		return nil
 	}
+}
+
+// resumeResult holds the output of resolveResumeAgents.
+type resumeResult struct {
+	agents        []*models.Agent        // agents to spawn (excludes completed)
+	resumePrompts map[uuid.UUID]string   // agentID → last prompt to re-send
+	skippedCount  int                    // agents skipped because they completed successfully
+	idSwaps       map[uuid.UUID]uuid.UUID // oldID → newID for agents whose UUID was restored
+}
+
+// resolveResumeAgents examines prior RunState and decides which agents to resume.
+// It restores original UUIDs, sets ResumeSessionID, and collects last prompts.
+// Returns an error if the run is already completed or all agents succeeded.
+func resolveResumeAgents(state *persistence.RunState, agents []*models.Agent) (*resumeResult, error) {
+	if state.Completed {
+		return nil, fmt.Errorf("run %q already completed, nothing to resume", state.RunID)
+	}
+
+	// Build lookup by agent name from prior run.
+	priorByName := make(map[string]persistence.AgentRunState)
+	for _, as := range state.Agents {
+		priorByName[as.AgentName] = as
+	}
+
+	result := &resumeResult{
+		resumePrompts: make(map[uuid.UUID]string),
+		idSwaps:       make(map[uuid.UUID]uuid.UUID),
+	}
+
+	for _, a := range agents {
+		prior, found := priorByName[a.Name]
+		if !found {
+			// New agent not in prior run — spawn as-is.
+			result.agents = append(result.agents, a)
+			continue
+		}
+
+		// Restore original UUID from event log.
+		restoredID, parseErr := uuid.Parse(prior.AgentID)
+		if parseErr != nil {
+			result.agents = append(result.agents, a)
+			continue
+		}
+		oldID := a.ID
+		a.ID = restoredID
+		result.idSwaps[oldID] = restoredID
+
+		// Skip agents that completed successfully.
+		if prior.Exited && prior.ExitCode == 0 {
+			result.skippedCount++
+			continue
+		}
+
+		// Set resume session ID.
+		if prior.SessionID != "" {
+			a.ResumeSessionID = prior.SessionID
+		}
+
+		// Track last prompt for re-send.
+		if prior.LastPrompt != "" {
+			result.resumePrompts[a.ID] = prior.LastPrompt
+		}
+
+		result.agents = append(result.agents, a)
+	}
+
+	if len(result.agents) == 0 {
+		return nil, fmt.Errorf("all agents completed successfully in run %q, nothing to resume", state.RunID)
+	}
+
+	return result, nil
 }
 
 // parseDurationSpec parses a duration string, supporting "Nd" for days.

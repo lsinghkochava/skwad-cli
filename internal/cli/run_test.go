@@ -2,10 +2,14 @@ package cli
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lsinghkochava/skwad-cli/internal/config"
+	"github.com/lsinghkochava/skwad-cli/internal/models"
+	"github.com/lsinghkochava/skwad-cli/internal/persistence"
 	"github.com/lsinghkochava/skwad-cli/internal/report"
 )
 
@@ -210,6 +214,179 @@ func TestParseResultText_NoResultField(t *testing.T) {
 	got := parseResultText(raw)
 	if got != "" {
 		t.Errorf("expected empty string when result field is absent, got %q", got)
+	}
+}
+
+// --- Resume orchestration tests ---
+
+func makeRunState(runID string, completed, failed bool, agents map[string]persistence.AgentRunState) *persistence.RunState {
+	return &persistence.RunState{
+		RunID:     runID,
+		Agents:    agents,
+		Completed: completed,
+		Failed:    failed,
+	}
+}
+
+func makeAgent(name string) *models.Agent {
+	return &models.Agent{
+		ID:   uuid.New(),
+		Name: name,
+	}
+}
+
+func TestResolveResumeAgents_CompletedRunReturnsError(t *testing.T) {
+	state := makeRunState("run-1", true, false, map[string]persistence.AgentRunState{
+		"a1": {AgentID: uuid.New().String(), AgentName: "Builder", Exited: true, ExitCode: 0},
+	})
+	agents := []*models.Agent{makeAgent("Builder")}
+
+	_, err := resolveResumeAgents(state, agents)
+	if err == nil {
+		t.Fatal("expected error for completed run")
+	}
+	if !strings.Contains(err.Error(), "already completed") {
+		t.Errorf("expected 'already completed' error, got: %v", err)
+	}
+}
+
+func TestResolveResumeAgents_AllAgentsSucceeded(t *testing.T) {
+	id1 := uuid.New()
+	id2 := uuid.New()
+	state := makeRunState("run-2", false, true, map[string]persistence.AgentRunState{
+		id1.String(): {AgentID: id1.String(), AgentName: "Builder", Exited: true, ExitCode: 0},
+		id2.String(): {AgentID: id2.String(), AgentName: "QA", Exited: true, ExitCode: 0},
+	})
+	agents := []*models.Agent{makeAgent("Builder"), makeAgent("QA")}
+
+	_, err := resolveResumeAgents(state, agents)
+	if err == nil {
+		t.Fatal("expected error when all agents completed successfully")
+	}
+	if !strings.Contains(err.Error(), "nothing to resume") {
+		t.Errorf("expected 'nothing to resume' error, got: %v", err)
+	}
+}
+
+func TestResolveResumeAgents_SkipsCompletedAgents(t *testing.T) {
+	builderID := uuid.New()
+	qaID := uuid.New()
+	state := makeRunState("run-3", false, true, map[string]persistence.AgentRunState{
+		builderID.String(): {AgentID: builderID.String(), AgentName: "Builder", Exited: true, ExitCode: 0, SessionID: "sess-b"},
+		qaID.String():      {AgentID: qaID.String(), AgentName: "QA", Exited: true, ExitCode: 1, SessionID: "sess-q"},
+	})
+	agents := []*models.Agent{makeAgent("Builder"), makeAgent("QA")}
+
+	rr, err := resolveResumeAgents(state, agents)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rr.agents) != 1 {
+		t.Fatalf("expected 1 agent to resume, got %d", len(rr.agents))
+	}
+	if rr.agents[0].Name != "QA" {
+		t.Errorf("expected QA to resume, got %q", rr.agents[0].Name)
+	}
+	if rr.skippedCount != 1 {
+		t.Errorf("expected 1 skipped, got %d", rr.skippedCount)
+	}
+}
+
+func TestResolveResumeAgents_RestoresUUIDs(t *testing.T) {
+	originalID := uuid.New()
+	state := makeRunState("run-4", false, true, map[string]persistence.AgentRunState{
+		originalID.String(): {AgentID: originalID.String(), AgentName: "Builder", Exited: true, ExitCode: 1, SessionID: "sess-123"},
+	})
+	agent := makeAgent("Builder")
+	newID := agent.ID // capture the auto-generated ID
+
+	rr, err := resolveResumeAgents(state, []*models.Agent{agent})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Agent ID should be restored to the original from event log.
+	if rr.agents[0].ID != originalID {
+		t.Errorf("expected restored ID %s, got %s", originalID, rr.agents[0].ID)
+	}
+	// idSwaps should map old → new.
+	if rr.idSwaps[newID] != originalID {
+		t.Errorf("expected idSwaps[%s] = %s, got %s", newID, originalID, rr.idSwaps[newID])
+	}
+}
+
+func TestResolveResumeAgents_SetsResumeSessionID(t *testing.T) {
+	agentID := uuid.New()
+	state := makeRunState("run-5", false, true, map[string]persistence.AgentRunState{
+		agentID.String(): {AgentID: agentID.String(), AgentName: "Builder", Exited: true, ExitCode: 1, SessionID: "sess-resume-me"},
+	})
+	agent := makeAgent("Builder")
+
+	rr, err := resolveResumeAgents(state, []*models.Agent{agent})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rr.agents[0].ResumeSessionID != "sess-resume-me" {
+		t.Errorf("expected ResumeSessionID 'sess-resume-me', got %q", rr.agents[0].ResumeSessionID)
+	}
+}
+
+func TestResolveResumeAgents_CollectsLastPrompt(t *testing.T) {
+	agentID := uuid.New()
+	state := makeRunState("run-6", false, true, map[string]persistence.AgentRunState{
+		agentID.String(): {AgentID: agentID.String(), AgentName: "Builder", Exited: true, ExitCode: 1, LastPrompt: "implement feature X"},
+	})
+	agent := makeAgent("Builder")
+
+	rr, err := resolveResumeAgents(state, []*models.Agent{agent})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rr.resumePrompts[rr.agents[0].ID] != "implement feature X" {
+		t.Errorf("expected resume prompt 'implement feature X', got %q", rr.resumePrompts[rr.agents[0].ID])
+	}
+}
+
+func TestResolveResumeAgents_NewAgentNotInPriorRun(t *testing.T) {
+	builderID := uuid.New()
+	state := makeRunState("run-7", false, true, map[string]persistence.AgentRunState{
+		builderID.String(): {AgentID: builderID.String(), AgentName: "Builder", Exited: true, ExitCode: 0},
+	})
+	// Team config has Builder (completed) + Reviewer (new).
+	agents := []*models.Agent{makeAgent("Builder"), makeAgent("Reviewer")}
+
+	rr, err := resolveResumeAgents(state, agents)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Builder completed → skipped. Reviewer is new → included.
+	if len(rr.agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(rr.agents))
+	}
+	if rr.agents[0].Name != "Reviewer" {
+		t.Errorf("expected Reviewer, got %q", rr.agents[0].Name)
+	}
+}
+
+func TestResolveResumeAgents_AgentNotExited(t *testing.T) {
+	agentID := uuid.New()
+	state := makeRunState("run-8", false, false, map[string]persistence.AgentRunState{
+		agentID.String(): {AgentID: agentID.String(), AgentName: "Builder", Exited: false, SessionID: "sess-interrupted"},
+	})
+	agent := makeAgent("Builder")
+
+	rr, err := resolveResumeAgents(state, []*models.Agent{agent})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rr.agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(rr.agents))
+	}
+	if rr.agents[0].ResumeSessionID != "sess-interrupted" {
+		t.Errorf("expected ResumeSessionID 'sess-interrupted', got %q", rr.agents[0].ResumeSessionID)
+	}
+	if rr.skippedCount != 0 {
+		t.Errorf("non-exited agent should not be skipped, got skippedCount=%d", rr.skippedCount)
 	}
 }
 

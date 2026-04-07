@@ -16,11 +16,12 @@ import (
 
 // managedAgent wraps a Runner with metadata for pool management.
 type managedAgent struct {
-	runner    *Runner
-	agentID   uuid.UUID
-	name      string
-	ready     chan struct{} // closed when first system/assistant message received
-	readyOnce sync.Once
+	runner          *Runner
+	agentID         uuid.UUID
+	name            string
+	ready           chan struct{} // closed when first system/assistant message received
+	readyOnce       sync.Once
+	sessionCaptured bool // true after session_id has been extracted
 }
 
 // Pool manages the lifecycle of multiple headless agent processes.
@@ -39,6 +40,8 @@ type Pool struct {
 	// OnStreamMessage is called for each parsed stream message, allowing external
 	// controllers (e.g. ActivityController) to process the message.
 	OnStreamMessage func(agentID uuid.UUID, msg StreamMessage)
+	// OnSessionID is called when a session_id is first discovered from the stream.
+	OnSessionID func(agentID uuid.UUID, sessionID string)
 	// OnExit is called when an agent process exits.
 	OnExit func(agentID uuid.UUID, exitCode int)
 	// OnSpawn is called after an agent process is successfully spawned.
@@ -81,6 +84,18 @@ func (p *Pool) Spawn(agentID uuid.UUID, name string, args []string, env []string
 			ma.readyOnce.Do(func() {
 				close(ma.ready)
 			})
+		}
+
+		// Extract session_id from the first InitMessage (type="system", subtype="init").
+		if !ma.sessionCaptured && msg.Type == "system" && msg.Subtype == "init" && len(msg.Raw) > 0 {
+			var init InitMessage
+			if err := json.Unmarshal(msg.Raw, &init); err == nil && init.SessionID != "" {
+				ma.sessionCaptured = true
+				slog.Info("captured session_id from stream", "agentID", agentID, "name", name, "sessionID", init.SessionID)
+				if p.OnSessionID != nil {
+					p.OnSessionID(agentID, init.SessionID)
+				}
+			}
 		}
 
 		// Forward raw bytes to output subscriber.

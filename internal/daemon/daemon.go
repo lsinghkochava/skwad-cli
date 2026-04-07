@@ -147,10 +147,19 @@ func (d *Daemon) Start() error {
 	d.MCPServer.StatusUpdater = &hookBridge{manager: d.Manager}
 
 	// Wire message delivery: when a message arrives, send via stream-json stdin.
-	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) {
+	d.Coordinator.OnDeliverMessage = func(agentID uuid.UUID, text string) error {
 		if err := d.Pool.SendPrompt(agentID, text); err != nil {
 			slog.Error("failed to deliver message", "agentID", agentID, "error", err)
+			return err
 		}
+		return nil
+	}
+
+	// Wire session_id capture: when the pool extracts a session_id from the stream,
+	// persist it via the manager (same path as hook-based SetSessionID).
+	d.Pool.OnSessionID = func(agentID uuid.UUID, sessionID string) {
+		d.Manager.UpdateAgent(agentID, func(a *models.Agent) { a.SessionID = sessionID })
+		slog.Info("session_id captured from stream", "agentID", agentID, "sessionID", sessionID)
 	}
 
 	// Wire stream messages through ActivityController for centralized status tracking.
@@ -226,22 +235,80 @@ func (d *Daemon) ApplyTeamConfig(tc *config.TeamConfig) {
 	}
 
 	// Auto-claim: when an agent goes idle in autonomous mode, assign the next
-	// pending task and deliver it as a prompt.
+	// pending task and deliver it as a prompt. Three-pass: tag overlap scoring,
+	// then preferred_role match, then FIFO fallback (untagged tasks only).
 	d.Coordinator.OnAgentIdle = func(agentID uuid.UUID) {
 		if d.CoordinationMode != "autonomous" {
 			return
 		}
+
+		var agentName string
+		var agentTags []string
+		if a, ok := d.Manager.Agent(agentID); ok {
+			agentName = a.Name
+			agentTags = a.Tags
+		}
+
 		tasks := d.Coordinator.ListTasks()
-		for _, t := range tasks {
-			if t.Status != models.TaskStatusPending || t.AssigneeID != nil {
-				continue
-			}
+
+		claimAndPrompt := func(t *models.Task) {
 			if err := d.Coordinator.ClaimTask(agentID, t.ID); err != nil {
-				continue // another agent beat us, try next
+				return
 			}
 			prompt := fmt.Sprintf("Task assigned to you:\n\nTitle: %s\nDescription: %s\nTask ID: %s\n\nWhen complete, call complete-task with this task ID.",
 				t.Title, t.Description, t.ID)
 			d.Pool.SendPrompt(agentID, prompt)
+		}
+
+		// Build agent tag set for O(1) lookup.
+		agentTagSet := make(map[string]bool, len(agentTags))
+		for _, tag := range agentTags {
+			agentTagSet[strings.ToLower(tag)] = true
+		}
+
+		// Pass 1: tag overlap scoring — find task with highest tag overlap.
+		var bestTask *models.Task
+		bestScore := 0
+		for _, t := range tasks {
+			if t.Status != models.TaskStatusPending || t.AssigneeID != nil || len(t.Tags) == 0 {
+				continue
+			}
+			score := 0
+			for _, tag := range t.Tags {
+				if agentTagSet[strings.ToLower(tag)] {
+					score++
+				}
+			}
+			if score > bestScore {
+				bestScore = score
+				bestTask = t
+			}
+		}
+		if bestTask != nil {
+			claimAndPrompt(bestTask)
+			return
+		}
+
+		// Pass 2: preferred_role match (backward compat).
+		for _, t := range tasks {
+			if t.Status != models.TaskStatusPending || t.AssigneeID != nil {
+				continue
+			}
+			if t.PreferredRole != "" && strings.EqualFold(t.PreferredRole, agentName) {
+				claimAndPrompt(t)
+				return
+			}
+		}
+
+		// Pass 3: FIFO fallback — only untagged tasks (tagged tasks wait for matching agents).
+		for _, t := range tasks {
+			if t.Status != models.TaskStatusPending || t.AssigneeID != nil {
+				continue
+			}
+			if len(t.Tags) > 0 {
+				continue // tagged tasks reserved for matching agents
+			}
+			claimAndPrompt(t)
 			return
 		}
 	}

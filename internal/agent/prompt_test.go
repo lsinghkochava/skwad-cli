@@ -276,8 +276,8 @@ func TestBuildCoordinationPrompt_Managed(t *testing.T) {
 	if !strings.Contains(prompt, "Wait for task assignments") {
 		t.Error("expected 'Wait for task assignments' in managed prompt")
 	}
-	if strings.Contains(prompt, "claim-task") && !strings.Contains(prompt, "Do not use") {
-		t.Error("managed mode should discourage claim-task usage")
+	if !strings.Contains(prompt, "claim-task") {
+		t.Error("managed mode should mention claim-task")
 	}
 }
 
@@ -326,5 +326,144 @@ func TestBuildSystemPrompt_NoWorktree(t *testing.T) {
 
 	if strings.Contains(prompt, "Git Worktree Isolation") {
 		t.Error("prompt should NOT contain worktree section when no worktree")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Verify-before-implement preamble tests
+// ---------------------------------------------------------------------------
+
+func TestPreamble_ContainsVerifyBeforeImplement(t *testing.T) {
+	preamble := buildPreamble(uuid.New().String())
+	if !strings.Contains(preamble, "Before implementing any change, verify the current state") {
+		t.Error("preamble should contain 'verify before implement' guidance")
+	}
+}
+
+func TestBuildSystemPrompt_AllRoles_ContainVerifyBeforeImplement(t *testing.T) {
+	// The preamble is universal — every agent type should get it.
+	roles := []string{"Coder", "Tester", "Explorer", "Reviewer", "Manager", "CustomBot"}
+	for _, name := range roles {
+		t.Run(name, func(t *testing.T) {
+			agent := &models.Agent{ID: uuid.New(), Name: name}
+			prompt := BuildSystemPrompt(agent, nil, nil)
+			if !strings.Contains(prompt, "Before implementing any change, verify the current state") {
+				t.Errorf("agent %q prompt should contain verify-before-implement text", name)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Completion message format tests
+// ---------------------------------------------------------------------------
+
+func TestBuildCoordinationPrompt_Autonomous_ContainsCompletionFormat(t *testing.T) {
+	prompt := buildCoordinationPrompt("autonomous")
+	if !strings.Contains(prompt, "Completion Message Format") {
+		t.Error("autonomous prompt should contain 'Completion Message Format' section")
+	}
+	if !strings.Contains(prompt, "What you changed") {
+		t.Error("autonomous prompt should contain completion format details")
+	}
+}
+
+func TestBuildCoordinationPrompt_Managed_NoCompletionFormat(t *testing.T) {
+	prompt := buildCoordinationPrompt("managed")
+	if strings.Contains(prompt, "Completion Message Format") {
+		t.Error("managed prompt should NOT contain 'Completion Message Format' — this is CRITICAL")
+	}
+}
+
+func TestBuildCoordinationPrompt_Default_NoCompletionFormat(t *testing.T) {
+	// Empty string defaults to managed mode.
+	prompt := buildCoordinationPrompt("")
+	if strings.Contains(prompt, "Completion Message Format") {
+		t.Error("default (empty) mode prompt should NOT contain completion format")
+	}
+}
+
+func TestBuildSystemPrompt_AutonomousAgent_HasCompletionFormat(t *testing.T) {
+	agent := &models.Agent{
+		ID:               uuid.New(),
+		Name:             "Coder",
+		CoordinationMode: "autonomous",
+	}
+	prompt := BuildSystemPrompt(agent, nil, nil)
+	if !strings.Contains(prompt, "Completion Message Format") {
+		t.Error("full prompt for autonomous agent should contain completion format")
+	}
+}
+
+func TestBuildSystemPrompt_ManagedAgent_NoCompletionFormat(t *testing.T) {
+	agent := &models.Agent{
+		ID:               uuid.New(),
+		Name:             "Coder",
+		CoordinationMode: "managed",
+	}
+	prompt := BuildSystemPrompt(agent, nil, nil)
+	if strings.Contains(prompt, "Completion Message Format") {
+		t.Error("full prompt for managed agent should NOT contain completion format")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tag display tests
+// ---------------------------------------------------------------------------
+
+func TestBuildTeamProtocol_IncludesTagsColumn(t *testing.T) {
+	agent := &models.Agent{
+		ID:   uuid.New(),
+		Name: "Manager",
+	}
+	teammates := []models.Agent{
+		{ID: uuid.New(), Name: "Coder", Tags: []string{"code", "backend"}},
+		{ID: uuid.New(), Name: "Tester", Tags: []string{"test"}},
+	}
+
+	protocol := buildTeamProtocol(agent, teammates)
+
+	if !strings.Contains(protocol, "Tags") {
+		t.Error("team roster should include a Tags column header")
+	}
+	if !strings.Contains(protocol, "code") {
+		t.Error("team roster should show Coder's 'code' tag")
+	}
+	if !strings.Contains(protocol, "backend") {
+		t.Error("team roster should show Coder's 'backend' tag")
+	}
+	if !strings.Contains(protocol, "test") {
+		t.Error("team roster should show Tester's 'test' tag")
+	}
+}
+
+func TestBuildTeamProtocol_NoTags_EmptyTagColumn(t *testing.T) {
+	agent := &models.Agent{
+		ID:   uuid.New(),
+		Name: "Manager",
+	}
+	teammates := []models.Agent{
+		{ID: uuid.New(), Name: "Coder"},
+	}
+
+	protocol := buildTeamProtocol(agent, teammates)
+
+	// Should still have the Tags column header even if agents have no tags.
+	if !strings.Contains(protocol, "Tags") {
+		t.Error("team roster should include Tags column header even when agents have no tags")
+	}
+}
+
+func TestBuildCoordinationPrompt_Autonomous_MentionsTags(t *testing.T) {
+	prompt := buildCoordinationPrompt("autonomous")
+	if !strings.Contains(prompt, "tags") && !strings.Contains(prompt, "Tags") {
+		t.Error("autonomous mode prompt should mention tags for task claiming")
+	}
+}
+
+func TestBuildCoordinationPrompt_Managed_MentionsTags(t *testing.T) {
+	prompt := buildCoordinationPrompt("managed")
+	if !strings.Contains(prompt, "tags") && !strings.Contains(prompt, "Tags") {
+		t.Error("managed mode prompt should mention tags for task creation")
 	}
 }

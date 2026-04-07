@@ -80,6 +80,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/agent/status", s.handleStatus)
 	mux.HandleFunc("/api/v1/agent/send", s.handleSend)
 	mux.HandleFunc("/api/v1/agent/broadcast", s.handleBroadcast)
+	mux.HandleFunc("/api/v1/tasks", s.handleListTasks)
 	mux.HandleFunc("/", s.handleDebug)
 
 	s.httpServer = &http.Server{
@@ -155,6 +156,44 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 			AgentType:  string(a.AgentType),
 			SessionID:  a.SessionID,
 			Metadata:   a.Metadata,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tasks := s.coordinator.ListTasks()
+	agents := s.coordinator.AllAgents()
+
+	// Build agent ID → name lookup.
+	nameByID := make(map[string]string, len(agents))
+	for _, a := range agents {
+		nameByID[a.ID.String()] = a.Name
+	}
+
+	type taskResponse struct {
+		ID            string  `json:"id"`
+		Title         string  `json:"title"`
+		Status        string  `json:"status"`
+		AssigneeName  string  `json:"assigneeName,omitempty"`
+		CreatedByName string  `json:"createdByName,omitempty"`
+	}
+
+	result := make([]taskResponse, len(tasks))
+	for i, t := range tasks {
+		result[i] = taskResponse{
+			ID:            t.ID.String(),
+			Title:         t.Title,
+			Status:        string(t.Status),
+			AssigneeName:  t.AssigneeName,
+			CreatedByName: nameByID[t.CreatedBy.String()],
 		}
 	}
 

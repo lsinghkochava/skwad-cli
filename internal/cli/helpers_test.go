@@ -117,3 +117,156 @@ func TestResolvePersona_InlinePriorityOverName(t *testing.T) {
 		t.Error("expected inline instructions to take priority over name match")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tag merging tests
+// ---------------------------------------------------------------------------
+
+func TestTagMerge_ConfigAndPersonaTags(t *testing.T) {
+	d := newTestDaemon(t)
+
+	// Create a persona with AllowedCategories (acts as persona tags).
+	tc := &config.TeamConfig{
+		Name: "Test",
+		Repo: t.TempDir(),
+		Agents: []config.AgentConfig{
+			{
+				Name:                "Bot",
+				AgentType:           "claude",
+				Tags:                []string{"code"},
+				PersonaInstructions: "You are a test bot.",
+			},
+		},
+		Personas: []config.PersonaConfig{
+			{Name: "Bot", Instructions: "You are a test bot.", Tags: []string{"test", "review"}},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+
+	a := agents[0]
+
+	// Inline persona instructions take priority over team persona, so
+	// AllowedCategories from the inline persona won't have the team persona tags.
+	// The config tags should be present.
+	found := make(map[string]bool)
+	for _, tag := range a.Tags {
+		found[tag] = true
+	}
+	if !found["code"] {
+		t.Errorf("expected 'code' tag from AgentConfig.Tags, got %v", a.Tags)
+	}
+}
+
+func TestTagMerge_PersonaCategoriesMerged(t *testing.T) {
+	d := newTestDaemon(t)
+
+	// Use team-level persona (matched by name) which has AllowedCategories.
+	tc := &config.TeamConfig{
+		Name: "Test",
+		Repo: t.TempDir(),
+		Agents: []config.AgentConfig{
+			{
+				Name:      "Bot",
+				AgentType: "claude",
+				Tags:      []string{"code"},
+			},
+		},
+		Personas: []config.PersonaConfig{
+			{Name: "Bot", Instructions: "You are a test bot.", Tags: []string{"test", "review"}},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	a := agents[0]
+
+	// Should have: code (from config) + test, review (from persona categories).
+	found := make(map[string]bool)
+	for _, tag := range a.Tags {
+		found[tag] = true
+	}
+	if !found["code"] {
+		t.Errorf("expected 'code' from config tags, got %v", a.Tags)
+	}
+	if !found["test"] {
+		t.Errorf("expected 'test' from persona categories, got %v", a.Tags)
+	}
+	if !found["review"] {
+		t.Errorf("expected 'review' from persona categories, got %v", a.Tags)
+	}
+
+	// Should be sorted.
+	for i := 1; i < len(a.Tags); i++ {
+		if a.Tags[i-1] > a.Tags[i] {
+			t.Errorf("tags should be sorted, got %v", a.Tags)
+			break
+		}
+	}
+}
+
+func TestTagMerge_Deduplication(t *testing.T) {
+	d := newTestDaemon(t)
+
+	// Both config and persona have "code" — should appear only once.
+	tc := &config.TeamConfig{
+		Name: "Test",
+		Repo: t.TempDir(),
+		Agents: []config.AgentConfig{
+			{
+				Name:      "Bot",
+				AgentType: "claude",
+				Tags:      []string{"code", "test"},
+			},
+		},
+		Personas: []config.PersonaConfig{
+			{Name: "Bot", Instructions: "Bot persona", Tags: []string{"Code", "review"}},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	a := agents[0]
+
+	// Count occurrences of "code" — should be exactly 1 (case-insensitive dedup).
+	codeCount := 0
+	for _, tag := range a.Tags {
+		if tag == "code" {
+			codeCount++
+		}
+	}
+	if codeCount != 1 {
+		t.Errorf("expected 'code' to appear once (deduplicated), got %d in %v", codeCount, a.Tags)
+	}
+
+	// Total should be 3: code, review, test (sorted).
+	if len(a.Tags) != 3 {
+		t.Errorf("expected 3 deduplicated tags, got %d: %v", len(a.Tags), a.Tags)
+	}
+
+	// Verify sorted: code, review, test.
+	expected := []string{"code", "review", "test"}
+	for i, want := range expected {
+		if i >= len(a.Tags) || a.Tags[i] != want {
+			t.Errorf("tags[%d] = %q, want %q (full: %v)", i, a.Tags[i], want, a.Tags)
+		}
+	}
+}
+
+func TestTagMerge_NoTags(t *testing.T) {
+	d := newTestDaemon(t)
+
+	tc := &config.TeamConfig{
+		Name: "Test",
+		Repo: t.TempDir(),
+		Agents: []config.AgentConfig{
+			{Name: "Bot", AgentType: "claude"},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	if len(agents[0].Tags) != 0 {
+		t.Errorf("expected no tags when none configured, got %v", agents[0].Tags)
+	}
+}
