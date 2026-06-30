@@ -22,6 +22,7 @@ const (
 	EventIteration        EventType = "iteration"
 	EventRunCompleted     EventType = "run_completed"
 	EventRunFailed        EventType = "run_failed"
+	EventToolCall         EventType = "tool_call"
 )
 
 // Event is a single run lifecycle event.
@@ -51,6 +52,15 @@ type EventLog struct {
 	count int
 }
 
+// EventLogPath returns the filesystem path for the event log of the given runID.
+func EventLogPath(runID string) (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, configDir, "runs", runID, "events.jsonl"), nil
+}
+
 // NewEventLog creates or opens an event log at ~/.config/skwad/runs/<runID>/events.jsonl.
 func NewEventLog(runID string) (*EventLog, error) {
 	base, err := os.UserConfigDir()
@@ -71,6 +81,16 @@ func NewEventLog(runID string) (*EventLog, error) {
 		runID: runID,
 		enc:   json.NewEncoder(f),
 	}, nil
+}
+
+// Path returns the filesystem path of this event log file.
+func (l *EventLog) Path() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return ""
+	}
+	return l.file.Name()
 }
 
 // Append writes an event to the log.

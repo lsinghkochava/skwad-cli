@@ -67,6 +67,10 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
+// executeRun returns only after all agent stdout readers have been fully drained
+// (via d.Pool.WaitAllDrained) and the event log has been fsynced and closed.
+// Callers that read ~/.config/skwad/runs/<runID>/events.jsonl after this process
+// exits do not need additional coordination.
 func executeRun(cmd *cobra.Command, args []string) error {
 	// Handle --clean-runs before anything else.
 	if runFlagCleanRuns != "" {
@@ -202,6 +206,12 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 	slog.Info("starting run", "runID", runID, "agents", len(agents), "timeout", timeout, "resume", isResume)
 	fmt.Fprintf(os.Stderr, "Run ID: %s\n", runID)
+	if logPath, err := persistence.EventLogPath(runID); err == nil {
+		fmt.Fprintf(os.Stderr, "Event log: %s\n", logPath)
+	}
+	for _, a := range agents {
+		fmt.Fprintf(os.Stderr, "Agent: %s %s\n", a.Name, a.ID)
+	}
 
 	// Event log for run state persistence (appends to existing log on resume).
 	eventLog, _ := persistence.NewEventLog(runID)
@@ -269,7 +279,8 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Capture result text for --output filtering.
+	// Capture result text for --output filtering; emit EventToolCall for tool_use blocks.
+	var streamParseFailures, streamTotal int
 	prevOnStream := d.Pool.OnStreamMessage
 	d.Pool.OnStreamMessage = func(agentID uuid.UUID, msg process.StreamMessage) {
 		if prevOnStream != nil {
@@ -282,6 +293,45 @@ func executeRun(cmd *cobra.Command, args []string) error {
 				outputMu.Unlock()
 			}
 		}
+		if msg.Type == "assistant" && len(msg.Raw) > 0 {
+			streamTotal++
+			toolNames, ok := extractToolUseNames(msg.Raw)
+			if !ok {
+				streamParseFailures++
+			}
+			now := time.Now().UnixMilli()
+			for _, name := range toolNames {
+				data, _ := json.Marshal(map[string]any{
+					"agent_id":          agentID.String(),
+					"tool_name":         name,
+					"timestamp_unix_ms": now,
+				})
+				eventLog.Append(persistence.Event{
+					Type:    persistence.EventToolCall,
+					AgentID: agentID.String(),
+					Data:    data,
+				})
+			}
+		}
+	}
+
+	// Emit EventToolCall for MCP tool calls (namespaced with "mcp:").
+	prevOnToolCall := d.MCPServer.OnToolCall
+	d.MCPServer.OnToolCall = func(agentID, agentName, toolName string, args map[string]interface{}, result interface{}) {
+		if prevOnToolCall != nil {
+			prevOnToolCall(agentID, agentName, toolName, args, result)
+		}
+		now := time.Now().UnixMilli()
+		data, _ := json.Marshal(map[string]any{
+			"agent_id":          agentID,
+			"tool_name":         "mcp:" + toolName,
+			"timestamp_unix_ms": now,
+		})
+		eventLog.Append(persistence.Event{
+			Type:    persistence.EventToolCall,
+			AgentID: agentID,
+			Data:    data,
+		})
 	}
 
 	// 9. Set team size and spawn all agents.
@@ -377,9 +427,11 @@ func executeRun(cmd *cobra.Command, args []string) error {
 	})
 
 	timedOut := false
+	hitMaxIterations := false
 	for {
 		iter, err := pl.NextIteration()
 		if err != nil {
+			hitMaxIterations = true
 			slog.Warn("max iterations reached", "iterations", pl.Iteration)
 			pl.RecordEvent("max_iterations", fmt.Sprintf("stopped after %d iterations", pl.Iteration))
 			break
@@ -449,8 +501,8 @@ func executeRun(cmd *cobra.Command, args []string) error {
 						slog.Debug("close stdin", "agent", a.Name, "error", err)
 					}
 				}
-				// Brief wait for graceful process exit.
-				time.Sleep(3 * time.Second)
+				// Poll for exit up to 30s instead of fixed 3s sleep.
+				waitForAgentsExit(d.Pool.IsRunning, agentIDs(agents), time.Now().Add(30*time.Second), time.Sleep)
 				break
 			}
 		}
@@ -599,24 +651,81 @@ func executeRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Drain all stdout readers before closing the event log.
+	// executeRun returns only after this call, guaranteeing all EventToolCall
+	// appends from the OnStreamMessage callback have been flushed to disk.
+	// Consumers (e.g. eval harness judge) may read the event log after this
+	// process exits without any additional coordination.
+	d.Pool.WaitAllDrained()
+
+	if streamTotal > 0 && streamParseFailures*100/streamTotal > 5 {
+		slog.Warn("high stream parse failure rate",
+			"failures", streamParseFailures,
+			"total", streamTotal,
+			"rate_pct", streamParseFailures*100/streamTotal)
+	}
+
 	// 15. Determine exit code.
-	if timedOut || cancelled {
+	failed, code := resolveRunResult(timedOut, cancelled, hitMaxIterations, agentExitCodes)
+	if failed {
 		eventLog.Append(persistence.Event{Type: persistence.EventRunFailed})
-		os.Exit(1)
-	}
-	if pl.Iteration >= pl.MaxIterations && pl.MaxIterations > 0 {
-		eventLog.Append(persistence.Event{Type: persistence.EventRunFailed})
-		os.Exit(1)
-	}
-	for _, code := range agentExitCodes {
-		if code != 0 {
-			eventLog.Append(persistence.Event{Type: persistence.EventRunFailed})
-			os.Exit(2)
-		}
+		os.Exit(code)
 	}
 
 	eventLog.Append(persistence.Event{Type: persistence.EventRunCompleted})
 	return nil
+}
+
+// resolveRunResult decides whether the run failed and what exit code to use.
+// It is extracted to allow unit-testing without touching os.Exit.
+func resolveRunResult(timedOut, cancelled, hitMaxIterations bool, agentExitCodes map[uuid.UUID]int) (failed bool, exitCode int) {
+	if timedOut || cancelled {
+		return true, 1
+	}
+	if hitMaxIterations {
+		return true, 1
+	}
+	for _, code := range agentExitCodes {
+		if code != 0 {
+			return true, 2
+		}
+	}
+	return false, 0
+}
+
+// waitForAgentsExit polls isRunning for each agent ID until all have exited or
+// deadline is reached. sleepFn is injected so tests can skip real wall-clock waits.
+// Returns true if all agents exited before the deadline.
+func waitForAgentsExit(isRunning func(uuid.UUID) bool, ids []uuid.UUID, deadline time.Time, sleepFn func(time.Duration)) bool {
+	for time.Now().Before(deadline) {
+		allGone := true
+		for _, id := range ids {
+			if isRunning(id) {
+				allGone = false
+				break
+			}
+		}
+		if allGone {
+			return true
+		}
+		sleepFn(500 * time.Millisecond)
+	}
+	// One final check — process may have exited during the last sleep.
+	for _, id := range ids {
+		if isRunning(id) {
+			return false
+		}
+	}
+	return true
+}
+
+// agentIDs extracts the UUID slice from a []*models.Agent slice.
+func agentIDs(agents []*models.Agent) []uuid.UUID {
+	ids := make([]uuid.UUID, len(agents))
+	for i, a := range agents {
+		ids[i] = a.ID
+	}
+	return ids
 }
 
 // resolveAgentPrompt returns the prompt for a specific agent, following priority:
@@ -708,6 +817,30 @@ func cleanOldRuns(spec string) error {
 }
 
 // parseResultText extracts the Result field from a raw result stream message.
+// extractToolUseNames parses an assistant stream-json message and returns the
+// names of all tool_use content blocks. Returns (nil, false) on parse failure;
+// returns (names, true) on success (names may be empty if no tool_use blocks).
+func extractToolUseNames(raw json.RawMessage) ([]string, bool) {
+	var am process.AssistantMessage
+	if err := json.Unmarshal(raw, &am); err != nil {
+		return nil, false
+	}
+	if len(am.Message.Content) == 0 {
+		return nil, true
+	}
+	var blocks []process.ContentBlock
+	if err := json.Unmarshal(am.Message.Content, &blocks); err != nil {
+		return nil, false
+	}
+	var names []string
+	for _, b := range blocks {
+		if b.Type == "tool_use" && b.Name != "" {
+			names = append(names, b.Name)
+		}
+	}
+	return names, true
+}
+
 func parseResultText(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""

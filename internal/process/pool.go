@@ -305,6 +305,23 @@ func (p *Pool) ExitCode(agentID uuid.UUID) int {
 	return ma.runner.ExitCode()
 }
 
+// WaitAllDrained blocks until the stdout reader goroutine of every known agent
+// has finished. Call this after all processes have exited to guarantee that all
+// OnStreamMessage callbacks (and thus all event-log appends) have completed
+// before reading the event log.
+func (p *Pool) WaitAllDrained() {
+	p.mu.RLock()
+	chans := make([]<-chan struct{}, 0, len(p.agents))
+	for _, ma := range p.agents {
+		chans = append(chans, ma.runner.ReadDone())
+	}
+	p.mu.RUnlock()
+
+	for _, ch := range chans {
+		<-ch
+	}
+}
+
 // Resize is a no-op for headless processes (no PTY to resize).
 func (p *Pool) Resize(agentID uuid.UUID, cols, rows uint16) {}
 

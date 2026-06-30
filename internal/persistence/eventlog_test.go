@@ -469,6 +469,84 @@ func TestReplay_PromptSent_AccumulatesCount(t *testing.T) {
 	}
 }
 
+func TestEventToolCall_RoundTrip(t *testing.T) {
+	el := setupTestEventLog(t, "test-toolcall-roundtrip")
+
+	toolData, _ := json.Marshal(map[string]any{
+		"agent_id":          "agt-123",
+		"tool_name":         "Read",
+		"timestamp_unix_ms": int64(1747721234567),
+	})
+	el.Append(Event{Type: EventToolCall, AgentID: "agt-123", Data: toolData})
+	el.Append(Event{Type: EventRunCompleted})
+	el.Close()
+
+	f, err := os.Open(el.file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var events []Event
+	for scanner.Scan() {
+		var ev Event
+		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		events = append(events, ev)
+	}
+
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Type != EventToolCall {
+		t.Errorf("expected type %q, got %q", EventToolCall, events[0].Type)
+	}
+	if events[0].AgentID != "agt-123" {
+		t.Errorf("expected agent_id 'agt-123', got %q", events[0].AgentID)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(events[0].Data, &payload); err != nil {
+		t.Fatalf("unmarshal data: %v", err)
+	}
+	if payload["tool_name"] != "Read" {
+		t.Errorf("expected tool_name 'Read', got %v", payload["tool_name"])
+	}
+}
+
+func TestReplay_BackwardCompat_ToolCallIgnored(t *testing.T) {
+	el := setupTestEventLog(t, "test-toolcall-compat")
+
+	el.Append(Event{Type: EventRunStarted})
+	el.Append(Event{Type: EventAgentSpawned, AgentID: "a1", AgentName: "Coder"})
+
+	toolData, _ := json.Marshal(map[string]any{
+		"agent_id":          "a1",
+		"tool_name":         "Read",
+		"timestamp_unix_ms": int64(1747721234567),
+	})
+	el.Append(Event{Type: EventToolCall, AgentID: "a1", Data: toolData})
+	el.Append(Event{Type: EventRunCompleted})
+	el.Close()
+
+	state := replayTestLog(t, el.file.Name())
+	if !state.Completed {
+		t.Error("run should be completed — EventToolCall should be silently ignored by replay")
+	}
+	if !state.Agents["a1"].Spawned {
+		t.Error("agent a1 should be spawned")
+	}
+}
+
+func TestEventLog_Path(t *testing.T) {
+	el := setupTestEventLog(t, "test-path")
+	defer el.Close()
+	if el.Path() == "" {
+		t.Error("Path() should return non-empty string")
+	}
+}
+
 func TestEventLog_CriticalEventsSync(t *testing.T) {
 	el := setupTestEventLog(t, "test-critical")
 	// Critical events should not error (fsync is called)

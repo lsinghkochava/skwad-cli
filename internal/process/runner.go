@@ -25,6 +25,7 @@ type Runner struct {
 	stopped  atomic.Bool
 	exitCode atomic.Int32
 	done     chan struct{}
+	readDone chan struct{} // closed when readStdout goroutine finishes
 	args     []string
 	env      []string
 	dir      string
@@ -38,10 +39,11 @@ type Runner struct {
 // working directory. Callbacks (OnMessage, OnExit) must be set before Start().
 func NewRunner(args []string, env []string, dir string) *Runner {
 	r := &Runner{
-		args: args,
-		env:  env,
-		dir:  dir,
-		done: make(chan struct{}),
+		args:     args,
+		env:      env,
+		dir:      dir,
+		done:     make(chan struct{}),
+		readDone: make(chan struct{}),
 	}
 	r.exitCode.Store(-1)
 	return r
@@ -213,9 +215,17 @@ func (r *Runner) Wait() <-chan struct{} {
 	return r.done
 }
 
+// ReadDone returns a channel that is closed when the stdout reader goroutine finishes
+// draining all output. Use this to guarantee all OnMessage callbacks have fired
+// before reading event logs written by those callbacks.
+func (r *Runner) ReadDone() <-chan struct{} {
+	return r.readDone
+}
+
 // readStdout scans stdout line-by-line, parses JSON stream messages, and
 // invokes OnMessage for each.
 func (r *Runner) readStdout() {
+	defer close(r.readDone)
 	scanner := bufio.NewScanner(r.stdout)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024) // 1MB buffer
 
