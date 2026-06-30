@@ -53,7 +53,7 @@ func ListTemplates() []string {
 // LoadConfigOrTemplate loads a team config from either a file path (--config)
 // or a built-in template (--team), with variable substitution from vars.
 // Exactly one of configPath or teamName should be non-empty.
-func LoadConfigOrTemplate(configPath, teamName string, vars map[string]string) (*TeamConfig, error) {
+func LoadConfigOrTemplate(configPath, teamName string, vars SetVars) (*TeamConfig, error) {
 	if configPath != "" && teamName != "" {
 		return nil, fmt.Errorf("--config and --team are mutually exclusive")
 	}
@@ -64,28 +64,52 @@ func LoadConfigOrTemplate(configPath, teamName string, vars map[string]string) (
 	}
 
 	if teamName != "" {
-		return LoadTemplate(teamName, vars)
+		return LoadTemplate(teamName, vars.All)
 	}
-	return LoadOrConvert(configPath)
+	tc, err := LoadOrConvert(configPath)
+	if err != nil {
+		return nil, err
+	}
+	// Apply explicit --set overrides to file-based configs before validation.
+	if vars.Explicit["repo"] {
+		tc.Repo = vars.All["repo"]
+	}
+	if vars.Explicit["prompt"] && vars.All["prompt"] != "" {
+		tc.Prompt = vars.All["prompt"]
+	}
+	if err := tc.Validate(); err != nil {
+		return nil, err
+	}
+	return tc, nil
 }
 
-// ParseSetFlags parses a slice of "key=value" strings into a map.
-func ParseSetFlags(flags []string) map[string]string {
-	vars := make(map[string]string)
+// SetVars holds parsed --set flag values and tracks which were explicitly provided.
+type SetVars struct {
+	All      map[string]string
+	Explicit map[string]bool
+}
+
+// ParseSetFlags parses a slice of "key=value" strings into a SetVars.
+func ParseSetFlags(flags []string) SetVars {
+	sv := SetVars{
+		All:      make(map[string]string),
+		Explicit: make(map[string]bool),
+	}
 	for _, f := range flags {
 		parts := strings.SplitN(f, "=", 2)
 		if len(parts) == 2 {
-			vars[parts[0]] = parts[1]
+			sv.All[parts[0]] = parts[1]
+			sv.Explicit[parts[0]] = true
 		}
 	}
 	// Ensure repo and prompt have defaults even if not set.
-	if _, ok := vars["repo"]; !ok {
+	if _, ok := sv.All["repo"]; !ok {
 		if wd, err := filepath.Abs("."); err == nil {
-			vars["repo"] = wd
+			sv.All["repo"] = wd
 		}
 	}
-	if _, ok := vars["prompt"]; !ok {
-		vars["prompt"] = ""
+	if _, ok := sv.All["prompt"]; !ok {
+		sv.All["prompt"] = ""
 	}
-	return vars
+	return sv
 }

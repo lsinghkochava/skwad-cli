@@ -105,20 +105,26 @@ func TestLoadTemplate_MissingVar(t *testing.T) {
 
 func TestParseSetFlags(t *testing.T) {
 	vars := ParseSetFlags([]string{"repo=/tmp/test", "prompt=do the thing"})
-	if vars["repo"] != "/tmp/test" {
-		t.Errorf("expected repo=/tmp/test, got %q", vars["repo"])
+	if vars.All["repo"] != "/tmp/test" {
+		t.Errorf("expected repo=/tmp/test, got %q", vars.All["repo"])
 	}
-	if vars["prompt"] != "do the thing" {
-		t.Errorf("expected prompt='do the thing', got %q", vars["prompt"])
+	if vars.All["prompt"] != "do the thing" {
+		t.Errorf("expected prompt='do the thing', got %q", vars.All["prompt"])
+	}
+	if !vars.Explicit["repo"] {
+		t.Error("expected repo to be marked as explicit")
 	}
 }
 
 func TestParseSetFlags_Defaults(t *testing.T) {
 	vars := ParseSetFlags(nil)
-	if _, ok := vars["repo"]; !ok {
+	if _, ok := vars.All["repo"]; !ok {
 		t.Error("expected default repo to be set")
 	}
-	if _, ok := vars["prompt"]; !ok {
+	if _, ok := vars.All["prompt"]; !ok {
 		t.Error("expected default prompt to be set")
+	}
+	if vars.Explicit["repo"] {
+		t.Error("expected repo to NOT be marked as explicit when defaulted")
 	}
 }

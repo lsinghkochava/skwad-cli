@@ -10,12 +10,6 @@
       "prompt": ""
     },
     {
-      "name": "Consistency Checker",
-      "agent_type": "claude",
-      "persona": "Consistency Checker",
-      "prompt": ""
-    },
-    {
       "name": "Bug Hunter",
       "agent_type": "claude",
       "persona": "Bug Hunter",
@@ -31,12 +25,6 @@
       "name": "Security Sentinel",
       "agent_type": "claude",
       "persona": "Security Sentinel",
-      "prompt": ""
-    },
-    {
-      "name": "Test Analyst",
-      "agent_type": "claude",
-      "persona": "Test Analyst",
       "prompt": ""
     },
     {
