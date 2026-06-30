@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/lsinghkochava/skwad-cli/internal/models"
 )
@@ -71,16 +72,10 @@ func (s *Service) CustomResponse(agentMessage string) (string, error) {
 }
 
 func (s *Service) callLLM(prompt string) (string, error) {
-	switch s.settings.Provider {
-	case models.AutopilotProviderAnthropic:
-		return s.callAnthropic(prompt)
-	case models.AutopilotProviderOpenAI:
-		return s.callOpenAI(prompt)
-	case models.AutopilotProviderGoogle:
-		return s.callGoogle(prompt)
-	default:
-		return "", fmt.Errorf("unknown provider: %s", s.settings.Provider)
-	}
+	// Skwad ships only the Claude SDK — autopilot always uses Anthropic.
+	// callOpenAI/callGoogle remain defined but unreachable; provider switch
+	// in settings is dormant for now.
+	return s.callAnthropic(prompt)
 }
 
 func (s *Service) callAnthropic(prompt string) (string, error) {
@@ -98,7 +93,7 @@ func (s *Service) callAnthropic(prompt string) (string, error) {
 		}
 		return resp.Content[0].Text, nil
 	}, map[string]string{
-		"x-api-key":         s.settings.APIKey,
+		"x-api-key":         os.Getenv("ANTHROPIC_API_KEY"),
 		"anthropic-version": "2023-06-01",
 	})
 }

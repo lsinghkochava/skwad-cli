@@ -549,3 +549,27 @@ func TestAutoClaim_CaseInsensitiveTagMatch(t *testing.T) {
 		t.Errorf("expected case-insensitive tag match to claim task, got status %s", claimed.Status)
 	}
 }
+
+func TestBuildAgentEnv(t *testing.T) {
+	env := buildAgentEnv("agent-id-123", "http://127.0.0.1:8777", "sk-ant-test")
+
+	want := map[string]string{
+		"SKWAD_AGENT_ID":    "agent-id-123",
+		"SKWAD_URL":         "http://127.0.0.1:8777",
+		"ANTHROPIC_API_KEY": "sk-ant-test",
+	}
+	got := map[string]string{}
+	for _, kv := range env {
+		for i := 0; i < len(kv); i++ {
+			if kv[i] == '=' {
+				got[kv[:i]] = kv[i+1:]
+				break
+			}
+		}
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("env[%s] = %q, want %q", k, got[k], v)
+		}
+	}
+}

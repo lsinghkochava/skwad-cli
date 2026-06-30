@@ -2,12 +2,14 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 
-	"github.com/spf13/cobra"
+	"github.com/joho/godotenv"
 	"github.com/lsinghkochava/skwad-cli/internal/models"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -32,11 +34,26 @@ var rootCmd = &cobra.Command{
 		}
 		handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 		slog.SetDefault(slog.New(handler))
+
+		if os.Getenv("ANTHROPIC_API_KEY") == "" {
+			return fmt.Errorf("ANTHROPIC_API_KEY environment variable is required: skwad uses the Claude SDK and cannot run without it")
+		}
 		return nil
 	},
 }
 
+func loadDotenv() {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		reason := "parse error"
+		if errors.Is(err, os.ErrPermission) {
+			reason = "permission denied"
+		}
+		slog.Warn("failed to load .env file", "reason", reason)
+	}
+}
+
 func init() {
+	cobra.OnInitialize(loadDotenv)
 	rootCmd.PersistentFlags().IntVar(&flagPort, "port", models.DefaultMCPPort, "MCP server port")
 	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "enable verbose output")
 	rootCmd.PersistentFlags().BoolVar(&flagQuiet, "quiet", false, "suppress non-error output")

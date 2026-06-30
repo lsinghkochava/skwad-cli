@@ -453,10 +453,7 @@ func (d *Daemon) SpawnAgent(a *models.Agent) {
 		return
 	}
 
-	env := []string{
-		"SKWAD_AGENT_ID=" + a.ID.String(),
-		"SKWAD_URL=" + strings.TrimSuffix(d.Pool.MCPURL(), "/mcp"),
-	}
+	env := buildAgentEnv(a.ID.String(), strings.TrimSuffix(d.Pool.MCPURL(), "/mcp"), os.Getenv("ANTHROPIC_API_KEY"))
 
 	// Create activity controller for stream-based status detection.
 	ac := agent.NewActivityController(a.ID, a.ActivityMode(), d.Manager)
@@ -506,6 +503,17 @@ func ensureGitignoreEntry(repoPath, entry string) {
 		f.WriteString("\n")
 	}
 	f.WriteString(entry + "\n")
+}
+
+// buildAgentEnv constructs the env slice passed to spawned agent processes.
+// ANTHROPIC_API_KEY is required: skwad spawns claude SDK processes which
+// authenticate via this env var.
+func buildAgentEnv(agentID, mcpURL, anthropicAPIKey string) []string {
+	return []string{
+		"SKWAD_AGENT_ID=" + agentID,
+		"SKWAD_URL=" + mcpURL,
+		"ANTHROPIC_API_KEY=" + anthropicAPIKey,
+	}
 }
 
 // sanitizeName converts a name to a filesystem/branch-safe string.
