@@ -65,6 +65,10 @@ Headless multi-agent CLI orchestrator written in Go. Spawns AI coding agents (Cl
 | Logging | log/slog (stdlib) |
 | Persistence | JSON files in ~/.config/skwad/ |
 
+## Runtime Requirements
+
+`ANTHROPIC_API_KEY` env var is mandatory. `rootCmd.PersistentPreRunE` rejects every command if unset. The key is injected into spawned claude processes via `buildAgentEnv` (`internal/daemon/daemon.go`) and used by autopilot Anthropic calls (`internal/autopilot/autopilot.go`). Autopilot always routes to Anthropic regardless of the `provider` setting — the openai/google branches are dormant.
+
 ## Coding Rules
 
 1. **Thread safety**: `agent.Manager` is mutex-protected. `agent.Coordinator` is the goroutine-safe message queue — never access it directly without going through its public API.
@@ -76,6 +80,7 @@ Headless multi-agent CLI orchestrator written in Go. Spawns AI coding agents (Cl
 7. **Signal handling** — double SIGINT/SIGTERM: first graceful (StopAll), second force kill.
 8. **No global mutable state** except persistence store and service singletons.
 9. **Write tests for all business logic** in `internal/` packages.
+10. **The `eval/` harness is EXEMPT from test coverage.** It is a research/experiment harness, not production code — do NOT write, maintain, or gate on tests for anything under `eval/`. Correctness there is confirmed by review and live runs, not a test suite.
 
 ## Development
 

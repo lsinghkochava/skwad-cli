@@ -18,6 +18,14 @@ cd skwad-cli
 make build
 ```
 
+## Requirements
+
+`ANTHROPIC_API_KEY` must be set in the environment. Skwad spawns the Claude SDK as its agent runtime and uses the same key for autopilot calls — every command (`start`, `run`, `status`, `list`, etc.) refuses to run without it.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
 ## Quick Start
 
 ```bash
@@ -212,7 +220,7 @@ Events tracked: run start/complete/fail, agent spawn/exit, prompts sent, phase t
 
 | Template | Agents | Description |
 |----------|--------|-------------|
-| `review-team` | 7 | Specialized code review: Performance, Consistency, Bug Hunter, Architecture, Security, Test Analyst, Coordinator |
+| `review-team` | 5 | Specialized code review: Performance, Bug Hunter, Architecture, Security, Coordinator |
 | `dev-team` | 3 | Explorer, Coder, Tester |
 
 ```bash
