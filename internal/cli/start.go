@@ -19,7 +19,7 @@ import (
 	"github.com/lsinghkochava/skwad-cli/internal/tui"
 )
 
-const defaultBootstrapPrompt = "List other agents names and project (no ID) in a table based on context then set your status to indicate you are ready to get going!"
+const defaultBootstrapPrompt = "Reply with a single line: ready. Do not call any tools or take any other action."
 
 var (
 	startFlagWatch   bool
