@@ -44,6 +44,33 @@ func TestLoadTeamConfig_Valid(t *testing.T) {
 	}
 }
 
+func TestLoadTeamConfig_ModelFields(t *testing.T) {
+	repo := t.TempDir()
+	cfg := writeConfig(t, `{
+		"name": "My Team",
+		"repo": "`+repo+`",
+		"model": "team-default-model",
+		"agents": [
+			{"name": "Coder", "agent_type": "claude", "model": "agent-model"},
+			{"name": "Tester", "agent_type": "claude"}
+		]
+	}`)
+
+	tc, err := LoadTeamConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tc.Model != "team-default-model" {
+		t.Errorf("expected team-level model 'team-default-model', got %q", tc.Model)
+	}
+	if tc.Agents[0].Model != "agent-model" {
+		t.Errorf("expected agents[0].model 'agent-model', got %q", tc.Agents[0].Model)
+	}
+	if tc.Agents[1].Model != "" {
+		t.Errorf("expected agents[1].model empty (omitted), got %q", tc.Agents[1].Model)
+	}
+}
+
 func TestValidate_MissingName(t *testing.T) {
 	repo := t.TempDir()
 	tc := &TeamConfig{

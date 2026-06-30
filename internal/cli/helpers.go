@@ -46,6 +46,12 @@ func createAgentsFromConfig(d *daemon.Daemon, tc *config.TeamConfig) []*models.A
 		a.AllowedTools = ac.AllowedTools
 		a.CoordinationMode = tc.Coordination
 
+		// Model: per-agent override, falling back to the team-level default.
+		a.Model = ac.Model
+		if a.Model == "" {
+			a.Model = tc.Model
+		}
+
 		// Worktree isolation: per-agent override > team default
 		if ac.Isolate != nil {
 			a.WorktreeIsolation = *ac.Isolate

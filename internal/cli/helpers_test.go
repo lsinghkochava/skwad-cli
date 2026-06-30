@@ -254,6 +254,68 @@ func TestTagMerge_Deduplication(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Per-agent model resolution tests
+//
+// createAgentsFromConfig sets a.Model = ac.Model, falling back to tc.Model
+// (team-level default) when the agent specifies none.
+// ---------------------------------------------------------------------------
+
+func TestCreateAgents_PerAgentModel(t *testing.T) {
+	d := newTestDaemon(t)
+
+	tc := &config.TeamConfig{
+		Name:  "Test",
+		Repo:  t.TempDir(),
+		Model: "team-default-model",
+		Agents: []config.AgentConfig{
+			{Name: "Bot", AgentType: "claude", Model: "agent-specific-model"},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	if agents[0].Model != "agent-specific-model" {
+		t.Errorf("expected per-agent model to win, got %q", agents[0].Model)
+	}
+}
+
+func TestCreateAgents_TeamModelFallback(t *testing.T) {
+	d := newTestDaemon(t)
+
+	// Agent has no model — should inherit the team-level default.
+	tc := &config.TeamConfig{
+		Name:  "Test",
+		Repo:  t.TempDir(),
+		Model: "team-default-model",
+		Agents: []config.AgentConfig{
+			{Name: "Bot", AgentType: "claude"},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	if agents[0].Model != "team-default-model" {
+		t.Errorf("expected team-level model fallback, got %q", agents[0].Model)
+	}
+}
+
+func TestCreateAgents_NoModel(t *testing.T) {
+	d := newTestDaemon(t)
+
+	// Neither agent nor team specify a model — Model stays empty.
+	tc := &config.TeamConfig{
+		Name: "Test",
+		Repo: t.TempDir(),
+		Agents: []config.AgentConfig{
+			{Name: "Bot", AgentType: "claude"},
+		},
+	}
+
+	agents := createAgentsFromConfig(d, tc)
+	if agents[0].Model != "" {
+		t.Errorf("expected empty model when none configured, got %q", agents[0].Model)
+	}
+}
+
 func TestTagMerge_NoTags(t *testing.T) {
 	d := newTestDaemon(t)
 

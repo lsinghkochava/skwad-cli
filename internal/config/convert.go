@@ -133,8 +133,5 @@ func LoadOrConvert(path string) (*TeamConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	if err := tc.Validate(); err != nil {
-		return nil, err
-	}
 	return &tc, nil
 }

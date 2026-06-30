@@ -56,8 +56,11 @@ func (b *CommandBuilder) BuildArgs(a *models.Agent, persona *models.Persona, set
 	}
 	args = append(args, "--append-system-prompt", systemPrompt)
 
-	// Model from ClaudeOptions (parse --model flag if present)
-	if opts := settings.AgentTypeOptions.ClaudeOptions; opts != "" {
+	// Model precedence: per-agent a.Model (carries the team-level default from
+	// createAgentsFromConfig) > global ClaudeOptions --model > CLI default.
+	if a.Model != "" {
+		args = append(args, "--model", a.Model)
+	} else if opts := settings.AgentTypeOptions.ClaudeOptions; opts != "" {
 		if model := parseFlag(opts, "--model"); model != "" {
 			args = append(args, "--model", model)
 		}

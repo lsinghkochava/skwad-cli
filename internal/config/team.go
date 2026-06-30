@@ -30,6 +30,7 @@ type TeamConfig struct {
 	Coordination  string          `json:"coordination,omitempty"`   // "managed" (default) or "autonomous"
 	PersistTasks  bool            `json:"persist_tasks,omitempty"`  // save tasks to disk for crash recovery
 	MaxTasks      int             `json:"max_tasks,omitempty"`      // max task count (default 50)
+	Model         string          `json:"model,omitempty"`          // team-level default model (per-agent Model overrides)
 	Agents        []AgentConfig   `json:"agents"`
 	Personas   []PersonaConfig `json:"personas,omitempty"`
 }
@@ -47,6 +48,7 @@ type AgentConfig struct {
 	Name                string   `json:"name"`
 	AgentType           string   `json:"agent_type"`
 	Persona             string   `json:"persona,omitempty"`
+	Model               string   `json:"model,omitempty"`
 	PersonaInstructions string   `json:"persona_instructions,omitempty"`
 	PersonaID           string   `json:"persona_id,omitempty"`
 	Avatar              string   `json:"avatar,omitempty"`
@@ -58,8 +60,8 @@ type AgentConfig struct {
 	Tags                []string `json:"tags,omitempty"`
 }
 
-// LoadTeamConfig reads a JSON file and returns a validated TeamConfig.
-func LoadTeamConfig(path string) (*TeamConfig, error) {
+// loadTeamConfigRaw reads a JSON file and returns an unvalidated TeamConfig.
+func loadTeamConfigRaw(path string) (*TeamConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -68,6 +70,16 @@ func LoadTeamConfig(path string) (*TeamConfig, error) {
 	var tc TeamConfig
 	if err := json.Unmarshal(data, &tc); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	return &tc, nil
+}
+
+// LoadTeamConfig reads a JSON file and returns a validated TeamConfig.
+func LoadTeamConfig(path string) (*TeamConfig, error) {
+	tc, err := loadTeamConfigRaw(path)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tc.Validate(); err != nil {
@@ -81,7 +93,7 @@ func LoadTeamConfig(path string) (*TeamConfig, error) {
 	}
 	slog.Debug("team config loaded", "team", tc.Name, "agentCount", len(tc.Agents), "agents", agentNames)
 
-	return &tc, nil
+	return tc, nil
 }
 
 // Validate checks that the TeamConfig is well-formed.

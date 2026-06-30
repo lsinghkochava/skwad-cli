@@ -51,6 +51,7 @@ type Agent struct {
 	Avatar       string     `json:"avatar"` // emoji or "data:image/png;base64,..."
 	Folder       string     `json:"folder"`
 	AgentType    AgentType  `json:"agentType"`
+	Model        string     `json:"model,omitempty"` // per-agent model override (falls back to team default, then ClaudeOptions)
 	ShellCommand string     `json:"shellCommand,omitempty"`
 	PersonaID    *uuid.UUID `json:"personaId,omitempty"`
 	CreatedBy    *uuid.UUID `json:"createdBy,omitempty"`

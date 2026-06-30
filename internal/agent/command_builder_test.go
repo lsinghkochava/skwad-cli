@@ -269,6 +269,17 @@ func TestBuildArgs_NoPluginDir(t *testing.T) {
 	}
 }
 
+// TestBuildArgs_NoRegistrationPrompt guards the invariant that the
+// bootstrap/registration USER prompt is never baked into the launch args.
+// Headless agents read their turn-trigger prompt from stdin (stream-json), so
+// the ONLY prompt-bearing arg is --append-system-prompt (the system prompt).
+//
+// This is asserted STRUCTURALLY rather than against a literal bootstrap string:
+// the previous version hardcoded the old roster-table sentinel ("List other
+// agents names and project"), which the bootstrap-prompt change deleted —
+// leaving the guard matching a string that no longer exists anywhere. The
+// structural form below stays meaningful no matter how the bootstrap text is
+// later reworded (and can't import the cli constant — that's an import cycle).
 func TestBuildArgs_NoRegistrationPrompt(t *testing.T) {
 	b := defaultBuilder()
 	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
@@ -276,10 +287,31 @@ func TestBuildArgs_NoRegistrationPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, arg := range args {
-		if strings.Contains(arg, "List other agents names and project") {
-			t.Error("headless mode should not include registration user prompt")
+
+	// `-p` must be a bare flag: the prompt is supplied via stdin, not passed
+	// positionally. If a future change embedded a bootstrap prompt as `-p
+	// <text>`, the token after -p would be free text instead of a flag.
+	pIdx := argIndex(args, "-p")
+	if pIdx < 0 {
+		t.Fatal("expected -p (headless print mode)")
+	}
+	if pIdx+1 >= len(args) || !strings.HasPrefix(args[pIdx+1], "-") {
+		got := ""
+		if pIdx+1 < len(args) {
+			got = args[pIdx+1]
 		}
+		t.Errorf("-p must be a bare flag (prompt comes from stdin), but is followed by free text %q — a user/bootstrap prompt may have been embedded in args", got)
+	}
+
+	// The only prompt-bearing arg is --append-system-prompt, and its value must
+	// be exactly the system prompt (BuildSystemPrompt) — nothing else (no
+	// bootstrap/registration user prompt) is appended into the launch args.
+	spIdx := argIndex(args, "--append-system-prompt")
+	if spIdx < 0 || spIdx+1 >= len(args) {
+		t.Fatal("expected --append-system-prompt with a value")
+	}
+	if want := BuildSystemPrompt(a, nil, nil); args[spIdx+1] != want {
+		t.Errorf("--append-system-prompt value is not exactly the system prompt; extra prompt text may have leaked into args.\n got len=%d\nwant len=%d", len(args[spIdx+1]), len(want))
 	}
 }
 
@@ -529,6 +561,87 @@ func TestBuildArgs_ExploreModeOverridesAllowedTools(t *testing.T) {
 		if !containsArg(args, tool) {
 			t.Errorf("explore mode should have tool %q", tool)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Per-agent model tests
+//
+// Model precedence in BuildArgs: per-agent a.Model (which already carries the
+// team-level default, applied in createAgentsFromConfig) > global ClaudeOptions
+// --model > CLI default (no --model arg).
+// ---------------------------------------------------------------------------
+
+// settingsWithModel returns settings whose global ClaudeOptions specify --model.
+func settingsWithModel(model string) *models.AppSettings {
+	s := models.DefaultSettings()
+	s.AgentTypeOptions.ClaudeOptions = "--model " + model
+	return &s
+}
+
+// modelArgs returns every value passed to a --model flag in args.
+func modelArgs(args []string) []string {
+	var out []string
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--model" {
+			out = append(out, args[i+1])
+		}
+	}
+	return out
+}
+
+func TestBuildArgs_PerAgentModel(t *testing.T) {
+	b := defaultBuilder()
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude, Model: "claude-opus-4"}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := modelArgs(args); len(got) != 1 || got[0] != "claude-opus-4" {
+		t.Errorf("expected exactly one --model claude-opus-4, got %v", got)
+	}
+}
+
+func TestBuildArgs_ModelFallsBackToClaudeOptions(t *testing.T) {
+	b := defaultBuilder()
+	// No per-agent Model — must fall back to the global ClaudeOptions --model.
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, settingsWithModel("claude-sonnet-4"), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := modelArgs(args); len(got) != 1 || got[0] != "claude-sonnet-4" {
+		t.Errorf("expected fallback to --model claude-sonnet-4 from ClaudeOptions, got %v", got)
+	}
+}
+
+func TestBuildArgs_PerAgentModelOverridesClaudeOptions(t *testing.T) {
+	b := defaultBuilder()
+	// Both set — per-agent wins, and ClaudeOptions value must NOT also appear.
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude, Model: "claude-opus-4"}
+	args, err := b.BuildArgs(a, nil, settingsWithModel("claude-sonnet-4"), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := modelArgs(args)
+	if len(got) != 1 {
+		t.Fatalf("expected exactly one --model (no duplicate), got %v", got)
+	}
+	if got[0] != "claude-opus-4" {
+		t.Errorf("per-agent model should override ClaudeOptions: got %q, want claude-opus-4", got[0])
+	}
+}
+
+func TestBuildArgs_NoModelWhenUnset(t *testing.T) {
+	b := defaultBuilder()
+	// Neither per-agent nor ClaudeOptions model — no --model arg (CLI default).
+	a := &models.Agent{ID: uuid.New(), Name: "Agent", Folder: "/tmp", AgentType: models.AgentTypeClaude}
+	args, err := b.BuildArgs(a, nil, defaultSettings(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := modelArgs(args); len(got) != 0 {
+		t.Errorf("expected no --model arg when unset, got %v", got)
 	}
 }
 
