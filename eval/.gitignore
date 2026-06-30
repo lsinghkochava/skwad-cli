@@ -1,0 +1,10 @@
+# Cloned target repos the harness runs against — large, regenerable, not source.
+repos/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store

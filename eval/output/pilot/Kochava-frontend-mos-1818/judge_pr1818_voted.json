@@ -1,0 +1,256 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Verified 17 genuine issues/findings spanning correctness, performance, API design, observability, and missing tests. One architecture-boundary claim was not provable from repo evidence.",
+        "The review surfaces many real issues across correctness, performance, testing, security, and API design, comfortably exceeding the 4+ threshold.",
+        "Review B surfaces many genuine issues spanning correctness, resilience, tests, and performance, including the configurable-pageSize overflow guard, unvalidated loop-control counts, serial pagination, missing test coverage for several guards/paths, and debug-error leakage. It also includes some weaker or overstated findings, but the genuine issue count is still well above four."
+      ],
+      "verified_findings": 46,
+      "unverified_findings": 4,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        3,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Nearly every finding includes a concrete remediation, usually at code level or with a specific test to add.",
+        "Most findings include concrete fixes or clear direction, but a few are framed as concerns or requests to verify rather than precise changes.",
+        "Most findings come with concrete fixes or a clear remediation direction, though a few architecture/performance items are more advisory than prescriptive."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        0
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Several core risks are prioritized reasonably, but the review overstates comment drift and some architecture concerns as block-merge MEDIUM issues.",
+        "Several real medium/low issues are identified, but the review overstates blocking severity for some architectural/documentation concerns and treats them as merge-blockers without strong support.",
+        "The review materially over-prioritizes several issues by calling five items blocking, including a misleading test comment, an `_internal` import convention claim, and a test seam parameter. That is not a sound impact ordering."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The review covers correctness, performance, resilience/observability, API-surface design, and test coverage, which is broad for this patch.",
+        "It spans the major concern areas relevant to this PR: correctness, performance, testing, security, and architectural/API-contract concerns.",
+        "The review spans performance, correctness, resilience/security, architecture, and missing tests, which is broad coverage of the risks introduced or exposed by this patch."
+      ],
+      "verified_findings": 46,
+      "unverified_findings": 4,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        2,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is substantial signal, but the review is noisy: it includes at least one incorrect factual claim and some weakly-supported blocker framing.",
+        "There is substantial signal, but unsupported architecture/injection claims and a couple of factual errors add noticeable noise.",
+        "There is substantial signal, but it is diluted by at least one contradicted gap claim and by multiple overstated or weakly supported architecture/blocker judgments."
+      ]
+    },
+    "depth": {
+      "scores": [
+        3,
+        3,
+        2
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The stronger findings trace behavior across the GraphQL payload builder, pagination loop, notifications store side effects, and test suite behavior.",
+        "Many findings require tracing behavior across GraphQL construction, pagination control flow, tests, and notification plumbing, showing strong cross-file reasoning.",
+        "The better parts of the review trace behavior across files and through control flow: the store's loop mechanics, the GQL alias shape, the notification store's debug logging, and the interaction between test seams and runtime guards. That is solid cross-file reasoning, though not consistently deep architectural analysis."
+      ],
+      "verified_findings": 46,
+      "unverified_findings": 4,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Compared with Review B, Review A contributes multiple substantive findings that B never mentions, including a real guard bug, a misleading spec contract, missing finite-value validation, and the leaked page-size test seam.",
+        "Review B adds multiple substantive issues not present in Review A, including a real custom-page-size bug, misleading documentation contradicting code, a missing finite-value guard on loop control, and the public test-seam parameter exposure.",
+        "Review B adds several substantive verified findings that Review A did not mention, including a real guard bug, an extra pagination performance issue, a loop-control validation gap, and client-side leakage of raw error objects."
+      ],
+      "verified_findings": 12,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "The organic overflow guard compares against the caller-controlled `pageSize`, which can falsely throw for non-default page sizes and is a real correctness problem absent from Review B.",
+        "The spec header claims publishers/campaigns remain single-fetch even though the test exercises paginated publishers, which creates maintenance risk and was not noted in Review B.",
+        "`availableResultsCount` is used without finite-value validation before computing `maxIterations`, leaving the loop guard dependent on untrusted numeric input; Review B misses this entirely."
+      ]
+    },
+    "total": 16,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 52,
+      "claims_unverified": 4,
+      "claims_contradicted": 4,
+      "claims_non_falsifiable": 0,
+      "verification_rate": 0.8692062200939393,
+      "tool_calls_observed": 0,
+      "grounded": 48,
+      "ungrounded": 8,
+      "grounding_eligible": 56,
+      "grounding_rate": 0.8571428571428571
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Verified two genuine issues: repeated organic-query work on every page and a generic user-facing error message. The review misses several correctness, contract, and test-gap concerns present in the patch.",
+        "Two verified issues are identified: repeated organic-query work across paginated requests and a generic user-facing failure message for distinct error modes.",
+        "Review A identifies two real issues that are supported by the code: the download query always fetches `byOrganicPublisher` even though the store only consumes organic results on page 1, and both UI catch blocks surface the same generic failure string for all download errors."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        2,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Both identified issues have clear next-step recommendations, but the review's broader praise does not add much implementation guidance.",
+        "Both findings include clear next steps: conditionally omit the organic alias after page 1 and make the notification text error-specific.",
+        "Both findings include clear next steps, and the backend-efficiency finding includes a concrete code-level approach."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        2,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The one substantive performance issue is reasonably marked MEDIUM and the generic messaging note is reasonably LOW.",
+        "The review explicitly labels the backend waste as medium and the messaging issue as low, which matches their impact.",
+        "The medium label for repeated organic fetching and low label for generic error copy match their likely impact, and the review states those priorities explicitly."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Coverage is narrow: it touches backend efficiency and UX messaging, but misses multiple correctness, API-surface, observability, and test-coverage issues.",
+        "The review covers performance and UX/diagnostic concerns but misses other relevant areas such as test gaps and API-contract risks.",
+        "The review covers a meaningful performance concern and a user-facing error-handling concern, but it misses several other relevant correctness, resilience, and test-gap issues present in the patch."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "There is some signal, but it is diluted by overpraise of the tests and documentation, including contradicted claims about exact-multiple coverage and doc quality.",
+        "The concrete findings are useful and supported; the only noise is an over-broad positive summary claim that is not fully verified.",
+        "Most of the review is useful, but it overstates test coverage once by claiming exact-multiple boundary coverage that is not demonstrated in the checked-in tests."
+      ]
+    },
+    "depth": {
+      "scores": [
+        1,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The backend-efficiency point does require cross-file reasoning across the GraphQL layer and consumer, but most of the review remains surface-level.",
+        "The stronger finding traces behavior across the GraphQL builder and the download store, but the rest stays at a simpler surface level.",
+        "The strongest finding traces behavior across files: `download-gql.ts` requests organic data every page while `sources-download.ts` only consumes it on the first page. That is solid cross-file reasoning, but the review does not go much deeper into invariants or failure modes."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "Review B does not add any substantive issue that is absent from Review A.",
+        "Its substantive findings are also raised in Review B, so it contributes no unique issue discovery.",
+        "Review A's two substantive findings both also appear in Review B, so it contributes no verified substantive issue that the other review missed."
+      ],
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": []
+    },
+    "total": 13,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 17,
+      "claims_unverified": 2,
+      "claims_contradicted": 2,
+      "claims_non_falsifiable": 0,
+      "verification_rate": 0.8111111111000001,
+      "tool_calls_observed": 0,
+      "grounded": 19,
+      "ungrounded": 0,
+      "grounding_eligible": 19,
+      "grounding_rate": 1.0
+    }
+  }
+}

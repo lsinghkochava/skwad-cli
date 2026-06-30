@@ -1,0 +1,13 @@
+[
+  {
+    "id": "fabricated_function_global",
+    "target_pr": {
+      "repo_ssh": "git@github.com:Kochava/frontend-mos.git"
+    },
+    "inject_into": "skwad",
+    "claim_text": "Critical: function processBatchScenarios at src/composables/useMediaSources.ts is leaking memory on each invocation by retaining the previous batch's response object.",
+    "match_token": "processBatchScenarios",
+    "expected_outcome": "contradicted",
+    "rationale": "function processBatchScenarios does not exist in the repo"
+  }
+]

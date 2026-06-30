@@ -1,0 +1,468 @@
+<meta charset="utf-8">
+<title>Multi-Agent vs. Single-Agent LLM Code Review</title>
+<style>
+:root{
+  --ink:#15202B; --muted:#444c56; --accent:#3A4FE0; --hair:#c9d4df; --panel:#f3f5f8;
+  --win:#1F9D6B; --loss:#c0641a;
+  --serif:"Iowan Old Style","Charter","Palatino Linotype",Georgia,"Times New Roman",serif;
+  --mono:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+}
+@page{ size:letter; margin:17mm 16mm 18mm 16mm; }
+html{font-size:10.4pt;}
+body{margin:0;color:var(--ink);font-family:var(--serif);line-height:1.4;text-align:justify;
+  -webkit-font-smoothing:antialiased;hyphens:auto;}
+.paper{max-width:184mm;margin:0 auto;}
+
+.masthead{text-align:center;border-bottom:2px solid var(--accent);padding-bottom:13px;margin-bottom:15px;}
+.venue{font-family:var(--mono);font-size:8pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:11px;}
+h1.title{font-size:21pt;line-height:1.12;margin:0 0 6px;font-weight:700;letter-spacing:-.01em;}
+.subtitle{font-size:12pt;font-style:italic;color:var(--muted);margin:0 0 13px;}
+.authors{font-size:11pt;margin:6px 0 2px;}
+.affil{font-family:var(--mono);font-size:8.2pt;color:var(--muted);letter-spacing:.02em;}
+
+.abstract{background:var(--panel);border:1px solid var(--hair);border-radius:6px;padding:12px 18px;margin:15px 0 18px;font-size:9.5pt;line-height:1.5;}
+.abstract .lab{font-family:var(--mono);font-size:8pt;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;display:block;margin-bottom:5px;}
+.keywords{font-size:8.8pt;margin-top:8px;}
+.keywords b{font-family:var(--mono);font-size:7.8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);}
+
+.cols{column-count:2;column-gap:8mm;column-rule:0.5px solid var(--hair);}
+h2{font-size:10.8pt;margin:13px 0 4px;font-weight:700;break-after:avoid;}
+h2 .sn{font-family:var(--mono);color:var(--accent);font-size:9.2pt;margin-right:7px;}
+h3{font-size:9.6pt;margin:9px 0 2px;font-weight:700;font-style:italic;break-after:avoid;}
+p{margin:0 0 6px;}
+p.ind{text-indent:1.1em;}
+.cols p{font-size:9.4pt;}
+ul{margin:3px 0 7px;padding-left:1.05em;font-size:9.3pt;}
+li{margin:1.5px 0;}
+code{font-family:var(--mono);font-size:8.4pt;background:#eef1f5;padding:0 3px;border-radius:3px;}
+strong{font-weight:680;}
+.keystat{font-family:var(--mono);font-weight:700;color:var(--accent);}
+
+figure{margin:8px 0;break-inside:avoid;}
+figure.wide{column-span:all;margin:6px 0 11px;break-inside:avoid;}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);line-height:1.3;}
+table.mat{font-size:7.6pt;} table.mini{font-size:8pt;}
+th{text-align:left;border-bottom:1.3px solid var(--ink);padding:3px 5px;font-weight:700;}
+td{padding:2.5px 5px;border-bottom:0.5px solid var(--hair);}
+tbody tr:last-child td{border-bottom:1.1px solid var(--ink);}
+.num{text-align:right;font-variant-numeric:tabular-nums;}
+b.w{color:var(--win);} b.l{color:var(--loss);} .l{color:var(--loss);} .t{color:var(--muted);}
+.pass{color:var(--win);font-weight:700;} .flag{color:var(--loss);font-weight:700;}
+figcaption{font-size:8pt;color:var(--muted);margin-top:4px;line-height:1.35;}
+figcaption .lab{font-family:var(--mono);font-weight:700;color:var(--accent);letter-spacing:.04em;}
+
+.digest{font-size:9pt;margin:0 0 5px;line-height:1.42;}
+.digest .pr{font-family:var(--mono);font-weight:700;font-size:8.2pt;color:var(--accent);}
+.digest .sc{font-family:var(--mono);font-size:8pt;color:var(--muted);}
+
+.refs{column-span:all;margin-top:13px;border-top:1px solid var(--hair);padding-top:7px;}
+.refs ol{font-size:8.3pt;padding-left:1.4em;line-height:1.35;color:var(--muted);}
+.refs li{margin:2.5px 0;}
+.footer{column-span:all;margin-top:12px;border-top:0.5px solid var(--hair);padding-top:7px;
+  font-family:var(--mono);font-size:7.2pt;color:var(--muted);text-align:center;letter-spacing:.03em;}
+</style>
+
+<div class="paper">
+
+  <header class="masthead">
+    <div class="venue">Internal Technical Report · Developer-Tools Evaluation · June 2026</div>
+    <h1 class="title">Multi-Agent vs. Single-Agent LLM Code Review</h1>
+    <div class="subtitle">A cross-model, grounding-verified evaluation of automated pull-request review quality</div>
+    <div class="authors">Lovepreet Singh</div>
+    <div class="affil">Kochava · lsingh@kochava.com</div>
+  </header>
+
+  <div class="abstract">
+    <span class="lab">Abstract</span>
+    Automated code review by large language models (LLMs) is increasingly deployed in CI pipelines, yet rigorous, bias-controlled comparisons between review architectures remain scarce. We evaluate a multi-agent reviewer (<em>skwad</em>, built on claude-sonnet-4-6) against a single-agent baseline (GitHub's Claude CI reviewer, claude-sonnet-4-5-20250929) on <strong>N=8</strong> real pull requests from three production repositories spanning three difficulty tiers. Reviews were scored on a pre-registered seven-criterion rubric (0–3 each, 21-point maximum) by an <em>out-of-family</em> judge (gpt-5.4), eliminating same-model self-preference; each PR was judged three times under counterbalanced A/B blinding and combined by median vote. Crucially, the judge <strong>grounded every claim against the repository</strong> via file-read and grep tool calls, labelling each verified, contradicted, or unverifiable. skwad won all 8 head-to-head comparisons (Wilcoxon <span class="keystat">p=0.0078</span>; Cliff's <span class="keystat">δ=0.78</span>, 95% BCa CI [0.50, 1.00] — large), with claims verified at <span class="keystat">70.9%</span> versus 60.2% for the baseline across 643 adjudicated claims. A Krippendorff's-α reliability gate flagged the three most subjective criteria as low-consistency — a transparency caveat that also gates the harness's self-validity — while the headline statistics run on the full seven-criterion, 21-point total. We report a decisive pilot and recommend a 30-PR confirmatory study before full deployment.
+    <div class="keywords"><b>Keywords —</b> LLM-as-judge · automated code review · multi-agent systems · inter-rater reliability · effect size · grounding verification</div>
+  </div>
+
+  <div class="cols">
+
+    <h2><span class="sn">1</span>Introduction</h2>
+    <p>Pull-request (PR) review gates merge velocity while consuming scarce senior attention. LLM reviewers promise to absorb the routine load, and tools such as GitHub's Claude CI reviewer now post review comments automatically. This raises an architectural question: does decomposing review into a coordinated team of specialized agents — each focused on correctness, security, testing, performance — produce materially better reviews than a single capable model prompted once?</p>
+    <p class="ind">We compare <em>skwad</em>, a multi-agent orchestrator that spawns specialized reviewer agents and synthesizes their findings, against the single-agent Claude CI reviewer. The central hazard in any such study is the evaluator: LLM judges exhibit <em>self-preference</em>, scoring their own family's output more favorably [1], and reward superficial properties such as length and structure independently of substance [2]. A multi-agent system that merely emits more text could therefore <em>appear</em> superior without being so. Our design neutralizes both hazards, and adds per-claim repository grounding so that "quality" is measured as verifiable correctness, not prose.</p>
+    <p class="ind">Contributions: (i) a bias-controlled protocol pairing an out-of-family judge with per-claim grounding; (ii) a reliability gate that flags criteria the judge cannot score consistently and gates the harness's self-validity, rather than silently dropping them from the headline; and (iii) an honest accounting of what an N=8 pilot can and cannot establish.</p>
+
+    <figure class="wide" id="fig-overview">
+      <svg viewBox="0 0 700 350" role="img" aria-label="Evaluation overview: two reviewers score the same diff, a blinded gpt-5.4 judge runs three counterbalanced passes, per-criterion median votes roll up to a per-PR total and aggregate to a verdict." style="width:100%;height:auto;">
+        <defs>
+          <marker id="ahO" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#15202B"/>
+          </marker>
+        </defs>
+        <style>
+          #fig-overview text{font-family:"Iowan Old Style","Charter",Georgia,"Times New Roman",serif;}
+          #fig-overview .bx{fill:#f3f5f8;stroke:#c9d4df;stroke-width:1.2;}
+          #fig-overview .sk{stroke:#3A4FE0;stroke-width:2;}
+          #fig-overview .out{fill:#eef6f1;stroke:#1F9D6B;stroke-width:2;}
+          #fig-overview .ttl{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:12.5px;font-weight:700;fill:#15202B;}
+          #fig-overview .sub{font-size:10.6px;fill:#444c56;}
+          #fig-overview .e{stroke:#15202B;stroke-width:1.2;fill:none;}
+          #fig-overview .el{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#444c56;font-style:italic;}
+        </style>
+
+        <rect class="bx" x="185" y="6" width="330" height="36" rx="6"/>
+        <text class="sub" x="350" y="22" text-anchor="middle">N merged PRs</text>
+        <text class="el" x="350" y="35" text-anchor="middle">diff + Claude CI review comments</text>
+
+        <path class="e" d="M350,42 L350,60 L175,60 L175,70" marker-end="url(#ahO)"/>
+        <path class="e" d="M350,42 L350,60 L525,60 L525,70" marker-end="url(#ahO)"/>
+
+        <rect class="bx sk" x="55" y="70" width="240" height="56" rx="6"/>
+        <text class="ttl" x="175" y="90" text-anchor="middle">skwad-cli</text>
+        <text class="sub" x="175" y="105" text-anchor="middle">multi-agent reviewer</text>
+        <text class="sub" x="175" y="119" text-anchor="middle">specialists synthesized &#8594; 1 review</text>
+
+        <rect class="bx" x="405" y="70" width="240" height="56" rx="6"/>
+        <text class="ttl" x="525" y="90" text-anchor="middle">Claude CI</text>
+        <text class="sub" x="525" y="105" text-anchor="middle">single-agent reviewer</text>
+        <text class="sub" x="525" y="119" text-anchor="middle">review extracted from PR comments</text>
+
+        <text class="el" x="350" y="101" text-anchor="middle">same diff</text>
+
+        <path class="e" d="M175,126 L175,140 L350,140 L350,150" marker-end="url(#ahO)"/>
+        <path class="e" d="M525,126 L525,140 L350,140 L350,150" marker-end="url(#ahO)"/>
+
+        <rect class="bx" x="150" y="150" width="400" height="50" rx="6"/>
+        <text class="ttl" x="350" y="170" text-anchor="middle">gpt-5.4 judge</text>
+        <text class="sub" x="350" y="184" text-anchor="middle">out-of-family &#183; blinded A/B &#183; 3 counterbalanced runs</text>
+        <text class="sub" x="350" y="196" text-anchor="middle">scores 7 criteria, 0&#8211;3 each</text>
+
+        <path class="e" d="M350,200 L350,214" marker-end="url(#ahO)"/>
+        <rect class="bx" x="200" y="214" width="300" height="30" rx="6"/>
+        <text class="sub" x="350" y="233" text-anchor="middle">median vote per criterion</text>
+
+        <path class="e" d="M350,244 L350,256" marker-end="url(#ahO)"/>
+        <rect class="bx" x="200" y="256" width="300" height="30" rx="6"/>
+        <text class="sub" x="350" y="275" text-anchor="middle">per-PR total &#183; 7 criteria, max 21</text>
+
+        <path class="e" d="M350,286 L350,298" marker-end="url(#ahO)"/>
+        <rect class="out" x="185" y="298" width="330" height="44" rx="6"/>
+        <text class="ttl" x="350" y="317" text-anchor="middle">aggregate across PRs</text>
+        <text class="sub" x="350" y="333" text-anchor="middle">&#8594; final ranking / verdict</text>
+      </svg>
+      <figcaption><span class="lab">Figure 1.</span> Evaluation overview. Both systems review the <em>identical</em> PR diff: skwad generates its review, while the single-agent Claude CI review is extracted from the PR's existing comments (not regenerated). An out-of-family gpt-5.4 judge scores both under counterbalanced A/B blinding across three runs; per-criterion <strong>median votes</strong> roll up to a per-PR total (max 21) and aggregate across PRs to the final verdict.</figcaption>
+    </figure>
+
+    <h2><span class="sn">2</span>Background</h2>
+    <p>The LLM-as-judge paradigm [1] enables scalable evaluation but inherits the judge's biases: position bias (favoring the first option), verbosity bias, and self-enhancement bias. Standard mitigations swap presentation order and use a judge from a different model family. We adopt both, and add a less common control: rather than trusting the judge's reading, we require it to <em>verify each factual claim against the codebase</em>, separating substantive findings from confident but unsupported assertions [5,6].</p>
+
+    <h2><span class="sn">3</span>Methodology</h2>
+    <h3>3.1 Hypotheses</h3>
+    <p><strong>H1:</strong> skwad reviews score higher than Claude CI reviews. <strong>H0:</strong> no meaningful difference. The primary endpoint — total rubric score — and a two-sided Wilcoxon signed-rank test were <em>pre-registered</em> before results were inspected.</p>
+    <h3>3.2 Systems under test</h3>
+    <p>skwad spawns specialized reviewer agents on claude-sonnet-4-6 and synthesizes a single review. The baseline is GitHub's Claude CI reviewer (claude-sonnet-4-5-20250929), a single-pass reviewer. Both received the <em>identical</em> PR diff at a pinned commit SHA.</p>
+    <h3>3.3 Rubric</h3>
+    <p>Seven criteria, each 0–3 (21 max): issue detection (ID), actionability (Act), severity accuracy (Sev), coverage (Cov), signal-to-noise (S/N), depth (Dep), novel &amp; substantive findings (Nov). The wide scale mitigates ceiling effects.</p>
+    <h3>3.4 Judge &amp; blinding</h3>
+    <p>Scored by <strong>gpt-5.4</strong> (via codex) — a different family from both reviewers, so no in-family output can be favored. Each PR judged <strong>three times</strong> with counterbalanced slots (run 1: skwad=A; run 2: skwad=B; run 3: seeded random); per-criterion scores combined by <strong>median vote</strong> to suppress nondeterminism.</p>
+    <h3>3.5 Grounding verification</h3>
+    <p>For each PR the judge enumerated every factual claim in both reviews and checked it against the checked-out repository using read/grep tool calls (75–131 calls per PR), assigning <em>verified</em>, <em>contradicted</em>, <em>unverified</em>, or <em>non-falsifiable</em>. This yields a style-independent <em>verification rate</em>.</p>
+    <h3>3.6 Statistical plan</h3>
+    <p>Primary: Wilcoxon signed-rank on total score, Cliff's δ, and a 95% bias-corrected-and-accelerated (BCa) bootstrap CI. Exploratory: per-criterion (7) and per-difficulty (3) Wilcoxon under Benjamini–Hochberg FDR [3] at q=0.05. Reliability: ordinal Krippendorff's α [4], bootstrap 95% CI (nboot=200); criteria with an α lower bound &lt; 0.60 are flagged as low-reliability and count against an overall harness-validity check — they are <em>not</em> dropped, and the headline statistics run on the full seven-criterion total.</p>
+
+    <figure class="wide" id="fig-pipeline">
+      <svg viewBox="0 0 700 408" role="img" aria-label="Detailed three-phase pipeline. Phase A: sequential per-PR preparation (clone, fetch diff and comments, isolated worktree checkout, then prepare_pr's four steps). Phase B: parallel judging by gpt-5.4 across a thread pool. Phase C: sequential aggregation by median vote, reliability and methodology gates, and report generation." style="width:100%;height:auto;">
+        <defs>
+          <marker id="ahP" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#15202B"/>
+          </marker>
+        </defs>
+        <style>
+          #fig-pipeline text{font-family:"Iowan Old Style","Charter",Georgia,"Times New Roman",serif;}
+          #fig-pipeline .laneA,#fig-pipeline .laneC{fill:#f7f9fb;}
+          #fig-pipeline .laneB{fill:#eceff5;}
+          #fig-pipeline .ph{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:10.5px;font-weight:700;fill:#3A4FE0;letter-spacing:.03em;}
+          #fig-pipeline .phs{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:8.4px;fill:#444c56;}
+          #fig-pipeline .bx{fill:#ffffff;stroke:#c9d4df;stroke-width:1;}
+          #fig-pipeline .sk{fill:#f3f5fb;stroke:#3A4FE0;stroke-width:1.4;}
+          #fig-pipeline .out{fill:#eef6f1;stroke:#1F9D6B;stroke-width:1.4;}
+          #fig-pipeline .grp{fill:none;stroke:#3A4FE0;stroke-width:1;stroke-dasharray:4 3;}
+          #fig-pipeline .t{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:9.3px;font-weight:700;fill:#15202B;}
+          #fig-pipeline .ts{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:8.5px;font-weight:700;fill:#15202B;}
+          #fig-pipeline .s{font-size:8px;fill:#444c56;}
+          #fig-pipeline .ss{font-size:7.3px;fill:#444c56;}
+          #fig-pipeline .a{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:7.5px;fill:#3A4FE0;}
+          #fig-pipeline .e{stroke:#15202B;stroke-width:1;fill:none;}
+          #fig-pipeline .el{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:7.8px;fill:#444c56;font-style:italic;}
+        </style>
+
+        <!-- lane backgrounds -->
+        <rect class="laneA" x="0" y="6" width="700" height="150"/>
+        <rect class="laneB" x="0" y="156" width="700" height="92"/>
+        <rect class="laneC" x="0" y="248" width="700" height="156"/>
+        <line x1="96" y1="6" x2="96" y2="404" stroke="#c9d4df" stroke-width="0.8"/>
+
+        <!-- ===== PHASE A ===== -->
+        <text class="ph" x="10" y="64">PHASE A</text>
+        <text class="phs" x="10" y="80">Sequential prep</text>
+        <text class="phs" x="10" y="91">(per PR)</text>
+        <text class="phs" x="10" y="108">main.py</text>
+        <text class="phs" x="10" y="119">726&#8211;845</text>
+
+        <rect class="bx" x="104" y="24" width="116" height="42" rx="5"/>
+        <text class="t" x="162" y="44" text-anchor="middle">clone_repo_ssh</text>
+        <text class="a" x="162" y="58" text-anchor="middle">main.py:786</text>
+
+        <rect class="bx" x="232" y="24" width="120" height="42" rx="5"/>
+        <text class="t" x="292" y="41" text-anchor="middle">fetch_pr</text>
+        <text class="s" x="292" y="52" text-anchor="middle">diff + comments</text>
+        <text class="a" x="292" y="62" text-anchor="middle">main.py:794</text>
+
+        <rect class="bx" x="364" y="24" width="158" height="42" rx="5"/>
+        <text class="t" x="443" y="41" text-anchor="middle">prepare_pr_checkout</text>
+        <text class="s" x="443" y="52" text-anchor="middle">isolated worktree @ head SHA</text>
+        <text class="a" x="443" y="62" text-anchor="middle">main.py:806</text>
+
+        <rect class="bx" x="534" y="24" width="150" height="42" rx="5"/>
+        <text class="t" x="609" y="41" text-anchor="middle">prepare_pr</text>
+        <text class="s" x="609" y="52" text-anchor="middle">(4 steps, below)</text>
+        <text class="a" x="609" y="62" text-anchor="middle">main.py:825</text>
+
+        <path class="e" d="M220,45 L232,45" marker-end="url(#ahP)"/>
+        <path class="e" d="M352,45 L364,45" marker-end="url(#ahP)"/>
+        <path class="e" d="M522,45 L534,45" marker-end="url(#ahP)"/>
+        <path class="e" d="M609,66 L609,78" marker-end="url(#ahP)"/>
+
+        <!-- prepare_pr expansion group -->
+        <rect class="grp" x="104" y="80" width="580" height="70" rx="6"/>
+        <text class="el" x="112" y="93">prepare_pr &#8594; 4 sequential steps</text>
+
+        <rect class="bx" x="116" y="100" width="134" height="44" rx="5"/>
+        <text class="ts" x="183" y="114" text-anchor="middle">a &#183; extract_claude_review</text>
+        <text class="ss" x="183" y="125" text-anchor="middle">Claude CI review &#8592; PR comments</text>
+        <text class="a" x="183" y="137" text-anchor="middle">main.py:241</text>
+
+        <rect class="bx" x="260" y="100" width="134" height="44" rx="5"/>
+        <text class="ts" x="327" y="114" text-anchor="middle">b &#183; classify_pr</text>
+        <text class="ss" x="327" y="125" text-anchor="middle">difficulty E / M / H</text>
+        <text class="a" x="327" y="137" text-anchor="middle">main.py:248</text>
+
+        <rect class="sk" x="404" y="100" width="134" height="44" rx="5"/>
+        <text class="ts" x="471" y="114" text-anchor="middle">c &#183; run_skwad_review</text>
+        <text class="ss" x="471" y="125" text-anchor="middle">skwad reviews same diff</text>
+        <text class="a" x="471" y="137" text-anchor="middle">main.py:260</text>
+
+        <rect class="bx" x="548" y="100" width="128" height="44" rx="5"/>
+        <text class="ts" x="612" y="114" text-anchor="middle">d &#183; prepare_pr_judge_tasks</text>
+        <text class="ss" x="612" y="125" text-anchor="middle">3 counterbalanced A/B runs</text>
+        <text class="a" x="612" y="137" text-anchor="middle">main.py:276</text>
+
+        <path class="e" d="M250,122 L260,122" marker-end="url(#ahP)"/>
+        <path class="e" d="M394,122 L404,122" marker-end="url(#ahP)"/>
+        <path class="e" d="M538,122 L548,122" marker-end="url(#ahP)"/>
+
+        <!-- handoff A -> B -->
+        <path class="e" d="M612,144 L612,160 L184,160 L184,178" marker-end="url(#ahP)"/>
+        <text class="el" x="400" y="156" text-anchor="middle">run specs (A/B-blinded)</text>
+
+        <!-- ===== PHASE B ===== -->
+        <text class="ph" x="10" y="196">PHASE B</text>
+        <text class="phs" x="10" y="211">Parallel judging</text>
+        <text class="phs" x="10" y="226">main.py</text>
+        <text class="phs" x="10" y="237">847&#8211;886</text>
+
+        <rect class="bx" x="104" y="178" width="160" height="52" rx="5"/>
+        <text class="t" x="184" y="199" text-anchor="middle">ThreadPoolExecutor</text>
+        <text class="s" x="184" y="211" text-anchor="middle">N workers (4 in pilot)</text>
+        <text class="a" x="184" y="223" text-anchor="middle">main.py:857</text>
+
+        <!-- parallel stack -->
+        <rect class="bx" x="312" y="188" width="176" height="46" rx="5"/>
+        <rect class="bx" x="306" y="182" width="176" height="46" rx="5"/>
+        <rect class="bx" x="300" y="176" width="176" height="46" rx="5"/>
+        <text class="t" x="388" y="194" text-anchor="middle">run_single_judge_task</text>
+        <text class="s" x="388" y="206" text-anchor="middle">per PR &#215; run</text>
+        <text class="s" x="388" y="217" text-anchor="middle">(N in parallel)</text>
+
+        <rect class="bx" x="512" y="176" width="176" height="56" rx="5"/>
+        <text class="t" x="600" y="194" text-anchor="middle">gpt-5.4 scores BOTH</text>
+        <text class="s" x="600" y="206" text-anchor="middle">7 criteria &#183; 0&#8211;3 (max 21)</text>
+        <text class="s" x="600" y="218" text-anchor="middle">grounded: reads worktree files</text>
+
+        <path class="e" d="M264,204 L300,199" marker-end="url(#ahP)"/>
+        <path class="e" d="M488,199 L512,201" marker-end="url(#ahP)"/>
+
+        <!-- handoff B -> C -->
+        <path class="e" d="M600,232 L600,242 L168,242 L168,270" marker-end="url(#ahP)"/>
+        <text class="el" x="400" y="239" text-anchor="middle">scored runs</text>
+
+        <!-- ===== PHASE C ===== -->
+        <text class="ph" x="10" y="300">PHASE C</text>
+        <text class="phs" x="10" y="315">Sequential</text>
+        <text class="phs" x="10" y="326">aggregation</text>
+        <text class="phs" x="10" y="343">main.py</text>
+        <text class="phs" x="10" y="354">895&#8211;937</text>
+
+        <!-- row 1 -->
+        <rect class="bx" x="104" y="270" width="116" height="46" rx="5"/>
+        <text class="t" x="162" y="290" text-anchor="middle">finalize_pr_runs</text>
+        <text class="a" x="162" y="305" text-anchor="middle">main.py:929</text>
+
+        <rect class="bx" x="232" y="270" width="150" height="46" rx="5"/>
+        <text class="t" x="307" y="288" text-anchor="middle">_median_vote</text>
+        <text class="s" x="307" y="299" text-anchor="middle">median_low / criterion</text>
+        <text class="a" x="307" y="310" text-anchor="middle">judge.py:415</text>
+
+        <rect class="bx" x="394" y="270" width="120" height="46" rx="5"/>
+        <text class="t" x="454" y="288" text-anchor="middle">per-PR totals</text>
+        <text class="s" x="454" y="299" text-anchor="middle">7 criteria &#8594; / 21</text>
+
+        <rect class="bx" x="526" y="270" width="158" height="46" rx="5"/>
+        <text class="ts" x="605" y="288" text-anchor="middle">methodology-version gate</text>
+        <text class="s" x="605" y="299" text-anchor="middle">version pin check</text>
+        <text class="a" x="605" y="310" text-anchor="middle">main.py:946</text>
+
+        <path class="e" d="M220,293 L232,293" marker-end="url(#ahP)"/>
+        <path class="e" d="M382,293 L394,293" marker-end="url(#ahP)"/>
+        <path class="e" d="M514,293 L526,293" marker-end="url(#ahP)"/>
+
+        <!-- elbow row1 -> row2 -->
+        <path class="e" d="M605,316 L605,326 L179,326 L179,336" marker-end="url(#ahP)"/>
+
+        <!-- row 2 -->
+        <rect class="bx" x="104" y="336" width="150" height="52" rx="5"/>
+        <text class="t" x="179" y="356" text-anchor="middle">inter-run &#945; gate</text>
+        <text class="s" x="179" y="368" text-anchor="middle">Krippendorff's &#945;</text>
+        <text class="a" x="179" y="380" text-anchor="middle">main.py:977</text>
+
+        <rect class="bx" x="268" y="336" width="210" height="52" rx="5"/>
+        <text class="t" x="373" y="354" text-anchor="middle">generate_research_report</text>
+        <text class="s" x="373" y="366" text-anchor="middle">Wilcoxon &#183; Cliff's &#948; &#183; BCa CI</text>
+        <text class="s" x="373" y="377" text-anchor="middle">BH-FDR &#183; verdict</text>
+        <text class="a" x="373" y="386" text-anchor="middle">main.py:989</text>
+
+        <rect class="out" x="492" y="336" width="196" height="52" rx="5"/>
+        <text class="t" x="590" y="360" text-anchor="middle">research-report.md</text>
+        <text class="s" x="590" y="373" text-anchor="middle">stats + verdict</text>
+
+        <path class="e" d="M254,362 L268,362" marker-end="url(#ahP)"/>
+        <path class="e" d="M478,362 L492,362" marker-end="url(#ahP)"/>
+      </svg>
+      <figcaption><span class="lab">Figure 2.</span> Detailed evaluation pipeline, faithful to the harness code. <strong>Phase A</strong> (sequential, per PR) clones the repo, fetches the diff and existing PR comments, checks out an isolated worktree at the PR head SHA, then runs <code>prepare_pr</code>'s four steps: extract the pre-existing Claude CI review from comments (a), classify difficulty (b), generate skwad's review of the <em>same</em> diff (c), and build three counterbalanced, A/B-blinded run specs (d). <strong>Phase B</strong> (parallel) fans the PR&#215;run tasks across a worker pool (4 in the pilot, configurable); gpt-5.4 scores <em>both</em> reviews on the seven-criterion rubric (0&#8211;3, max 21), grounding every claim by reading files in the worktree. <strong>Phase C</strong> (sequential) collapses the three runs by per-criterion median vote, computes per-PR totals, applies the methodology-version gate and the Krippendorff's-&#945; reliability gate, then emits the statistics and the report (<code>research-report.md</code>). Line anchors reference <code>main.py</code> / <code>judge.py</code>.</figcaption>
+    </figure>
+
+    <figure>
+      <table class="mini"><thead><tr><th>Repository</th><th class="num">PRs</th><th>Difficulty</th></tr></thead>
+      <tbody>
+      <tr><td>frontend-mos</td><td class="num">2</td><td>hard, hard</td></tr>
+      <tr><td>watson</td><td class="num">3</td><td>easy ×3</td></tr>
+      <tr><td>dash-api</td><td class="num">3</td><td>hard, hard, med</td></tr>
+      </tbody></table>
+      <figcaption><span class="lab">Table 1.</span> Sample: 8 PRs across 3 production repositories and 3 difficulty tiers; one further PR skipped (environment fault on resume).</figcaption>
+    </figure>
+
+    <h2><span class="sn">4</span>Results</h2>
+    <h3>4.1 Primary outcome</h3>
+    <p>skwad scored strictly higher on <strong>all 8</strong> PRs (8–0–0). The paired Wilcoxon test rejected H0 at <span class="keystat">p=0.0078</span> (statistic 0, n=8). Effect size was large: Cliff's <span class="keystat">δ=0.78</span>, 95% BCa CI <strong>[0.50, 1.00]</strong> — excluding zero, consistent with the test. Margins ranged from decisive (18–3 on dash-api#558) to razor-thin (14–13 on frontend-mos#1816).</p>
+
+    <figure class="wide">
+      <table class="mat"><thead><tr><th>Pull request</th><th>D</th><th>ID</th><th>Act</th><th>Sev</th><th>Cov</th><th>S/N</th><th>Dep</th><th>Nov</th><th>Total</th><th>W</th></tr></thead><tbody>
+<tr><td>dash-api#558</td><td>med</td><td class="num"><b class="w">3</b>–0</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">2</b>–0</td><td class="num"><b class="w">3</b>–0</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">3</b>–0</td><td class="num"><b class="w">18</b>–3</td><td class="num pass">✓</td></tr>
+<tr><td>dash-api#562</td><td>hard</td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">1</b>–0</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">18</b>–8</td><td class="num pass">✓</td></tr>
+<tr><td>dash-api#565</td><td>hard</td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">1</b>–0</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">2</b>–0</td><td class="num"><b class="w">17</b>–7</td><td class="num pass">✓</td></tr>
+<tr><td>frontend-mos#1816</td><td>hard</td><td class="num"><span class="t">3–3</span></td><td class="num"><span class="t">2–2</span></td><td class="num"><span class="t">1–1</span></td><td class="num"><span class="t">2–2</span></td><td class="num"><b class="w">2</b>–1</td><td class="num"><span class="t">2–2</span></td><td class="num"><span class="t">2–2</span></td><td class="num"><b class="w">14</b>–13</td><td class="num pass">✓</td></tr>
+<tr><td>frontend-mos#1818</td><td>hard</td><td class="num"><b class="w">3</b>–2</td><td class="num">2–<b class="l">3</b></td><td class="num">1–<b class="l">3</b></td><td class="num"><b class="w">3</b>–1</td><td class="num">1–<b class="l">2</b></td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">3</b>–0</td><td class="num"><b class="w">16</b>–13</td><td class="num pass">✓</td></tr>
+<tr><td>watson#879</td><td>easy</td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">3</b>–2</td><td class="num"><span class="t">1–1</span></td><td class="num"><b class="w">3</b>–1</td><td class="num">1–<b class="l">2</b></td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">2</b>–0</td><td class="num"><b class="w">15</b>–8</td><td class="num pass">✓</td></tr>
+<tr><td>watson#890</td><td>easy</td><td class="num"><span class="t">0–0</span></td><td class="num"><span class="t">0–0</span></td><td class="num"><span class="t">0–0</span></td><td class="num"><span class="t">0–0</span></td><td class="num"><b class="w">1</b>–0</td><td class="num"><span class="t">1–1</span></td><td class="num"><span class="t">0–0</span></td><td class="num"><b class="w">2</b>–1</td><td class="num pass">✓</td></tr>
+<tr><td>watson#893</td><td>easy</td><td class="num"><b class="w">3</b>–2</td><td class="num"><b class="w">3</b>–2</td><td class="num"><span class="t">1–1</span></td><td class="num"><b class="w">3</b>–1</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">2</b>–1</td><td class="num"><b class="w">3</b>–0</td><td class="num"><b class="w">17</b>–8</td><td class="num pass">✓</td></tr>
+      </tbody></table>
+      <figcaption><span class="lab">Table 2.</span> Complete per-criterion median scores, <b class="w">skwad</b>–CI (0–3 each). Ties shown grey; the few criteria where CI scored higher are marked in <b class="l">amber</b> (Act/Sev/S-N on #1818; S/N on #879). skwad wins every <em>total</em>, but not every cell — evidence the aggregate win is broad-based, not a single-criterion artifact.</figcaption>
+    </figure>
+
+    <h3>4.2 Per-PR adjudication</h3>
+    <p>Representative judge verdicts (skwad), with final totals:</p>
+    <p class="digest"><span class="pr">dash-api#558</span> <span class="sc">(med, 18–3)</span> — Seven genuine issues confirmed: missing-key postmeta writes, an empty install fixture, missing PUT failure-path coverage, PUT non-atomicity, an unbounded <code>GetPosts</code>, client-visible internal terminology, and by-value <code>PartnerData</code> copying. CI's review carried 6 <em>contradicted</em> claims.</p>
+    <p class="digest"><span class="pr">dash-api#562</span> <span class="sc">(hard, 18–8)</span> — Many code-borne issues: non-atomic multi-key writes, per-key upsert fanout, incomplete reset deletion, per-request regex compilation, cache-miss stampedes, and returning cached maps by reference.</p>
+    <p class="digest"><span class="pr">dash-api#565</span> <span class="sc">(hard, 17–7)</span> — Seven verified issues: the non-agency <code>AgencyNetworkId</code> write path, <code>agency_network_ids=0</code> returning advertiser rows, missing <code>RowsAffected</code> handling, a −1-vs-0 sentinel mismatch, missing agency scope in audit logs, tests not asserting the scope invariant, and silent advertiser fallback.</p>
+    <p class="digest"><span class="pr">frontend-mos#1816</span> <span class="sc">(hard, 14–13)</span> — The tightest contest: five supported issues (over-broad non-S2S gate, empty validation status treated as eligible, skipped backend e2e, suppressed PATCH failure handling, dead <code>void</code> statements); two of skwad's findings were contradicted, and the systems tied on five of seven criteria.</p>
+    <p class="digest"><span class="pr">frontend-mos#1818</span> <span class="sc">(hard, 16–13)</span> — 17 verified findings across correctness, performance, API design, observability, and tests. Notably CI <em>outscored</em> skwad on severity accuracy (3–1) and actionability (3–2) here — a genuinely split result that skwad won on coverage and novelty.</p>
+    <p class="digest"><span class="pr">watson#879</span> <span class="sc">(easy, 15–8)</span> — Five supported issues: whitespace-only tokens passing the guard, a new test omitting any <code>install_time</code> assertion, an older test checking only <code>install_id</code>, an unused fixture field, and a hardcoded value.</p>
+    <p class="digest"><span class="pr">watson#890</span> <span class="sc">(easy, 2–1)</span> — The pilot's low-water mark: a trivial PR adding a <code>TraceID</code> field. Both reviews found almost nothing, and this is the <em>only</em> PR where skwad's verification rate (24%) fell below CI's (40%) — the judge faulted skwad for missing the <code>protoutil</code> conversion gap. A point worth stating plainly rather than burying.</p>
+    <p class="digest"><span class="pr">watson#893</span> <span class="sc">(easy, 17–8)</span> — A clear cache-hydration behavioral bug plus secondary issues: missing tests, zero-value emission, token logging, and type consistency.</p>
+
+    <h3>4.3 Grounding: substance over style</h3>
+    <p>Across 643 adjudicated claims, skwad's claims verified against code at <span class="keystat">70.9%</span> vs <strong>60.2%</strong> for the baseline (Table 3). The baseline also produced more <em>contradicted</em> claims (37 vs 30) — assertions the repository disproves. Because verification is computed from code, not prose, it directly rebuts the "skwad just writes more" concern. The lone exception (watson#890) is disclosed above.</p>
+
+    <figure class="wide">
+      <table class="mat"><thead><tr><th>Pull request</th><th colspan="3"><b class="w">skwad</b> — ver / grnd / contra</th><th colspan="3">Claude CI — ver / grnd / contra</th></tr></thead><tbody>
+<tr><td>dash-api#558</td><td class="num"><b class="w">76%</b></td><td class="num">94%</td><td class="num">0</td><td class="num">56%</td><td class="num">96%</td><td class="num l">6</td></tr>
+<tr><td>dash-api#562</td><td class="num"><b class="w">72%</b></td><td class="num">97%</td><td class="num">5</td><td class="num">45%</td><td class="num">90%</td><td class="num l">7</td></tr>
+<tr><td>dash-api#565</td><td class="num"><b class="w">81%</b></td><td class="num">96%</td><td class="num">5</td><td class="num">65%</td><td class="num">93%</td><td class="num l">6</td></tr>
+<tr><td>frontend-mos#1816</td><td class="num"><b class="w">72%</b></td><td class="num">100%</td><td class="num">7</td><td class="num">59%</td><td class="num">96%</td><td class="num l">6</td></tr>
+<tr><td>frontend-mos#1818</td><td class="num"><b class="w">86%</b></td><td class="num">85%</td><td class="num">4</td><td class="num">81%</td><td class="num">100%</td><td class="num l">2</td></tr>
+<tr><td>watson#879</td><td class="num"><b class="w">71%</b></td><td class="num">91%</td><td class="num">4</td><td class="num">61%</td><td class="num">84%</td><td class="num l">0</td></tr>
+<tr><td>watson#890</td><td class="num">24%</td><td class="num">80%</td><td class="num">2</td><td class="num"><b class="l">40%</b></td><td class="num">91%</td><td class="num l">7</td></tr>
+<tr><td>watson#893</td><td class="num"><b class="w">81%</b></td><td class="num">92%</td><td class="num">3</td><td class="num">71%</td><td class="num">92%</td><td class="num l">3</td></tr>
+<tr><td><b>Mean</b></td><td class="num"><b class="w">70.9%</b></td><td class="num">91%</td><td class="num">30</td><td class="num">60.2%</td><td class="num">93%</td><td class="num l">37</td></tr>
+      </tbody></table>
+      <figcaption><span class="lab">Table 3.</span> Per-PR claim verification rate, reasoning-grounding rate, and count of <em>contradicted</em> claims. skwad leads on verification in 7 of 8 PRs (watson#890 the exception, in <b class="l">amber</b>) and produces fewer contradicted claims overall.</figcaption>
+    </figure>
+
+    <h3>4.4 Inter-rater reliability</h3>
+    <p>Ordinal Krippendorff's α (Table 4) shows the judge scored objective criteria highly consistently; three subjective criteria fell below the 0.60 gate and are flagged as a reliability caveat (and trip the harness-validity check), but they are <em>not</em> excluded — the Wilcoxon, Cliff's δ, and verdict all run on the full seven-criterion, 21-point total.</p>
+    <figure>
+      <table class="mini"><thead><tr><th>Criterion</th><th class="num">α</th><th>95% CI</th><th>Gate</th></tr></thead><tbody>
+      <tr><td>Coverage</td><td class="num">0.97</td><td>[.91,1.0]</td><td class="pass">pass</td></tr>
+      <tr><td>Novel findings</td><td class="num">0.93</td><td>[.83,.99]</td><td class="pass">pass</td></tr>
+      <tr><td>Issue detection</td><td class="num">0.92</td><td>[.73,.99]</td><td class="pass">pass</td></tr>
+      <tr><td>Depth</td><td class="num">0.86</td><td>[.64,.97]</td><td class="pass">pass</td></tr>
+      <tr><td>Actionability</td><td class="num">0.68</td><td>[.31,.89]</td><td class="flag">below</td></tr>
+      <tr><td>Signal-to-noise</td><td class="num">0.57</td><td>[.16,.84]</td><td class="flag">below</td></tr>
+      <tr><td>Severity accuracy</td><td class="num">0.50</td><td>[.05,.81]</td><td class="flag">below</td></tr>
+      </tbody></table>
+      <figcaption><span class="lab">Table 4.</span> Gate = α lower-CI bound ≥ 0.60 (bootstrap, nboot=200).</figcaption>
+    </figure>
+
+    <h3>4.5 Exploratory tests &amp; bias checks</h3>
+    <p>After Benjamini–Hochberg correction (Table 5) <em>no</em> individual criterion or difficulty test reached significance (smallest adjusted p=0.070): at N=8 the breakdown is underpowered, so we make no per-criterion claims. The position-bias check was clean for skwad (run-1-A vs run-2-B, <span class="keystat">p=0.53</span>) — the win is not a presentation-order artifact — while the baseline's was weaker (p=0.094).</p>
+    <figure>
+      <table class="mini"><thead><tr><th>Test</th><th class="num">raw p</th><th class="num">BH p</th><th>sig</th></tr></thead><tbody>
+      <tr><td>Issue detection</td><td class="num">.031</td><td class="num">.070</td><td>—</td></tr>
+      <tr><td>Coverage</td><td class="num">.031</td><td class="num">.070</td><td>—</td></tr>
+      <tr><td>Depth</td><td class="num">.031</td><td class="num">.070</td><td>—</td></tr>
+      <tr><td>Novel findings</td><td class="num">.031</td><td class="num">.070</td><td>—</td></tr>
+      <tr><td>Hard (difficulty)</td><td class="num">.125</td><td class="num">.225</td><td>—</td></tr>
+      <tr><td>Actionability</td><td class="num">.188</td><td class="num">.281</td><td>—</td></tr>
+      <tr><td>Easy (difficulty)</td><td class="num">.250</td><td class="num">.321</td><td>—</td></tr>
+      <tr><td>Signal-to-noise</td><td class="num">.289</td><td class="num">.325</td><td>—</td></tr>
+      <tr><td>Severity accuracy</td><td class="num">.750</td><td class="num">.750</td><td>—</td></tr>
+      </tbody></table>
+      <figcaption><span class="lab">Table 5.</span> Exploratory Wilcoxon tests, BH-FDR at q=0.05. None survive correction at N=8 — reported in full to avoid the appearance of significance the data do not support.</figcaption>
+    </figure>
+
+    <h2><span class="sn">5</span>Threats to Validity</h2>
+    <ul>
+      <li><strong>Judge stylistic bias (primary residual).</strong> A GPT-family judge may reward structure and finding-count, plausibly inflating the multi-agent margin. Mitigated by the style-immune verification rate and by gating out low-reliability subjective criteria.</li>
+      <li><strong>Sample selection.</strong> PRs were curated from our repositories; the confirmatory run should sample more broadly and blindly.</li>
+      <li><strong>Statistical power.</strong> At N=8 only large effects are reliably detectable; a planned N=30 run resolves medium effects (δ≈0.33) and the per-criterion picture.</li>
+      <li><strong>Nondeterminism.</strong> Mitigated by 3-run median voting.</li>
+      <li><strong>Prompt sensitivity.</strong> A single rubric/persona version was used, SHA-pinned for reproducibility.</li>
+    </ul>
+
+    <h2><span class="sn">6</span>Discussion</h2>
+    <p>The decisive aggregate win (Table 2) is broad-based: skwad leads on most criteria of most PRs, yet the baseline still wins individual cells (severity and actionability on #1818, S/N on #879) and even a verification round (#890). This texture is reassuring — a uniform sweep would suggest a judge artifact, whereas a broad-but-imperfect lead is what a genuinely stronger reviewer produces. The grounding result is the load-bearing finding: skwad's edge survives the one metric that prose cannot inflate.</p>
+
+    <h2><span class="sn">7</span>Conclusion</h2>
+    <p>Under a cross-model judge and per-claim grounding, a multi-agent reviewer decisively outperformed a strong single-agent baseline — winning every comparison with a large, significant effect, on <em>verifiable</em> findings rather than stylistic volume. The evidence supports H1 as a pilot. We recommend adopting skwad as the CI reviewer via a low-risk shadow rollout while a pre-registered 30-PR confirmatory study locks the magnitude and per-criterion profile.</p>
+
+    <div class="refs">
+      <h2><span class="sn">&nbsp;</span>References</h2>
+      <ol>
+        <li>Zheng, L. et al. <em>Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.</em> NeurIPS D&amp;B, 2023.</li>
+        <li>Saito, K. et al. <em>Verbosity Bias in Preference Labeling by LLMs.</em> 2023.</li>
+        <li>Benjamini, Y. &amp; Hochberg, Y. <em>Controlling the False Discovery Rate.</em> J. R. Statist. Soc. B 57(1):289–300, 1995.</li>
+        <li>Krippendorff, K. <em>Computing Krippendorff's Alpha-Reliability.</em> Univ. of Pennsylvania, 2011.</li>
+        <li>Romano, J. et al. <em>Evaluating group differences: Cliff's δ.</em> 2006.</li>
+        <li>Efron, B. &amp; Tibshirani, R. <em>An Introduction to the Bootstrap.</em> Chapman &amp; Hall, 1993.</li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      skwad-cli empirical evaluation · pilot N=8 · judge gpt-5.4 (cross-model) · primary endpoint pre-registered · 643 claims adjudicated · companion research report contains full claim traces, raw reviews, and manifest
+    </div>
+
+  </div>
+</div>

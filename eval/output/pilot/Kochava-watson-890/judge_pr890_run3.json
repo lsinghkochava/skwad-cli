@@ -1,0 +1,740 @@
+{
+  "run": 3,
+  "ab_assignment": [
+    "claude_ci",
+    "skwad"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review does not identify the main correctness gap in this repo: the new field is added to `WatsonRequest`, but the response/protobuf reclog path still has no `TraceID` propagation. Its only issue-like concern is an external deployment checklist that could not be verified from the codebase.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "It offers no actionable code-level fixes for the actual integration gap; the only concrete advice is external deployment coordination.",
+          "score": 0
+        },
+        "severity_accuracy": {
+          "reasoning": "The review approves the change and misses the substantive correctness problem in the logging/proto path, so its prioritization is not accurate.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "It discusses many areas superficially, but as an issue-finding review it covers none of the material code risks and misses the relevant cross-file integration problem.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "The review is verbose, contains multiple unsupported assertions, and includes contradicted factual claims about request embedding/log flow, so the signal is low.",
+          "score": 0
+        },
+        "depth": {
+          "reasoning": "There is some attempt at behavioral and cross-file reasoning, but the key cross-file inference about response/log propagation is wrong and there are no validated architectural findings.",
+          "score": 1,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It does not contribute any verified or non-falsifiable substantive issue that is absent from Review B.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 1,
+      "verification_summary": {
+        "claims_verified": 5,
+        "claims_unverified": 2,
+        "claims_contradicted": 3,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.4167,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The PR is a clean, well-executed addition that integrates seamlessly with the codebase.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is an overall qualitative judgment without a concrete code referent to verify or falsify from the repository."
+        },
+        {
+          "claim_text": "TraceID is placed immediately next to ControlTransactionID in WatsonRequest.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field uses the Go-style name `TraceID` rather than `TraceId`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field is tagged as `json:\"trace_id,omitempty\"`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `omitempty` tag means empty TraceID values are omitted from JSON output, providing zero-value safety.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "WatsonResponse embeds WatsonRequest at line 26.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 26,
+            "snippet": "Request              WatsonRequest          `json:\"request\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Trace IDs automatically flow to reconciliation logs.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceId|TraceID|trace_id",
+            "grep_scope": "cmd/watson/protoutil cmd/watson/reclogtransferutil",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'TraceId|TraceID|trace_id' (claim: 'Trace IDs automatically flow to reconciliation logs.')"
+        },
+        {
+          "claim_text": "There is no null-pointer risk because TraceID is a string value field.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Existing `cmd/watson/structs` tests already cover TraceID serialization/response flow.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceID|trace_id",
+            "grep_scope": "cmd/watson/structs/*test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change is production-ready and ready for immediate merge.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a release-readiness opinion rather than a concrete, repository-verifiable claim."
+        },
+        {
+          "claim_text": "Coordinated deployment across control-proto/control/portal/analytics is required for the broader feature.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "This depends on external repositories and deployment state that are not available in the checked-out codebase."
+        },
+        {
+          "claim_text": "The change is backward compatible for all existing clients.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The repository shows an optional field addition, but compatibility for all external clients cannot be confirmed from this codebase alone."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review finds no genuine issues and misses the relevant correctness gap that TraceID is not propagated into the response/protobuf reclog path.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "It provides no corrective guidance because it reports no issues.",
+          "score": 0
+        },
+        "severity_accuracy": {
+          "reasoning": "Approving the change without noticing the missing propagation into the logging/proto path is a material prioritization miss.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "The review comments on compatibility and scope, but it does not cover the main cross-file correctness concern and therefore misses the most relevant issue area.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "It is concise and some observations are accurate, but it still includes a contradicted claim about log-correlation enablement and several unsupported assertions.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "There is some behavioral reasoning about optional serialization and scope, but it does not develop into validated cross-file analysis and misses the real integration gap.",
+          "score": 1,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It contributes no verified or non-falsifiable substantive issue that is absent from Review A.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 2,
+      "verification_summary": {
+        "claims_verified": 4,
+        "claims_unverified": 5,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.3636,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "PR #890 adds `TraceID` with `json:\"trace_id,omitempty\"` to WatsonRequest next to ControlTransactionID.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field is optional via `omitempty`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Absent `trace_id` values decode to the empty string, so the change is backward compatible at the struct level.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change passes existing build and unit tests.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The repository contains tests, but pass/fail status cannot be confirmed without executing them, which was not part of the verification evidence."
+        },
+        {
+          "claim_text": "The field enables trace-based log correlation in reconciliation logs and traffic replay tooling.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceId|TraceID|trace_id",
+            "grep_scope": "cmd/watson/protoutil cmd/watson/reclogtransferutil",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'TraceId|TraceID|trace_id' (claim: 'The field enables trace-based log correlation in reconciliat')"
+        },
+        {
+          "claim_text": "The field is positioned immediately after ControlTransactionID.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`omitempty` preserves exact-match validation in handler tests and reclog consumers.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "This claim depends on test behavior and downstream consumer expectations that are not directly established by the repository reads alone."
+        },
+        {
+          "claim_text": "This is a pure struct addition with no handler, waterfall, or module logic modified.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The checked-out repository shows the post-change state, but verifying the exact PR scope would require diff-aware evidence beyond the available repository reads."
+        },
+        {
+          "claim_text": "There are no unintended side effects in other packages.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "A blanket absence-of-side-effects claim cannot be confirmed from the limited changed code, especially with cross-file integrations present."
+        },
+        {
+          "claim_text": "Follow-up commit `9fe96f58` correctly keeps empty trace IDs out of test fixtures and reclog data.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The review references commit history and fixture effects that are not verifiable from the checked-out repository state alone."
+        },
+        {
+          "claim_text": "Overall this is a clean, minimal change with no issues and ready to merge.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a high-level evaluative judgment without a concrete code referent that can be directly verified or falsified."
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "claude_ci": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review does not identify the main correctness gap in this repo: the new field is added to `WatsonRequest`, but the response/protobuf reclog path still has no `TraceID` propagation. Its only issue-like concern is an external deployment checklist that could not be verified from the codebase.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "It offers no actionable code-level fixes for the actual integration gap; the only concrete advice is external deployment coordination.",
+          "score": 0
+        },
+        "severity_accuracy": {
+          "reasoning": "The review approves the change and misses the substantive correctness problem in the logging/proto path, so its prioritization is not accurate.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "It discusses many areas superficially, but as an issue-finding review it covers none of the material code risks and misses the relevant cross-file integration problem.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "The review is verbose, contains multiple unsupported assertions, and includes contradicted factual claims about request embedding/log flow, so the signal is low.",
+          "score": 0
+        },
+        "depth": {
+          "reasoning": "There is some attempt at behavioral and cross-file reasoning, but the key cross-file inference about response/log propagation is wrong and there are no validated architectural findings.",
+          "score": 1,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It does not contribute any verified or non-falsifiable substantive issue that is absent from Review B.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 1,
+      "verification_summary": {
+        "claims_verified": 5,
+        "claims_unverified": 2,
+        "claims_contradicted": 3,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.4167,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The PR is a clean, well-executed addition that integrates seamlessly with the codebase.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is an overall qualitative judgment without a concrete code referent to verify or falsify from the repository."
+        },
+        {
+          "claim_text": "TraceID is placed immediately next to ControlTransactionID in WatsonRequest.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field uses the Go-style name `TraceID` rather than `TraceId`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field is tagged as `json:\"trace_id,omitempty\"`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `omitempty` tag means empty TraceID values are omitted from JSON output, providing zero-value safety.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "WatsonResponse embeds WatsonRequest at line 26.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 26,
+            "snippet": "Request              WatsonRequest          `json:\"request\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Trace IDs automatically flow to reconciliation logs.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceId|TraceID|trace_id",
+            "grep_scope": "cmd/watson/protoutil cmd/watson/reclogtransferutil",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'TraceId|TraceID|trace_id' (claim: 'Trace IDs automatically flow to reconciliation logs.')"
+        },
+        {
+          "claim_text": "There is no null-pointer risk because TraceID is a string value field.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Existing `cmd/watson/structs` tests already cover TraceID serialization/response flow.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceID|trace_id",
+            "grep_scope": "cmd/watson/structs/*test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change is production-ready and ready for immediate merge.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a release-readiness opinion rather than a concrete, repository-verifiable claim."
+        },
+        {
+          "claim_text": "Coordinated deployment across control-proto/control/portal/analytics is required for the broader feature.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "This depends on external repositories and deployment state that are not available in the checked-out codebase."
+        },
+        {
+          "claim_text": "The change is backward compatible for all existing clients.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The repository shows an optional field addition, but compatibility for all external clients cannot be confirmed from this codebase alone."
+        }
+      ]
+    },
+    "skwad": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review finds no genuine issues and misses the relevant correctness gap that TraceID is not propagated into the response/protobuf reclog path.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "It provides no corrective guidance because it reports no issues.",
+          "score": 0
+        },
+        "severity_accuracy": {
+          "reasoning": "Approving the change without noticing the missing propagation into the logging/proto path is a material prioritization miss.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "The review comments on compatibility and scope, but it does not cover the main cross-file correctness concern and therefore misses the most relevant issue area.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "It is concise and some observations are accurate, but it still includes a contradicted claim about log-correlation enablement and several unsupported assertions.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "There is some behavioral reasoning about optional serialization and scope, but it does not develop into validated cross-file analysis and misses the real integration gap.",
+          "score": 1,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It contributes no verified or non-falsifiable substantive issue that is absent from Review A.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 2,
+      "verification_summary": {
+        "claims_verified": 4,
+        "claims_unverified": 5,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.3636,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "PR #890 adds `TraceID` with `json:\"trace_id,omitempty\"` to WatsonRequest next to ControlTransactionID.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The field is optional via `omitempty`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Absent `trace_id` values decode to the empty string, so the change is backward compatible at the struct level.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 245,
+            "snippet": "TraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change passes existing build and unit tests.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The repository contains tests, but pass/fail status cannot be confirmed without executing them, which was not part of the verification evidence."
+        },
+        {
+          "claim_text": "The field enables trace-based log correlation in reconciliation logs and traffic replay tooling.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "TraceId|TraceID|trace_id",
+            "grep_scope": "cmd/watson/protoutil cmd/watson/reclogtransferutil",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'TraceId|TraceID|trace_id' (claim: 'The field enables trace-based log correlation in reconciliat')"
+        },
+        {
+          "claim_text": "The field is positioned immediately after ControlTransactionID.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 244,
+            "snippet": "ControlTransactionID string                 `json:\"control_transaction_id\"`\n\tTraceID              string                 `json:\"trace_id,omitempty\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`omitempty` preserves exact-match validation in handler tests and reclog consumers.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "This claim depends on test behavior and downstream consumer expectations that are not directly established by the repository reads alone."
+        },
+        {
+          "claim_text": "This is a pure struct addition with no handler, waterfall, or module logic modified.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The checked-out repository shows the post-change state, but verifying the exact PR scope would require diff-aware evidence beyond the available repository reads."
+        },
+        {
+          "claim_text": "There are no unintended side effects in other packages.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "A blanket absence-of-side-effects claim cannot be confirmed from the limited changed code, especially with cross-file integrations present."
+        },
+        {
+          "claim_text": "Follow-up commit `9fe96f58` correctly keeps empty trace IDs out of test fixtures and reclog data.",
+          "outcome": "unverified",
+          "tools_used": [],
+          "evidence": "The review references commit history and fixture effects that are not verifiable from the checked-out repository state alone."
+        },
+        {
+          "claim_text": "Overall this is a clean, minimal change with no issues and ready to merge.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a high-level evaluative judgment without a concrete code referent that can be directly verified or falsified."
+        }
+      ]
+    }
+  },
+  "command_count": 26,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 4,
+      "ungrounded": 1,
+      "grounding_eligible": 5,
+      "grounding_rate": 0.8
+    },
+    "claude_ci": {
+      "grounded": 7,
+      "ungrounded": 1,
+      "grounding_eligible": 8,
+      "grounding_rate": 0.875
+    }
+  },
+  "duration_seconds": 195.76324666699657
+}

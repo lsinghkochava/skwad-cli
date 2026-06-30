@@ -1,0 +1,1243 @@
+{
+  "scraped_paper": {
+    "table2": {
+      "dash-api#558": {
+        "issue_detection": [
+          3,
+          0
+        ],
+        "actionability": [
+          3,
+          1
+        ],
+        "severity_accuracy": [
+          2,
+          0
+        ],
+        "coverage": [
+          3,
+          0
+        ],
+        "signal_to_noise": [
+          2,
+          1
+        ],
+        "depth": [
+          2,
+          1
+        ],
+        "novel_substantive_findings": [
+          3,
+          0
+        ],
+        "_total": [
+          18,
+          3
+        ],
+        "_win": "\u2713"
+      },
+      "dash-api#562": {
+        "issue_detection": [
+          3,
+          2
+        ],
+        "actionability": [
+          3,
+          2
+        ],
+        "severity_accuracy": [
+          1,
+          0
+        ],
+        "coverage": [
+          3,
+          1
+        ],
+        "signal_to_noise": [
+          2,
+          1
+        ],
+        "depth": [
+          3,
+          1
+        ],
+        "novel_substantive_findings": [
+          3,
+          1
+        ],
+        "_total": [
+          18,
+          8
+        ],
+        "_win": "\u2713"
+      },
+      "dash-api#565": {
+        "issue_detection": [
+          3,
+          2
+        ],
+        "actionability": [
+          3,
+          2
+        ],
+        "severity_accuracy": [
+          1,
+          0
+        ],
+        "coverage": [
+          3,
+          1
+        ],
+        "signal_to_noise": [
+          2,
+          1
+        ],
+        "depth": [
+          3,
+          1
+        ],
+        "novel_substantive_findings": [
+          2,
+          0
+        ],
+        "_total": [
+          17,
+          7
+        ],
+        "_win": "\u2713"
+      },
+      "frontend-mos#1816": {
+        "issue_detection": [
+          3,
+          3
+        ],
+        "actionability": [
+          2,
+          2
+        ],
+        "severity_accuracy": [
+          1,
+          1
+        ],
+        "coverage": [
+          2,
+          2
+        ],
+        "signal_to_noise": [
+          2,
+          1
+        ],
+        "depth": [
+          2,
+          2
+        ],
+        "novel_substantive_findings": [
+          2,
+          2
+        ],
+        "_total": [
+          14,
+          13
+        ],
+        "_win": "\u2713"
+      },
+      "frontend-mos#1818": {
+        "issue_detection": [
+          3,
+          2
+        ],
+        "actionability": [
+          2,
+          3
+        ],
+        "severity_accuracy": [
+          1,
+          3
+        ],
+        "coverage": [
+          3,
+          1
+        ],
+        "signal_to_noise": [
+          1,
+          2
+        ],
+        "depth": [
+          3,
+          2
+        ],
+        "novel_substantive_findings": [
+          3,
+          0
+        ],
+        "_total": [
+          16,
+          13
+        ],
+        "_win": "\u2713"
+      },
+      "watson#879": {
+        "issue_detection": [
+          3,
+          1
+        ],
+        "actionability": [
+          3,
+          2
+        ],
+        "severity_accuracy": [
+          1,
+          1
+        ],
+        "coverage": [
+          3,
+          1
+        ],
+        "signal_to_noise": [
+          1,
+          2
+        ],
+        "depth": [
+          2,
+          1
+        ],
+        "novel_substantive_findings": [
+          2,
+          0
+        ],
+        "_total": [
+          15,
+          8
+        ],
+        "_win": "\u2713"
+      },
+      "watson#890": {
+        "issue_detection": [
+          0,
+          0
+        ],
+        "actionability": [
+          0,
+          0
+        ],
+        "severity_accuracy": [
+          0,
+          0
+        ],
+        "coverage": [
+          0,
+          0
+        ],
+        "signal_to_noise": [
+          1,
+          0
+        ],
+        "depth": [
+          1,
+          1
+        ],
+        "novel_substantive_findings": [
+          0,
+          0
+        ],
+        "_total": [
+          2,
+          1
+        ],
+        "_win": "\u2713"
+      },
+      "watson#893": {
+        "issue_detection": [
+          3,
+          2
+        ],
+        "actionability": [
+          3,
+          2
+        ],
+        "severity_accuracy": [
+          1,
+          1
+        ],
+        "coverage": [
+          3,
+          1
+        ],
+        "signal_to_noise": [
+          2,
+          1
+        ],
+        "depth": [
+          2,
+          1
+        ],
+        "novel_substantive_findings": [
+          3,
+          0
+        ],
+        "_total": [
+          17,
+          8
+        ],
+        "_win": "\u2713"
+      }
+    },
+    "table3": {
+      "dash-api#558": {
+        "skwad": [
+          76.0,
+          94.0,
+          0
+        ],
+        "claude_ci": [
+          56.0,
+          96.0,
+          6
+        ]
+      },
+      "dash-api#562": {
+        "skwad": [
+          72.0,
+          97.0,
+          5
+        ],
+        "claude_ci": [
+          45.0,
+          90.0,
+          7
+        ]
+      },
+      "dash-api#565": {
+        "skwad": [
+          81.0,
+          96.0,
+          5
+        ],
+        "claude_ci": [
+          65.0,
+          93.0,
+          6
+        ]
+      },
+      "frontend-mos#1816": {
+        "skwad": [
+          72.0,
+          100.0,
+          7
+        ],
+        "claude_ci": [
+          59.0,
+          96.0,
+          6
+        ]
+      },
+      "frontend-mos#1818": {
+        "skwad": [
+          86.0,
+          85.0,
+          4
+        ],
+        "claude_ci": [
+          81.0,
+          100.0,
+          2
+        ]
+      },
+      "watson#879": {
+        "skwad": [
+          71.0,
+          91.0,
+          4
+        ],
+        "claude_ci": [
+          61.0,
+          84.0,
+          0
+        ]
+      },
+      "watson#890": {
+        "skwad": [
+          24.0,
+          80.0,
+          2
+        ],
+        "claude_ci": [
+          40.0,
+          91.0,
+          7
+        ]
+      },
+      "watson#893": {
+        "skwad": [
+          81.0,
+          92.0,
+          3
+        ],
+        "claude_ci": [
+          71.0,
+          92.0,
+          3
+        ]
+      },
+      "Mean": {
+        "skwad": [
+          70.9,
+          91.0,
+          30
+        ],
+        "claude_ci": [
+          60.2,
+          93.0,
+          37
+        ]
+      }
+    },
+    "table4": {
+      "Coverage": [
+        0.97,
+        0.91,
+        1.0,
+        "pass"
+      ],
+      "Novel findings": [
+        0.93,
+        0.83,
+        0.99,
+        "pass"
+      ],
+      "Issue detection": [
+        0.92,
+        0.73,
+        0.99,
+        "pass"
+      ],
+      "Depth": [
+        0.86,
+        0.64,
+        0.97,
+        "pass"
+      ],
+      "Actionability": [
+        0.68,
+        0.31,
+        0.89,
+        "below"
+      ],
+      "Signal-to-noise": [
+        0.57,
+        0.16,
+        0.84,
+        "below"
+      ],
+      "Severity accuracy": [
+        0.5,
+        0.05,
+        0.81,
+        "below"
+      ]
+    },
+    "table5": {
+      "Issue detection": [
+        0.031,
+        0.07
+      ],
+      "Coverage": [
+        0.031,
+        0.07
+      ],
+      "Depth": [
+        0.031,
+        0.07
+      ],
+      "Novel findings": [
+        0.031,
+        0.07
+      ],
+      "Hard (difficulty)": [
+        0.125,
+        0.225
+      ],
+      "Actionability": [
+        0.188,
+        0.281
+      ],
+      "Easy (difficulty)": [
+        0.25,
+        0.321
+      ],
+      "Signal-to-noise": [
+        0.289,
+        0.325
+      ],
+      "Severity accuracy": [
+        0.75,
+        0.75
+      ]
+    },
+    "prose": {
+      "wilcoxon_p": 0.0078,
+      "wilcoxon_stat": 0,
+      "wilcoxon_n": 8,
+      "cliffs_delta": 0.78,
+      "bca_ci": [
+        0.5,
+        1.0
+      ],
+      "total_claims": 643,
+      "ver_skwad": 70.9,
+      "ver_ci": 60.2,
+      "contra_ci_prose": 37,
+      "contra_skwad_prose": 30,
+      "smallest_bh_p": 0.07,
+      "win_sweep": 8,
+      "planned_n": 30,
+      "forward_delta": 0.33,
+      "nboot_caption": 200,
+      "pos_bias_skwad": 0.53,
+      "pos_bias_ci": 0.094,
+      "tool_calls_range": [
+        75,
+        131
+      ]
+    }
+  },
+  "environment": {
+    "installed": {
+      "scipy": "1.17.1",
+      "numpy": "2.3.3",
+      "krippendorff": "0.8.2"
+    },
+    "pinned": {
+      "scipy": "1.17.1",
+      "numpy": "2.3.3",
+      "krippendorff": "0.8.2"
+    },
+    "bootstrap_run": true,
+    "bca_seed": 12345
+  },
+  "reconstruction": {
+    "frontend-mos#1816": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 2,
+          "severity_accuracy": 1,
+          "coverage": 2,
+          "signal_to_noise": 2,
+          "depth": 2,
+          "novel_substantive_findings": 2
+        },
+        "total": 14,
+        "stored_total": 14
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 2,
+          "severity_accuracy": 1,
+          "coverage": 2,
+          "signal_to_noise": 1,
+          "depth": 2,
+          "novel_substantive_findings": 2
+        },
+        "total": 13,
+        "stored_total": 13
+      }
+    },
+    "frontend-mos#1818": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 2,
+          "severity_accuracy": 1,
+          "coverage": 3,
+          "signal_to_noise": 1,
+          "depth": 3,
+          "novel_substantive_findings": 3
+        },
+        "total": 16,
+        "stored_total": 16
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 2,
+          "actionability": 3,
+          "severity_accuracy": 3,
+          "coverage": 1,
+          "signal_to_noise": 2,
+          "depth": 2,
+          "novel_substantive_findings": 0
+        },
+        "total": 13,
+        "stored_total": 13
+      }
+    },
+    "watson#893": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 3,
+          "severity_accuracy": 1,
+          "coverage": 3,
+          "signal_to_noise": 2,
+          "depth": 2,
+          "novel_substantive_findings": 3
+        },
+        "total": 17,
+        "stored_total": 17
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 2,
+          "actionability": 2,
+          "severity_accuracy": 1,
+          "coverage": 1,
+          "signal_to_noise": 1,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 8,
+        "stored_total": 8
+      }
+    },
+    "watson#890": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 0,
+          "actionability": 0,
+          "severity_accuracy": 0,
+          "coverage": 0,
+          "signal_to_noise": 1,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 2,
+        "stored_total": 2
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 0,
+          "actionability": 0,
+          "severity_accuracy": 0,
+          "coverage": 0,
+          "signal_to_noise": 0,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 1,
+        "stored_total": 1
+      }
+    },
+    "watson#879": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 3,
+          "severity_accuracy": 1,
+          "coverage": 3,
+          "signal_to_noise": 1,
+          "depth": 2,
+          "novel_substantive_findings": 2
+        },
+        "total": 15,
+        "stored_total": 15
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 1,
+          "actionability": 2,
+          "severity_accuracy": 1,
+          "coverage": 1,
+          "signal_to_noise": 2,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 8,
+        "stored_total": 8
+      }
+    },
+    "dash-api#565": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 3,
+          "severity_accuracy": 1,
+          "coverage": 3,
+          "signal_to_noise": 2,
+          "depth": 3,
+          "novel_substantive_findings": 2
+        },
+        "total": 17,
+        "stored_total": 17
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 2,
+          "actionability": 2,
+          "severity_accuracy": 0,
+          "coverage": 1,
+          "signal_to_noise": 1,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 7,
+        "stored_total": 7
+      }
+    },
+    "dash-api#558": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 3,
+          "severity_accuracy": 2,
+          "coverage": 3,
+          "signal_to_noise": 2,
+          "depth": 2,
+          "novel_substantive_findings": 3
+        },
+        "total": 18,
+        "stored_total": 18
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 0,
+          "actionability": 1,
+          "severity_accuracy": 0,
+          "coverage": 0,
+          "signal_to_noise": 1,
+          "depth": 1,
+          "novel_substantive_findings": 0
+        },
+        "total": 3,
+        "stored_total": 3
+      }
+    },
+    "dash-api#562": {
+      "skwad": {
+        "voted": {
+          "issue_detection": 3,
+          "actionability": 3,
+          "severity_accuracy": 1,
+          "coverage": 3,
+          "signal_to_noise": 2,
+          "depth": 3,
+          "novel_substantive_findings": 3
+        },
+        "total": 18,
+        "stored_total": 18
+      },
+      "claude_ci": {
+        "voted": {
+          "issue_detection": 2,
+          "actionability": 2,
+          "severity_accuracy": 0,
+          "coverage": 1,
+          "signal_to_noise": 1,
+          "depth": 1,
+          "novel_substantive_findings": 1
+        },
+        "total": 8,
+        "stored_total": 8
+      }
+    }
+  },
+  "primary": {
+    "skwad_totals": [
+      14.0,
+      16.0,
+      17.0,
+      2.0,
+      15.0,
+      17.0,
+      18.0,
+      18.0
+    ],
+    "ci_totals": [
+      13.0,
+      13.0,
+      8.0,
+      1.0,
+      8.0,
+      7.0,
+      3.0,
+      8.0
+    ],
+    "diffs": [
+      1.0,
+      3.0,
+      9.0,
+      1.0,
+      7.0,
+      10.0,
+      15.0,
+      10.0
+    ],
+    "wilcoxon_p": 0.0078125,
+    "wilcoxon_statistic": 0.0,
+    "cliffs_delta": 0.78125,
+    "sign": {
+      "pos": 8,
+      "neg": 0,
+      "zero": 0
+    },
+    "bca_ci": [
+      0.5,
+      1.0
+    ]
+  },
+  "table2_medians": {
+    "skwad": {
+      "issue_detection": 3,
+      "actionability": 3,
+      "severity_accuracy": 1,
+      "coverage": 3,
+      "signal_to_noise": 2,
+      "depth": 2,
+      "novel_substantive_findings": 2
+    },
+    "claude_ci": {
+      "issue_detection": 2,
+      "actionability": 2,
+      "severity_accuracy": 0,
+      "coverage": 1,
+      "signal_to_noise": 1,
+      "depth": 1,
+      "novel_substantive_findings": 0
+    }
+  },
+  "table2_cell_mismatches": [],
+  "table3": {
+    "per_pr": {
+      "frontend-mos#1816": {
+        "skwad": {
+          "ver_rate": 0.7234753550543024,
+          "grnd_rate": 1.0,
+          "per_run_ver": [
+            0.7142857142857143,
+            0.7894736842105263,
+            0.6666666666666666
+          ],
+          "per_run_grnd": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.5962962962962963,
+          "grnd_rate": 0.9743589743589745,
+          "per_run_ver": [
+            0.5,
+            0.7333333333333333,
+            0.5555555555555556
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.9230769230769231,
+            1.0
+          ]
+        }
+      },
+      "frontend-mos#1818": {
+        "skwad": {
+          "ver_rate": 0.8692185007974481,
+          "grnd_rate": 0.8537037037037036,
+          "per_run_ver": [
+            0.8947368421052632,
+            0.8181818181818182,
+            0.8947368421052632
+          ],
+          "per_run_grnd": [
+            0.8333333333333334,
+            0.95,
+            0.7777777777777778
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.8111111111111112,
+          "grnd_rate": 1.0,
+          "per_run_ver": [
+            0.8,
+            0.8,
+            0.8333333333333334
+          ],
+          "per_run_grnd": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "watson#893": {
+        "skwad": {
+          "ver_rate": 0.8166666666666668,
+          "grnd_rate": 0.9285714285714285,
+          "per_run_ver": [
+            0.8333333333333334,
+            0.8666666666666667,
+            0.75
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.9285714285714286,
+            0.8571428571428571
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.7181818181818181,
+          "grnd_rate": 0.9259259259259259,
+          "per_run_ver": [
+            0.7272727272727273,
+            0.7,
+            0.7272727272727273
+          ],
+          "per_run_grnd": [
+            0.8888888888888888,
+            1.0,
+            0.8888888888888888
+          ]
+        }
+      },
+      "watson#890": {
+        "skwad": {
+          "ver_rate": 0.24656824656824658,
+          "grnd_rate": 0.8222222222222223,
+          "per_run_ver": [
+            0.2222222222222222,
+            0.15384615384615385,
+            0.36363636363636365
+          ],
+          "per_run_grnd": [
+            0.6666666666666666,
+            1.0,
+            0.8
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.40972222222222227,
+          "grnd_rate": 0.9249999999999999,
+          "per_run_ver": [
+            0.5,
+            0.3125,
+            0.4166666666666667
+          ],
+          "per_run_grnd": [
+            0.9,
+            1.0,
+            0.875
+          ]
+        }
+      },
+      "watson#879": {
+        "skwad": {
+          "ver_rate": 0.7168627450980393,
+          "grnd_rate": 0.915461731251205,
+          "per_run_ver": [
+            0.7647058823529411,
+            0.68,
+            0.7058823529411765
+          ],
+          "per_run_grnd": [
+            0.9285714285714286,
+            0.8947368421052632,
+            0.9230769230769231
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.6121212121212122,
+          "grnd_rate": 0.8492063492063492,
+          "per_run_ver": [
+            0.6363636363636364,
+            0.6,
+            0.6
+          ],
+          "per_run_grnd": [
+            0.7142857142857143,
+            0.8333333333333334,
+            1.0
+          ]
+        }
+      },
+      "dash-api#565": {
+        "skwad": {
+          "ver_rate": 0.8134920634920636,
+          "grnd_rate": 0.9607843137254902,
+          "per_run_ver": [
+            0.8571428571428571,
+            0.75,
+            0.8333333333333334
+          ],
+          "per_run_grnd": [
+            1.0,
+            1.0,
+            0.8823529411764706
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.6515151515151515,
+          "grnd_rate": 0.9333333333333332,
+          "per_run_ver": [
+            0.6363636363636364,
+            0.5,
+            0.8181818181818182
+          ],
+          "per_run_grnd": [
+            1.0,
+            1.0,
+            0.8
+          ]
+        }
+      },
+      "dash-api#558": {
+        "skwad": {
+          "ver_rate": 0.7631578947368421,
+          "grnd_rate": 0.9259259259259259,
+          "per_run_ver": [
+            0.7894736842105263,
+            0.75,
+            0.75
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.7777777777777778,
+            1.0
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.5627705627705627,
+          "grnd_rate": 0.9523809523809524,
+          "per_run_ver": [
+            0.5,
+            0.5454545454545454,
+            0.6428571428571429
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.8571428571428571,
+            1.0
+          ]
+        }
+      },
+      "dash-api#562": {
+        "skwad": {
+          "ver_rate": 0.7277777777777777,
+          "grnd_rate": 0.9791666666666666,
+          "per_run_ver": [
+            0.7333333333333333,
+            0.7,
+            0.75
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.9375,
+            1.0
+          ]
+        },
+        "claude_ci": {
+          "ver_rate": 0.45274725274725275,
+          "grnd_rate": 0.9280303030303031,
+          "per_run_ver": [
+            0.14285714285714285,
+            0.6153846153846154,
+            0.6
+          ],
+          "per_run_grnd": [
+            1.0,
+            0.9090909090909091,
+            0.875
+          ]
+        }
+      }
+    },
+    "overall_ver": {
+      "skwad": 0.7096524062739233,
+      "claude_ci": 0.6018082033707033
+    },
+    "overall_grnd": {
+      "skwad": 0.9232294990083303,
+      "claude_ci": 0.9360294797794797
+    },
+    "pooled_ver": {
+      "skwad": 0.7315789473684211,
+      "claude_ci": 0.5931558935361216
+    },
+    "contradicted_total": {
+      "skwad": 30,
+      "claude_ci": 37
+    },
+    "corpus_claims": 643
+  },
+  "table4": {
+    "coverage": {
+      "alpha": 0.966690290574061,
+      "ci_200_42": [
+        0.9005514978763564,
+        1.0
+      ],
+      "ci_2000_0": [
+        0.8824408592486068,
+        1.0
+      ]
+    },
+    "novel_substantive_findings": {
+      "alpha": 0.9297273688266783,
+      "ci_200_42": [
+        0.8070846293461539,
+        1.0
+      ],
+      "ci_2000_0": [
+        0.7944815739059851,
+        1.0
+      ]
+    },
+    "issue_detection": {
+      "alpha": 0.918355566270224,
+      "ci_200_42": [
+        0.7207774095666146,
+        0.9941536618366077
+      ],
+      "ci_2000_0": [
+        0.7185327923178029,
+        0.997110655737705
+      ]
+    },
+    "depth": {
+      "alpha": 0.8599833938142609,
+      "ci_200_42": [
+        0.6961264002075177,
+        0.9592703448351108
+      ],
+      "ci_2000_0": [
+        0.6548705364134639,
+        0.9619458635078012
+      ]
+    },
+    "actionability": {
+      "alpha": 0.6776749308286005,
+      "ci_200_42": [
+        0.3193188864087302,
+        0.8947856466423546
+      ],
+      "ci_2000_0": [
+        0.25431795634920623,
+        0.8940938245006933
+      ]
+    },
+    "signal_to_noise": {
+      "alpha": 0.5675374705287975,
+      "ci_200_42": [
+        0.21284193299482276,
+        0.8580919815298823
+      ],
+      "ci_2000_0": [
+        0.19165305566031002,
+        0.8286470532253599
+      ]
+    },
+    "severity_accuracy": {
+      "alpha": 0.49633827269170583,
+      "ci_200_42": [
+        0.06659064226638858,
+        0.8230189417105759
+      ],
+      "ci_2000_0": [
+        0.046963381251675186,
+        0.8134257509849896
+      ]
+    }
+  },
+  "table4_gate_margins": [
+    {
+      "criterion": "Coverage",
+      "ci_lower": 0.9005514978763564,
+      "margin_from_0.60": 0.3005514978763564
+    },
+    {
+      "criterion": "Novel findings",
+      "ci_lower": 0.8070846293461539,
+      "margin_from_0.60": 0.2070846293461539
+    },
+    {
+      "criterion": "Issue detection",
+      "ci_lower": 0.7207774095666146,
+      "margin_from_0.60": 0.12077740956661465
+    },
+    {
+      "criterion": "Depth",
+      "ci_lower": 0.6961264002075177,
+      "margin_from_0.60": 0.09612640020751773
+    },
+    {
+      "criterion": "Actionability",
+      "ci_lower": 0.3193188864087302,
+      "margin_from_0.60": -0.2806811135912698
+    },
+    {
+      "criterion": "Signal-to-noise",
+      "ci_lower": 0.21284193299482276,
+      "margin_from_0.60": -0.3871580670051772
+    },
+    {
+      "criterion": "Severity accuracy",
+      "ci_lower": 0.06659064226638858,
+      "margin_from_0.60": -0.5334093577336114
+    }
+  ],
+  "table5": {
+    "criteria": {
+      "Issue detection": 0.03125,
+      "Actionability": 0.1875,
+      "Severity accuracy": 0.75,
+      "Coverage": 0.03125,
+      "Signal-to-noise": 0.2890625,
+      "Depth": 0.03125,
+      "Novel findings": 0.03125
+    },
+    "difficulty": {
+      "Hard (difficulty)": 0.125,
+      "Easy (difficulty)": 0.25,
+      "Medium (difficulty)": 1.0
+    },
+    "bh_adjusted": {
+      "Issue detection": 0.0703125,
+      "Actionability": 0.28125,
+      "Severity accuracy": 0.75,
+      "Coverage": 0.0703125,
+      "Signal-to-noise": 0.3251953125,
+      "Depth": 0.0703125,
+      "Novel findings": 0.0703125,
+      "Hard (difficulty)": 0.225,
+      "Easy (difficulty)": 0.32142857142857145
+    },
+    "position_bias": {
+      "skwad": {
+        "run1_vs_run2": 0.53125
+      },
+      "claude_ci": {
+        "run1_vs_run2": 0.09375
+      }
+    }
+  },
+  "tool_calls": {
+    "per_pr_command_count": {
+      "frontend-mos#1816": 131,
+      "frontend-mos#1818": 120,
+      "watson#893": 104,
+      "watson#890": 76,
+      "watson#879": 75,
+      "dash-api#565": 100,
+      "dash-api#558": 75,
+      "dash-api#562": 87
+    },
+    "range": [
+      75,
+      131
+    ],
+    "paper_range": [
+      75,
+      131
+    ],
+    "transcript_crosscheck_agrees": true,
+    "tool_calls_observed_placeholder_all_zero": true
+  }
+}

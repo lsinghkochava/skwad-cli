@@ -1,0 +1,7 @@
+# Statistical analysis dependencies (Step 4)
+scipy>=1.11.0
+numpy>=1.24.0
+krippendorff>=0.6.0
+
+# OpenAI judge (Route B) — Python OpenAI client
+openai>=1.99.0

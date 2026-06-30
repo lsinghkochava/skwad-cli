@@ -1,0 +1,1100 @@
+{
+  "run": 2,
+  "ab_assignment": [
+    "claude_ci",
+    "skwad"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A identifies four genuine issues backed by the code: ignored response-body close errors, missing numeric-value validation before persisting payload data, missing Watson configuration validation, and the manual fallback-sync risk. Its headline HIGH-severity defect is contradicted by the write path, and the empty-value portion of its validation criticism is also contradicted.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Every concrete finding comes with a specific code-level direction or sample fix, even when the underlying prioritization is weak.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The only explicitly labeled HIGH-severity defect is incorrect because empty values are skipped before persistence, so the review's prioritization is materially wrong.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "The genuine findings touch validation, configuration, resource handling, and fallback maintenance, but the review misses the PR's larger transactional, deletion, cache-stampede, and test-mocking risks.",
+          "score": 1,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some real value, but the main defect analysis is a false positive and several supporting claims are either contradicted or unsupported.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review shows some behavioral reasoning about downstream effects, but its deepest analysis misreads the save path and therefore does not sustain high-depth credit.",
+          "score": 1,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Relative to Review B, A contributes two substantive unique points: lack of numeric payload validation and lack of Watson config validation. Its other genuine findings are either already covered by B or too minor to count as substantive novelty.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "Review A uniquely notes that persisted reconciliation values are never validated for numeric shape before `UpsertPostmeta`, which could allow malformed lookback/window data into postmeta.",
+            "Review A uniquely notes that the new Watson settings are accepted from env without any startup validation of base URL or timeout bounds."
+          ]
+        }
+      },
+      "total": 11,
+      "verification_summary": {
+        "claims_verified": 8,
+        "claims_unverified": 2,
+        "claims_contradicted": 3,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.6153846154,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "There is a HIGH-severity bug because the empty-string values produced by `effectiveDefaults()` will be saved to the database and then parsed by Watson as zero-length lookbacks.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`effectiveDefaults()` returns empty-string placeholders for UI-only reconciliation fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 345,
+            "snippet": "\"impression_device_attribution_tier\":     \"\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client ignores response-body close errors.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 98,
+            "snippet": "defer resp.Body.Close() //nolint:errcheck"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Empty payload values are not prevented from being persisted, which would cause Watson parsing problems.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The handler does not validate invalid numeric reconciliation values before persisting them.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 310,
+            "snippet": "if err := dbAppDAO.UpsertPostmeta(appID, pipelineID, metaKey, value); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new Watson configuration lacks startup validation.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "ValidateWatsonConfig|url\\.Parse\\(.*Watson|WatsonBaseURL.*Parse|WatsonTimeout <",
+            "grep_scope": "cmd internal -g'*.go'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim not backed by an emitted empty search whose pattern equals the recorded grep_pattern 'ValidateWatsonConfig|url\\\\.Parse\\\\(.*Watson|WatsonBaseURL.*Parse|WatsonTimeout <': 'The new Watson configuration lacks startup validation.'"
+        },
+        {
+          "claim_text": "The fallback defaults require manual synchronization with Watson's EngineDefaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/fallback.go",
+            "line": 8,
+            "snippet": "// Keep values in sync with watson/cmd/watson/ruleset/defaults.go EngineDefaults."
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Request payload validation prevents injection attacks.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 190,
+            "snippet": "if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `X-Watson-Feature` header is only set when configured.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 91,
+            "snippet": "if c.featureHeader != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client uses a 5-minute cache TTL.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 22,
+            "snippet": "cacheTTL     = 5 * time.Minute"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The POST path now persists only keys present in the payload.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 305,
+            "snippet": "for key, value := range payload {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Current test coverage is 84.84% with 15 missing lines.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": "I found no coverage artifact in the repo that substantiates the specific 84.84% / 15-lines figure."
+        },
+        {
+          "claim_text": "No critical security issues were found.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "This is a broad absence-of-vulnerabilities assessment that is not provable from the inspected files alone."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B identifies many genuine issues, including the non-atomic save loop, the per-key upsert round trips, orphaned-key deletion gaps, a broken test mock, repeated regex compilation, missing singleflight, redundant Watson dependency on reset, brittle key-count assertions, and fallback-sync maintenance risk. It also raises two architecture concerns that are evaluative but code-grounded.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "actionability": {
+          "reasoning": "The findings consistently provide concrete remediation paths, usually with clear code-level direction or replacement patterns.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The major correctness and performance problems are prioritized appropriately, but several medium/nit architecture points are overstated as pre-merge blockers.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review spans correctness, data integrity, database performance, cache behavior, handler latency, architecture consistency, and test quality; it covers most of the PR's important risk areas.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "signal_to_noise": {
+          "reasoning": "Most comments add real value, but there is some noise from contradicted praise (for example claiming no N+1 pattern) and a couple speculative low-confidence notes.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "Review B traces behavior across handlers, DAO methods, cache usage, and tests. Its strongest findings require cross-file reasoning about control flow and persistence semantics.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review A, B contributes several substantive unique findings about transactional safety, query behavior, deletion correctness, test correctness, cache stampedes, and unnecessary Watson coupling on reset.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "B uniquely identifies that `updateReconciliationSettings` performs multiple independent writes without any transaction, so failures can leave partial state behind.",
+            "B uniquely traces `UpsertPostmeta` into `GetPostmetas` plus update/insert behavior, surfacing the 2N round-trip database pattern.",
+            "B uniquely shows that reset first discovers keys with a LIKE scan but then deletes only the enumerated defaults, leaving extra reconciliation keys behind.",
+            "B uniquely catches that the SparsePOST test mocks `[]string{\"cpi_2_\"}` while production passes `[]string{\"cpi_2_%\"}`, so the specific LIKE expectation is not actually exercised.",
+            "B uniquely points out the lack of singleflight around cache misses, so concurrent expiry can fan out multiple Watson fetches.",
+            "B uniquely points out that reset calls `effectiveDefaults()` and therefore depends on Watson client work even though delete only needs key names."
+          ]
+        }
+      },
+      "total": 18,
+      "verification_summary": {
+        "claims_verified": 14,
+        "claims_unverified": 2,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.7,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "`updateReconciliationSettings` can leave partially applied state because it writes one key at a time with no transaction.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 310,
+            "snippet": "if err := dbAppDAO.UpsertPostmeta(appID, pipelineID, metaKey, value); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The POST save path has an N+1-style database pattern because each upsert performs a read before update/insert.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/database/dbApp.go",
+            "line": 160,
+            "snippet": "postmetas, err := db.GetPostmetas(appID, []int{postID}, []string{metaKey})"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`deleteReconciliationSettings` deletes only the enumerated default keys, so other `cpi_<nid>_...` postmeta keys can survive reset.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 326,
+            "snippet": "metaKeys = append(metaKeys, fmt.Sprintf(\"cpi_%s_%s\", networkID, key))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The SparsePOST test mocks the wrong LIKE key slice (`cpi_2_` instead of `cpi_2_%`), so the specific expectation does not match production behavior.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation_test.go",
+            "line": 268,
+            "snippet": "[]string{\"cpi_2_\"}, mock.AnythingOfType(\"[]map[string]string\"))."
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`regexp.MustCompile` is called on every request path instead of compiling once.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 85,
+            "snippet": "if !regexp.MustCompile(`^[0-9]+$`).MatchString(appID) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client has no singleflight protection on cache miss.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "singleflight",
+            "grep_scope": "internal cmd -g'*.go'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim not backed by an emitted empty search whose pattern equals the recorded grep_pattern 'singleflight': 'The Watson client has no singleflight protection on cache mi'"
+        },
+        {
+          "claim_text": "Placing the new code under `internal/clients/watson` breaks the project's existing flat client/package convention.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The repo clearly has both flat internal packages and this new nested path, but whether that constitutes a convention break is an evaluative architecture judgment rather than a directly falsifiable defect."
+        },
+        {
+          "claim_text": "`BaseHandler` now mixes two different optional-service patterns (`*aimwebhook.Client` vs `watson.Client`), creating an inconsistency.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The field shapes are concrete in `BaseHandler`, but judging that divergence as a meaningful architecture problem is evaluative rather than strictly falsifiable."
+        },
+        {
+          "claim_text": "Reset makes an unnecessary Watson client call even though delete only needs key names.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 323,
+            "snippet": "defaults := h.effectiveDefaults(ctx)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "On cache hit, the Watson client returns the cached map directly without cloning it.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 69,
+            "snippet": "return m"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`TestEffectiveDefaults_AllTwentyKeysPresent` is brittle because it hardcodes an exact key count of 20.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation_test.go",
+            "line": 399,
+            "snippet": "assert.Equal(t, 20, len(got), \"expected 20 keys total (4 engine + 16 blank)\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Because the shared app cache is created with `cache.New(0, 0)`, expired Watson entries never evict.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The code shows the shared cache is created with `cache.New(0, 0)`, but the precise eviction behavior of the third-party cache library is not established from these repo files alone."
+        },
+        {
+          "claim_text": "The fallback values are duplicated between `fallback.go` and `mock_watson_client.go`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "Both files contain fallback-like literals, but this claim depends on cross-file value equivalence that is not fully demonstrable with a single cited snippet under the required evidence format."
+        },
+        {
+          "claim_text": "No N+1 query patterns were introduced.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/database/dbApp.go",
+            "line": 160,
+            "snippet": "postmetas, err := db.GetPostmetas(appID, []int{postID}, []string{metaKey})"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`deleteReconciliationSettings()` correctly uses `effectiveDefaults()` to determine all keys that need deletion.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 326,
+            "snippet": "metaKeys = append(metaKeys, fmt.Sprintf(\"cpi_%s_%s\", networkID, key))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Skipping empty values in sparse POST is a sound correctness fix.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`effectiveDefaults()` merges Watson-provided defaults with blank UI placeholders.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 362,
+            "snippet": "for k, v := range engine {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "POST now persists only keys present in the payload.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 305,
+            "snippet": "for key, value := range payload {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`mergeRulesWithDefaults()` overlays explicit postmeta rules on top of defaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 372,
+            "snippet": "out[k] = v"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The fallback map must stay in sync with Watson's EngineDefaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/fallback.go",
+            "line": 8,
+            "snippet": "// Keep values in sync with watson/cmd/watson/ruleset/defaults.go EngineDefaults."
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "claude_ci": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A identifies four genuine issues backed by the code: ignored response-body close errors, missing numeric-value validation before persisting payload data, missing Watson configuration validation, and the manual fallback-sync risk. Its headline HIGH-severity defect is contradicted by the write path, and the empty-value portion of its validation criticism is also contradicted.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Every concrete finding comes with a specific code-level direction or sample fix, even when the underlying prioritization is weak.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The only explicitly labeled HIGH-severity defect is incorrect because empty values are skipped before persistence, so the review's prioritization is materially wrong.",
+          "score": 0
+        },
+        "coverage": {
+          "reasoning": "The genuine findings touch validation, configuration, resource handling, and fallback maintenance, but the review misses the PR's larger transactional, deletion, cache-stampede, and test-mocking risks.",
+          "score": 1,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some real value, but the main defect analysis is a false positive and several supporting claims are either contradicted or unsupported.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review shows some behavioral reasoning about downstream effects, but its deepest analysis misreads the save path and therefore does not sustain high-depth credit.",
+          "score": 1,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Relative to Review B, A contributes two substantive unique points: lack of numeric payload validation and lack of Watson config validation. Its other genuine findings are either already covered by B or too minor to count as substantive novelty.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "Review A uniquely notes that persisted reconciliation values are never validated for numeric shape before `UpsertPostmeta`, which could allow malformed lookback/window data into postmeta.",
+            "Review A uniquely notes that the new Watson settings are accepted from env without any startup validation of base URL or timeout bounds."
+          ]
+        }
+      },
+      "total": 11,
+      "verification_summary": {
+        "claims_verified": 8,
+        "claims_unverified": 2,
+        "claims_contradicted": 3,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.6153846154,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "There is a HIGH-severity bug because the empty-string values produced by `effectiveDefaults()` will be saved to the database and then parsed by Watson as zero-length lookbacks.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`effectiveDefaults()` returns empty-string placeholders for UI-only reconciliation fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 345,
+            "snippet": "\"impression_device_attribution_tier\":     \"\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client ignores response-body close errors.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 98,
+            "snippet": "defer resp.Body.Close() //nolint:errcheck"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Empty payload values are not prevented from being persisted, which would cause Watson parsing problems.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The handler does not validate invalid numeric reconciliation values before persisting them.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 310,
+            "snippet": "if err := dbAppDAO.UpsertPostmeta(appID, pipelineID, metaKey, value); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new Watson configuration lacks startup validation.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "ValidateWatsonConfig|url\\.Parse\\(.*Watson|WatsonBaseURL.*Parse|WatsonTimeout <",
+            "grep_scope": "cmd internal -g'*.go'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim not backed by an emitted empty search whose pattern equals the recorded grep_pattern 'ValidateWatsonConfig|url\\\\.Parse\\\\(.*Watson|WatsonBaseURL.*Parse|WatsonTimeout <': 'The new Watson configuration lacks startup validation.'"
+        },
+        {
+          "claim_text": "The fallback defaults require manual synchronization with Watson's EngineDefaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/fallback.go",
+            "line": 8,
+            "snippet": "// Keep values in sync with watson/cmd/watson/ruleset/defaults.go EngineDefaults."
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Request payload validation prevents injection attacks.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 190,
+            "snippet": "if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `X-Watson-Feature` header is only set when configured.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 91,
+            "snippet": "if c.featureHeader != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client uses a 5-minute cache TTL.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 22,
+            "snippet": "cacheTTL     = 5 * time.Minute"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The POST path now persists only keys present in the payload.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 305,
+            "snippet": "for key, value := range payload {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Current test coverage is 84.84% with 15 missing lines.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": "I found no coverage artifact in the repo that substantiates the specific 84.84% / 15-lines figure."
+        },
+        {
+          "claim_text": "No critical security issues were found.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "This is a broad absence-of-vulnerabilities assessment that is not provable from the inspected files alone."
+        }
+      ]
+    },
+    "skwad": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B identifies many genuine issues, including the non-atomic save loop, the per-key upsert round trips, orphaned-key deletion gaps, a broken test mock, repeated regex compilation, missing singleflight, redundant Watson dependency on reset, brittle key-count assertions, and fallback-sync maintenance risk. It also raises two architecture concerns that are evaluative but code-grounded.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "actionability": {
+          "reasoning": "The findings consistently provide concrete remediation paths, usually with clear code-level direction or replacement patterns.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The major correctness and performance problems are prioritized appropriately, but several medium/nit architecture points are overstated as pre-merge blockers.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review spans correctness, data integrity, database performance, cache behavior, handler latency, architecture consistency, and test quality; it covers most of the PR's important risk areas.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "signal_to_noise": {
+          "reasoning": "Most comments add real value, but there is some noise from contradicted praise (for example claiming no N+1 pattern) and a couple speculative low-confidence notes.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "Review B traces behavior across handlers, DAO methods, cache usage, and tests. Its strongest findings require cross-file reasoning about control flow and persistence semantics.",
+          "score": 3,
+          "verified_findings": 10,
+          "unverified_findings": 2,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 2
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review A, B contributes several substantive unique findings about transactional safety, query behavior, deletion correctness, test correctness, cache stampedes, and unnecessary Watson coupling on reset.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "B uniquely identifies that `updateReconciliationSettings` performs multiple independent writes without any transaction, so failures can leave partial state behind.",
+            "B uniquely traces `UpsertPostmeta` into `GetPostmetas` plus update/insert behavior, surfacing the 2N round-trip database pattern.",
+            "B uniquely shows that reset first discovers keys with a LIKE scan but then deletes only the enumerated defaults, leaving extra reconciliation keys behind.",
+            "B uniquely catches that the SparsePOST test mocks `[]string{\"cpi_2_\"}` while production passes `[]string{\"cpi_2_%\"}`, so the specific LIKE expectation is not actually exercised.",
+            "B uniquely points out the lack of singleflight around cache misses, so concurrent expiry can fan out multiple Watson fetches.",
+            "B uniquely points out that reset calls `effectiveDefaults()` and therefore depends on Watson client work even though delete only needs key names."
+          ]
+        }
+      },
+      "total": 18,
+      "verification_summary": {
+        "claims_verified": 14,
+        "claims_unverified": 2,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.7,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "`updateReconciliationSettings` can leave partially applied state because it writes one key at a time with no transaction.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 310,
+            "snippet": "if err := dbAppDAO.UpsertPostmeta(appID, pipelineID, metaKey, value); err != nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The POST save path has an N+1-style database pattern because each upsert performs a read before update/insert.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/database/dbApp.go",
+            "line": 160,
+            "snippet": "postmetas, err := db.GetPostmetas(appID, []int{postID}, []string{metaKey})"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`deleteReconciliationSettings` deletes only the enumerated default keys, so other `cpi_<nid>_...` postmeta keys can survive reset.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 326,
+            "snippet": "metaKeys = append(metaKeys, fmt.Sprintf(\"cpi_%s_%s\", networkID, key))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The SparsePOST test mocks the wrong LIKE key slice (`cpi_2_` instead of `cpi_2_%`), so the specific expectation does not match production behavior.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation_test.go",
+            "line": 268,
+            "snippet": "[]string{\"cpi_2_\"}, mock.AnythingOfType(\"[]map[string]string\"))."
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`regexp.MustCompile` is called on every request path instead of compiling once.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 85,
+            "snippet": "if !regexp.MustCompile(`^[0-9]+$`).MatchString(appID) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The Watson client has no singleflight protection on cache miss.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "singleflight",
+            "grep_scope": "internal cmd -g'*.go'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim not backed by an emitted empty search whose pattern equals the recorded grep_pattern 'singleflight': 'The Watson client has no singleflight protection on cache mi'"
+        },
+        {
+          "claim_text": "Placing the new code under `internal/clients/watson` breaks the project's existing flat client/package convention.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The repo clearly has both flat internal packages and this new nested path, but whether that constitutes a convention break is an evaluative architecture judgment rather than a directly falsifiable defect."
+        },
+        {
+          "claim_text": "`BaseHandler` now mixes two different optional-service patterns (`*aimwebhook.Client` vs `watson.Client`), creating an inconsistency.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The field shapes are concrete in `BaseHandler`, but judging that divergence as a meaningful architecture problem is evaluative rather than strictly falsifiable."
+        },
+        {
+          "claim_text": "Reset makes an unnecessary Watson client call even though delete only needs key names.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 323,
+            "snippet": "defaults := h.effectiveDefaults(ctx)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "On cache hit, the Watson client returns the cached map directly without cloning it.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/client.go",
+            "line": 69,
+            "snippet": "return m"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`TestEffectiveDefaults_AllTwentyKeysPresent` is brittle because it hardcodes an exact key count of 20.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation_test.go",
+            "line": 399,
+            "snippet": "assert.Equal(t, 20, len(got), \"expected 20 keys total (4 engine + 16 blank)\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Because the shared app cache is created with `cache.New(0, 0)`, expired Watson entries never evict.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The code shows the shared cache is created with `cache.New(0, 0)`, but the precise eviction behavior of the third-party cache library is not established from these repo files alone."
+        },
+        {
+          "claim_text": "The fallback values are duplicated between `fallback.go` and `mock_watson_client.go`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "Both files contain fallback-like literals, but this claim depends on cross-file value equivalence that is not fully demonstrable with a single cited snippet under the required evidence format."
+        },
+        {
+          "claim_text": "No N+1 query patterns were introduced.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/database/dbApp.go",
+            "line": 160,
+            "snippet": "postmetas, err := db.GetPostmetas(appID, []int{postID}, []string{metaKey})"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`deleteReconciliationSettings()` correctly uses `effectiveDefaults()` to determine all keys that need deletion.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 326,
+            "snippet": "metaKeys = append(metaKeys, fmt.Sprintf(\"cpi_%s_%s\", networkID, key))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Skipping empty values in sparse POST is a sound correctness fix.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 306,
+            "snippet": "if value == \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`effectiveDefaults()` merges Watson-provided defaults with blank UI placeholders.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 362,
+            "snippet": "for k, v := range engine {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "POST now persists only keys present in the payload.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 305,
+            "snippet": "for key, value := range payload {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`mergeRulesWithDefaults()` overlays explicit postmeta rules on top of defaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/handlers/partners/configure-reconciliation.go",
+            "line": 372,
+            "snippet": "out[k] = v"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The fallback map must stay in sync with Watson's EngineDefaults.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "internal/clients/watson/fallback.go",
+            "line": 8,
+            "snippet": "// Keep values in sync with watson/cmd/watson/ruleset/defaults.go EngineDefaults."
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "command_count": 29,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 15,
+      "ungrounded": 1,
+      "grounding_eligible": 16,
+      "grounding_rate": 0.9375
+    },
+    "claude_ci": {
+      "grounded": 10,
+      "ungrounded": 1,
+      "grounding_eligible": 11,
+      "grounding_rate": 0.9090909090909091
+    }
+  },
+  "duration_seconds": 227.26204112500272
+}

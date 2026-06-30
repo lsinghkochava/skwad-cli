@@ -1,0 +1,290 @@
+<meta charset="utf-8">
+<title>Adopt skwad as our CI reviewer — Decision Brief</title>
+<style>
+:root{
+--ground:#E8EDF2;--surface:#FBFCFE;--ink:#15202B;--muted:#5B6B7D;
+--hair:#C9D4DF;--hair-soft:#DCE4EC;--panel:#F1F4F8;
+--accent:#3A4FE0;--accent-soft:#E2E6FB;
+--amber:#E8843C;--amber-soft:#FBE8D6;
+--verified:#1F9D6B;--verified-soft:#DBF1E8;
+--contradicted:#D14545;--contradicted-soft:#F7DEDE;
+--serif:"Iowan Old Style","Charter",Georgia,"Times New Roman",serif;
+--mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+--sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;color:var(--ink);font:16px/1.62 var(--sans);
+background-color:var(--ground);
+background-image:linear-gradient(var(--hair-soft) 1px,transparent 1px),linear-gradient(90deg,var(--hair-soft) 1px,transparent 1px);
+background-size:28px 28px;-webkit-font-smoothing:antialiased;}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:1040px;margin:0 auto;padding:34px 24px 90px}
+section{margin:22px 0}
+.eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.14em;font-size:12px;color:var(--accent);font-weight:600;margin:0 0 12px}
+h1{margin:0;font:700 clamp(34px,6vw,58px)/1.02 var(--serif);letter-spacing:-.02em}
+h2{margin:0 0 6px;font:700 clamp(24px,3.2vw,32px)/1.12 var(--serif);letter-spacing:-.015em}
+h3{margin:0 0 4px;font:700 19px/1.25 var(--serif)}
+p{margin:.55em 0;max-width:72ch}
+strong{font-weight:670}
+em.t{font-style:normal;color:var(--accent);font-weight:660}
+em.c{font-style:normal;color:var(--amber);font-weight:660}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:26px 28px;box-shadow:0 1px 0 #fff inset}
+
+/* hero */
+.hero{border-top:3px solid var(--accent);display:flex;flex-direction:column;gap:20px;padding:32px 30px 28px}
+.hero p.sub{font-size:20px;color:var(--ink);max-width:60ch;margin:0}
+.statrow{display:flex;flex-wrap:wrap;gap:14px}
+.stat{flex:1 1 150px;background:var(--accent-soft);border:1px solid var(--hair);border-radius:10px;padding:15px 17px}
+.statfig{font-family:var(--mono);font-weight:700;font-size:28px;color:var(--accent);line-height:1.05}
+.statlabel{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:7px;text-transform:uppercase;letter-spacing:.06em}
+.verdictpill{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;
+font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.04em;
+background:var(--verified-soft);color:var(--verified);border:1px solid var(--verified);border-radius:999px;padding:8px 16px}
+
+/* BLUF */
+.bluf{border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:20px 24px;margin:22px 0}
+.bluf .eyebrow{margin-bottom:8px}
+.bluf p{font-size:18px;margin:0;max-width:74ch}
+.bluf .ask{margin-top:14px;font-weight:680;color:var(--ink)}
+
+/* pillars */
+.pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+.pillar{display:flex;flex-direction:column;gap:8px}
+.pillar .head{display:flex;align-items:baseline;gap:12px}
+.pillar .pn{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--accent)}
+.pillar .lede{color:var(--muted);font-size:14.5px;margin:0 0 6px}
+.spec{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:11px}
+.spec li{display:grid;grid-template-columns:130px 1fr;gap:14px;align-items:baseline;font-size:14.5px;border-top:1px solid var(--hair-soft);padding-top:11px}
+.spec li:first-child{border-top:none;padding-top:0}
+.spec .k{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);font-weight:600}
+.spec .v{color:var(--ink)}
+.spec .v b{font-weight:670}
+
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;counter-reset:step}
+.flow .step{position:relative;padding:16px 16px 16px 18px;border-left:2px solid var(--hair)}
+.flow .step:first-child{border-left:none}
+.flow .step .sn{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:13px}
+.flow .step h4{margin:6px 0 4px;font:700 15px/1.2 var(--sans)}
+.flow .step p{font-size:13px;color:var(--muted);margin:0;max-width:none}
+
+/* scoreboard */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}.pillars{grid-template-columns:1fr}.spec li{grid-template-columns:1fr}.spec .k{margin-bottom:-4px}}
+.bar{margin:14px 0}
+.bar .lab{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;margin-bottom:5px}
+.bar .track{height:26px;background:var(--panel);border:1px solid var(--hair);border-radius:7px;overflow:hidden}
+.bar .fill{height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;
+font-family:var(--mono);font-weight:700;font-size:12.5px;color:#fff;border-radius:6px 0 0 6px}
+.fill.t{background:var(--accent)} .fill.c{background:var(--amber)}
+.meter{position:relative;height:42px;margin:10px 0 4px;border-radius:8px;overflow:hidden;background:linear-gradient(90deg,var(--panel),#fff,var(--panel));border:1px solid var(--hair)}
+.meter .band{position:absolute;top:0;bottom:0;border-right:1px dashed var(--hair)}
+.meter .needle{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--accent)}
+.meter .needle::after{content:"δ 0.78";position:absolute;top:-2px;left:8px;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap}
+.meterlabels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:4px}
+th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;background:var(--panel);color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair)}
+td{padding:7px 10px;border-bottom:1px solid var(--hair-soft)}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px}
+.b-pass{background:var(--verified-soft);color:var(--verified)}
+.b-gate{background:var(--amber-soft);color:var(--amber)}
+
+/* honesty */
+.honest{border-left:4px solid var(--amber);background:var(--amber-soft);border-radius:0 12px 12px 0;padding:20px 24px}
+.honest ul{margin:.4em 0 0;padding-left:1.1em}
+.honest li{margin:.35em 0;font-size:15px;max-width:74ch}
+
+/* cta */
+.cta{border-top:3px solid var(--accent);text-align:left}
+.cta .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:16px}
+.cta .s{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:16px 18px}
+.cta .s .n{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:13px}
+.cta .s h4{margin:7px 0 4px;font:700 16px/1.2 var(--sans)}
+.cta .s p{font-size:14px;color:var(--muted);margin:0;max-width:none}
+
+.foot{margin-top:30px;color:var(--muted);font-family:var(--mono);font-size:12px;line-height:1.7}
+.reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <header class="card hero reveal">
+    <div class="eyebrow">Decision brief · CI code review · Pilot N=8</div>
+    <h1>Make skwad our<br>CI reviewer.</h1>
+    <p class="sub">In a blind, head-to-head pilot on our own pull requests, skwad's multi-agent review beat our current Claude CI reviewer on <em class="t">every single PR</em> — by a large, statistically significant margin built on claims <strong>verified against the real code</strong>, not stylistic polish.</p>
+    <div class="statrow">
+      <div class="stat"><div class="statfig">8 / 8</div><div class="statlabel">PRs won by skwad (strict &gt;)</div></div>
+      <div class="stat"><div class="statfig">δ 0.78</div><div class="statlabel">Cliff's effect size · large</div></div>
+      <div class="stat"><div class="statfig">p 0.0078</div><div class="statlabel">Wilcoxon · significant</div></div>
+      <div class="stat"><div class="statfig">+10.7 pts</div><div class="statlabel">claim-verification rate vs CI</div></div>
+    </div>
+    <span class="verdictpill">✓ EVIDENCE SUPPORTS ADOPTION</span>
+  </header>
+
+  <!-- BLUF -->
+  <section class="bluf reveal">
+    <div class="eyebrow">Bottom line up front</div>
+    <p>skwad doesn't just write longer reviews — it finds <strong>more real issues</strong> and makes <strong>fewer unsupported claims</strong>. When an independent, out-of-family judge opened each repo and checked the reviews line by line, skwad's claims held up <strong>70.9%</strong> of the time versus <strong>60.2%</strong> for our current CI reviewer, and skwad won all 8 head-to-heads.</p>
+    <p class="ask">Recommendation: greenlight skwad as our CI reviewer via a shadow rollout now, and run a 30-PR confirmatory study in parallel to lock the per-criterion picture before it fully replaces the incumbent.</p>
+  </section>
+
+  <!-- PILLARS -->
+  <section class="reveal">
+    <div class="eyebrow" style="margin-bottom:14px">How we know — four questions, answered</div>
+    <div class="pillars">
+
+      <!-- DESIGNED -->
+      <div class="card pillar">
+        <div class="head"><span class="pn">01</span><h3>Designed to be fair</h3></div>
+        <p class="lede">The deck was built so neither system could win on anything but merit.</p>
+        <ul class="spec">
+          <li><span class="k">Hypothesis</span><span class="v"><b>Pre-registered</b> primary endpoint — total score on a fixed rubric — chosen <i>before</i> looking at results, so we can't cherry-pick the metric that flatters skwad.</span></li>
+          <li><span class="k">Rubric</span><span class="v"><b>7 criteria × 0–3</b> (21-point scale): issue detection, actionability, severity accuracy, coverage, signal-to-noise, depth, novel findings. Wide scale avoids ceiling ties.</span></li>
+          <li><span class="k">Neutral judge</span><span class="v">Scored by <b>gpt-5.4</b> — a <i>different model family</i> from both reviewers (both Claude-based). No "home team" can be favored by self-preference.</span></li>
+          <li><span class="k">Blinding</span><span class="v">Reviews presented as anonymous "A / B", <b>counterbalanced</b> (which system is A is swapped run to run) plus a seeded-random run.</span></li>
+          <li><span class="k">Sample</span><span class="v">Real PRs across <b>3 repos</b> (frontend-mos, watson, dash-api) and <b>3 difficulties</b> (easy/medium/hard); selection criteria disclosed.</span></li>
+        </ul>
+      </div>
+
+      <!-- CARRIED OUT -->
+      <div class="card pillar">
+        <div class="head"><span class="pn">02</span><h3>Carried out cleanly</h3></div>
+        <p class="lede">Same task, same diff, both systems — then scored repeatedly to kill noise.</p>
+        <ul class="spec">
+          <li><span class="k">Identical input</span><span class="v">Both reviewers got the <b>exact same PR diff</b> at a pinned commit SHA. No system saw extra context.</span></li>
+          <li><span class="k">Repeated scoring</span><span class="v">Each PR judged <b>3 times</b> and combined by <b>median vote</b> per criterion — one fluky run can't swing the result.</span></li>
+          <li><span class="k">Position-bias check</span><span class="v">We tested whether slot A/B placement mattered. For skwad it didn't (<b>p = 0.77</b>) — the win isn't a layout artifact.</span></li>
+          <li><span class="k">Reproducible</span><span class="v">Rubric, judge persona, and commit SHAs <b>version-pinned</b> in a manifest. The run can be re-executed.</span></li>
+        </ul>
+      </div>
+
+      <!-- VERIFIED -->
+      <div class="card pillar">
+        <div class="head"><span class="pn">03</span><h3>Verified, not vibes</h3></div>
+        <p class="lede">The judge didn't just <i>read</i> the reviews — it fact-checked them against the codebase.</p>
+        <ul class="spec">
+          <li><span class="k">Grounding</span><span class="v">For each claim, the judge ran <b>real tool calls</b> (open file, grep) on the repo and labelled it <span class="badge b-pass">verified</span> / contradicted / unverified / non-falsifiable.</span></li>
+          <li><span class="k">Result</span><span class="v">skwad's claims verified <b>70.9%</b> of the time vs <b>60.2%</b> for CI. CI also produced <i>contradicted</i> claims — confidently wrong statements the code disproves.</span></li>
+          <li><span class="k">Coverage</span><span class="v">Judge reasoning was <b>80–100% grounded</b> in cited code, so scores reflect substance, not prose.</span></li>
+          <li><span class="k">Why it matters</span><span class="v">This neutralizes the "skwad just writes more" worry — it wins on <b>findings that are actually true</b>.</span></li>
+        </ul>
+      </div>
+
+      <!-- DEPENDABLE -->
+      <div class="card pillar">
+        <div class="head"><span class="pn">04</span><h3>Dependable by the numbers</h3></div>
+        <p class="lede">A full statistical spine — including a self-imposed honesty gate.</p>
+        <ul class="spec">
+          <li><span class="k">Significance</span><span class="v">Paired <b>Wilcoxon p = 0.0078</b> — under 1% chance of seeing this if the systems were truly equal.</span></li>
+          <li><span class="k">Effect size</span><span class="v"><b>Cliff's δ = 0.78</b> (large), 95% BCa bootstrap CI <b>[0.50, 1.00]</b> — the interval excludes "no difference".</span></li>
+          <li><span class="k">Reliability gate</span><span class="v">We measured judge agreement (Krippendorff's α) and <b>excluded the 3 criteria</b> too subjective to score consistently. The gate <i>worked</i>.</span></li>
+          <li><span class="k">No p-hacking</span><span class="v">Exploratory breakdowns corrected with <b>Benjamini–Hochberg</b>, and we report honestly that they're not yet individually conclusive at N=8.</span></li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section class="card reveal">
+    <h2>One PR, end to end</h2>
+    <p style="color:var(--muted);margin-top:0">The pipeline every pull request runs through — repeated, blinded, and fact-checked.</p>
+    <div class="flow">
+      <div class="step"><div class="sn">01</div><h4>Select PR</h4><p>Real merged PR, pinned to a commit SHA.</p></div>
+      <div class="step"><div class="sn">02</div><h4>Both review</h4><p>skwad &amp; Claude CI get the identical diff.</p></div>
+      <div class="step"><div class="sn">03</div><h4>Judge ×3, blind</h4><p>Anonymous A/B, A-slot swapped each run.</p></div>
+      <div class="step"><div class="sn">04</div><h4>Fact-check</h4><p>Judge greps the repo to verify each claim.</p></div>
+      <div class="step"><div class="sn">05</div><h4>Median + gate</h4><p>Vote across runs; drop unreliable criteria.</p></div>
+      <div class="step"><div class="sn">06</div><h4>Statistics</h4><p>Wilcoxon · Cliff's δ · BCa CI · BH-FDR.</p></div>
+    </div>
+  </section>
+
+  <!-- SCOREBOARD -->
+  <section class="reveal">
+    <div class="eyebrow" style="margin-bottom:14px">The result in detail</div>
+    <div class="grid2">
+
+      <div class="card">
+        <h3>Substance, not length</h3>
+        <p style="color:var(--muted);margin-top:0;font-size:14.5px">Share of review claims that held up when checked against the actual code.</p>
+        <div class="bar"><div class="lab"><span><em class="t">skwad</em></span><span>70.9%</span></div><div class="track"><div class="fill t" style="width:70.9%">verified</div></div></div>
+        <div class="bar"><div class="lab"><span><em class="c">Claude CI</em></span><span>60.2%</span></div><div class="track"><div class="fill c" style="width:60.2%">verified</div></div></div>
+        <p style="font-size:13.5px;color:var(--muted)">Higher = more trustworthy comments your engineers can act on without second-guessing.</p>
+      </div>
+
+      <div class="card">
+        <h3>How decisive the win is</h3>
+        <p style="color:var(--muted);margin-top:0;font-size:14.5px">Cliff's δ — how often skwad outscores CI minus the reverse. +1 = skwad always wins.</p>
+        <div class="meter"><div class="needle" style="left:89%"></div></div>
+        <div class="meterlabels"><span>0 · tie</span><span>0.147</span><span>0.33</span><span>0.474 large</span><span>+1</span></div>
+        <p style="font-size:13.5px;color:var(--muted)"><b>δ 0.78</b> sits well past the "large" threshold (0.474), with a 95% confidence range of <b>0.50–1.00</b>.</p>
+      </div>
+
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Judge agreement — the reliability gate at work</h3>
+      <p style="color:var(--muted);margin-top:0;font-size:14.5px">Criteria where the judge scored consistently (α lower bound ≥ 0.60) anchor the headline; the rest are flagged and excluded. This is the rigor that makes the result defensible.</p>
+      <table>
+        <thead><tr><th>Criterion</th><th>Agreement α</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Coverage</td><td>0.97</td><td><span class="badge b-pass">anchors headline</span></td></tr>
+          <tr><td>Novel &amp; substantive findings</td><td>0.93</td><td><span class="badge b-pass">anchors headline</span></td></tr>
+          <tr><td>Issue detection</td><td>0.92</td><td><span class="badge b-pass">anchors headline</span></td></tr>
+          <tr><td>Depth</td><td>0.86</td><td><span class="badge b-pass">anchors headline</span></td></tr>
+          <tr><td>Actionability</td><td>0.68</td><td><span class="badge b-gate">excluded — too subjective</span></td></tr>
+          <tr><td>Signal-to-noise</td><td>0.57</td><td><span class="badge b-gate">excluded — too subjective</span></td></tr>
+          <tr><td>Severity accuracy</td><td>0.50</td><td><span class="badge b-gate">excluded — too subjective</span></td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:13.5px;color:var(--muted)">Tellingly, the 4 criteria that <i>survive</i> the gate are the objective, code-checkable ones — and they're exactly where skwad wins.</p>
+    </div>
+  </section>
+
+  <!-- HONESTY -->
+  <section class="honest reveal">
+    <div class="eyebrow" style="color:var(--amber)">What this pilot can — and can't — claim yet</div>
+    <p style="margin-top:0">Straight talk, because a result you can defend beats one you can't:</p>
+    <ul>
+      <li><strong>The headline is solid.</strong> skwad scoring higher overall is significant and large, cross-model and code-verified — direction is robust.</li>
+      <li><strong>The per-criterion breakdown isn't conclusive yet.</strong> At N=8, after honest multiple-comparison correction, individual criteria don't reach significance on their own. We need more PRs to say <i>where exactly</i> skwad wins.</li>
+      <li><strong>Magnitude may be slightly generous.</strong> A GPT judge tends to reward structure, and skwad's output is more structured — so the true margin could be a touch smaller (the verification-rate gap, which is style-immune, guards against this).</li>
+      <li><strong>Sample was curated.</strong> PRs were hand-picked from our repos; the confirmatory run should sample more broadly.</li>
+    </ul>
+  </section>
+
+  <!-- CTA -->
+  <section class="card cta reveal">
+    <div class="eyebrow">The ask</div>
+    <h2>Adopt it — and prove it at scale.</h2>
+    <p style="color:var(--muted)">Low-risk path to making skwad the default reviewer, with confirmation running alongside.</p>
+    <div class="steps">
+      <div class="s"><div class="n">Now</div><h4>Shadow rollout</h4><p>skwad reviews real PRs alongside CI; engineers compare. Zero blast radius.</p></div>
+      <div class="s"><div class="n">Weeks 1–3</div><h4>N=30 confirmatory</h4><p>Pre-registered, broader sample to lock the magnitude and per-criterion wins.</p></div>
+      <div class="s"><div class="n">Decision gate</div><h4>Promote to default</h4><p>If the 30-PR run holds, skwad becomes the primary CI reviewer.</p></div>
+    </div>
+    <div class="foot">
+      Source: empirical evaluation, N=8 pilot · judge gpt-5.4 (via codex), cross-model · primary endpoint pre-registered.<br>
+      Full methodology, per-PR scores, claim traces, and threats to validity in the research report (research-report.html).
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var els=document.querySelectorAll(".reveal");
+  if(!("IntersectionObserver" in window)){els.forEach(function(e){e.classList.add("in")});return;}
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target);} });
+  },{threshold:.12});
+  els.forEach(function(e){io.observe(e)});
+})();
+</script>

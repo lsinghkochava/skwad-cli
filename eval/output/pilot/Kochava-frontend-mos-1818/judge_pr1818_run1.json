@@ -1,0 +1,1044 @@
+{
+  "run": 1,
+  "ab_assignment": [
+    "skwad",
+    "claude_ci"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Verified 17 genuine issues/findings spanning correctness, performance, API design, observability, and missing tests. One architecture-boundary claim was not provable from repo evidence.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Nearly every finding includes a concrete remediation, usually at code level or with a specific test to add.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Several core risks are prioritized reasonably, but the review overstates comment drift and some architecture concerns as block-merge MEDIUM issues.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review covers correctness, performance, resilience/observability, API-surface design, and test coverage, which is broad for this patch.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is substantial signal, but the review is noisy: it includes at least one incorrect factual claim and some weakly-supported blocker framing.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The stronger findings trace behavior across the GraphQL payload builder, pagination loop, notifications store side effects, and test suite behavior.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review B, Review A contributes multiple substantive findings that B never mentions, including a real guard bug, a misleading spec contract, missing finite-value validation, and the leaked page-size test seam.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "The organic overflow guard compares against the caller-controlled `pageSize`, which can falsely throw for non-default page sizes and is a real correctness problem absent from Review B.",
+            "The spec header claims publishers/campaigns remain single-fetch even though the test exercises paginated publishers, which creates maintenance risk and was not noted in Review B.",
+            "`availableResultsCount` is used without finite-value validation before computing `maxIterations`, leaving the loop guard dependent on untrusted numeric input; Review B misses this entirely.",
+            "The public `downloadData` signature exposes a `pageSize` parameter that non-test callers do not use, leaking a test seam into production API surface; Review B does not discuss this contract issue."
+          ]
+        }
+      },
+      "total": 17,
+      "verification_summary": {
+        "claims_verified": 17,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8947,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The GraphQL payload always requests `byOrganicPublisher`, so later pages re-fetch organic data that the download store ignores after page 1.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 82,
+            "snippet": "byOrganicPublisher: attribution("
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Pages are fetched strictly sequentially because each loop iteration awaits `fetchDownloadData` before moving to the next offset.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 57,
+            "snippet": "const page = await sourcesApiStore.fetchDownloadData(type, appIds, {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The pagination API exposes no `AbortSignal`, so callers cannot cancel a long-running export.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "AbortSignal",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The store exposes no `onProgress` callback or similar progress hook for multi-page downloads.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "onProgress",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The organic overflow guard compares `availableResultsCount` against the caller-provided `pageSize`, so non-default page sizes can trigger false overflow errors.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 67,
+            "snippet": "if (page.byOrganicPublisher.availableResultsCount > pageSize) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The spec header is inaccurate because it says publishers/campaigns keep single-fetch behavior, but the test itself paginates publishers across three pages.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 198,
+            "snippet": "await store.downloadData(\"publishers\", undefined, 2); // 5 rows, pageSize 2 \u2192 3 pages"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no test that exercises the organic overflow throw path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "exceed the page cap",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no test that exercises the max-iterations throw path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "max pagination iterations",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new pagination tests only cover short final pages; they do not cover the `gotAllRows` exit when the last page is full-sized.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 147,
+            "snippet": "serveByPage(master); // 5 rows, pageSize 2 \u2192 pages of 2, 2, 1"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`MmmTopFilter.spec.ts` does not cover the new notification path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "addNotification",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/__tests__/MmmTopFilter.spec.ts",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'addNotification' (claim: '`MmmTopFilter.spec.ts` does not cover the new notification p')"
+        },
+        {
+          "claim_text": "There is no `ModalHeader` spec covering the new download error handling.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "ModalHeader",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights -g '*spec.ts'",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`availableResultsCount` is used without any finite-value validation before computing the loop guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep",
+            "Read"
+          ],
+          "evidence": {
+            "grep_pattern": "Number\\.isFinite",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Number\\\\.isFinite' (claim: '`availableResultsCount` is used without any finite-value val')"
+        },
+        {
+          "claim_text": "Passing `debug: error` into notifications logs the raw error object to the console because the notifications store prints any truthy `notification.debug`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/core/src/stores/notifications.ts",
+            "line": 12,
+            "snippet": "console.info(\"\u2139\ufe0f Notification debug:\", notification.debug);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The public `downloadData` action now exposes a `pageSize` parameter.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 43,
+            "snippet": "pageSize: number = DOWNLOAD_PAGE_SIZE,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Current non-test callers do not pass the third `pageSize` argument; only tests use that seam.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "downloadData\\([^\\)]*,[^\\)]*,[^\\)]*\\)",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download -g '!**/__tests__/**'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'downloadData\\\\([^\\\\)]*,[^\\\\)]*,[^\\\\)]*\\\\)' (claim: 'Current non-test callers do not pass the third `pageSize` ar')"
+        },
+        {
+          "claim_text": "The initial `skip`/`take` emitted by download options are immediately overridden inside the pagination loop.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 60,
+            "snippet": "take: pageSize,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The GQL builder still hardcodes `5000` as a fallback page size.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 56,
+            "snippet": "option.take ?? 5000,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The review's architecture-strength statement claiming `useNotificationsStore` and `useI18n` both come from `@mos/core` is correct.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTabComponent/Sources/MediaPartnerDetailsModal/ModalHeader/ModalHeader.vue",
+            "line": 26,
+            "snippet": "import { useI18n } from \"vue-i18n\";"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Importing `DOWNLOAD_PAGE_SIZE` from an `_internal` path violates a documented module-boundary rule in this repo.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The `_internal` path is visible in code, but no repository-local rule or convention was found proving such imports are forbidden."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Verified two genuine issues: repeated organic-query work on every page and a generic user-facing error message. The review misses several correctness, contract, and test-gap concerns present in the patch.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Both identified issues have clear next-step recommendations, but the review's broader praise does not add much implementation guidance.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "The one substantive performance issue is reasonably marked MEDIUM and the generic messaging note is reasonably LOW.",
+          "score": 2
+        },
+        "coverage": {
+          "reasoning": "Coverage is narrow: it touches backend efficiency and UX messaging, but misses multiple correctness, API-surface, observability, and test-coverage issues.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some signal, but it is diluted by overpraise of the tests and documentation, including contradicted claims about exact-multiple coverage and doc quality.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The backend-efficiency point does require cross-file reasoning across the GraphQL layer and consumer, but most of the review remains surface-level.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review B does not add any substantive issue that is absent from Review A.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 9,
+      "verification_summary": {
+        "claims_verified": 8,
+        "claims_unverified": 0,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The GraphQL query requests `byOrganicPublisher` on every pagination page, while the frontend only consumes organic results from page 1.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 82,
+            "snippet": "byOrganicPublisher: attribution("
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The notification shown on download failure uses a single generic `failed_download` message.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/MmmTopFilter.vue",
+            "line": 78,
+            "snippet": "text: t(\"mmm_insights.errors.failed_download\"),"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify skip offsets of `0, 2, 4`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 155,
+            "snippet": "expect(skips).toEqual([0, 2, 4]);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify the previously dropped networks are present in the merged export.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 163,
+            "snippet": "DROPPED_NETWORKS.forEach((name) => expect(networks).toContain(name));"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify there is no duplication across page boundaries.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 165,
+            "snippet": "expect(new Set(networks).size).toBe(5);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify organic data is only included once.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 168,
+            "snippet": "expect(merged.byOrganicPublisher.results).toHaveLength(1);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests cover exact-multiple pagination boundaries.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 147,
+            "snippet": "serveByPage(master); // 5 rows, pageSize 2 \u2192 pages of 2, 2, 1"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test file has strong inline documentation explaining the two concerns being tested.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 16,
+            "snippet": "keep single-fetch behavior (their grain can't be offset-paged safely) \u2014 the type-gate"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `+2` buffer in `maxIterations` is clearly documented.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 73,
+            "snippet": "// +2 = slack so a final partial page or a slightly stale/under-reported"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Download failures are propagated to the UI through notifications.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/MmmTopFilter.vue",
+            "line": 76,
+            "snippet": "notificationsStore.addNotification({"
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "skwad": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Verified 17 genuine issues/findings spanning correctness, performance, API design, observability, and missing tests. One architecture-boundary claim was not provable from repo evidence.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Nearly every finding includes a concrete remediation, usually at code level or with a specific test to add.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Several core risks are prioritized reasonably, but the review overstates comment drift and some architecture concerns as block-merge MEDIUM issues.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review covers correctness, performance, resilience/observability, API-surface design, and test coverage, which is broad for this patch.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is substantial signal, but the review is noisy: it includes at least one incorrect factual claim and some weakly-supported blocker framing.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The stronger findings trace behavior across the GraphQL payload builder, pagination loop, notifications store side effects, and test suite behavior.",
+          "score": 3,
+          "verified_findings": 17,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review B, Review A contributes multiple substantive findings that B never mentions, including a real guard bug, a misleading spec contract, missing finite-value validation, and the leaked page-size test seam.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "The organic overflow guard compares against the caller-controlled `pageSize`, which can falsely throw for non-default page sizes and is a real correctness problem absent from Review B.",
+            "The spec header claims publishers/campaigns remain single-fetch even though the test exercises paginated publishers, which creates maintenance risk and was not noted in Review B.",
+            "`availableResultsCount` is used without finite-value validation before computing `maxIterations`, leaving the loop guard dependent on untrusted numeric input; Review B misses this entirely.",
+            "The public `downloadData` signature exposes a `pageSize` parameter that non-test callers do not use, leaking a test seam into production API surface; Review B does not discuss this contract issue."
+          ]
+        }
+      },
+      "total": 17,
+      "verification_summary": {
+        "claims_verified": 17,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8947,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The GraphQL payload always requests `byOrganicPublisher`, so later pages re-fetch organic data that the download store ignores after page 1.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 82,
+            "snippet": "byOrganicPublisher: attribution("
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Pages are fetched strictly sequentially because each loop iteration awaits `fetchDownloadData` before moving to the next offset.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 57,
+            "snippet": "const page = await sourcesApiStore.fetchDownloadData(type, appIds, {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The pagination API exposes no `AbortSignal`, so callers cannot cancel a long-running export.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "AbortSignal",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The store exposes no `onProgress` callback or similar progress hook for multi-page downloads.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "onProgress",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The organic overflow guard compares `availableResultsCount` against the caller-provided `pageSize`, so non-default page sizes can trigger false overflow errors.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 67,
+            "snippet": "if (page.byOrganicPublisher.availableResultsCount > pageSize) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The spec header is inaccurate because it says publishers/campaigns keep single-fetch behavior, but the test itself paginates publishers across three pages.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 198,
+            "snippet": "await store.downloadData(\"publishers\", undefined, 2); // 5 rows, pageSize 2 \u2192 3 pages"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no test that exercises the organic overflow throw path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "exceed the page cap",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no test that exercises the max-iterations throw path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "max pagination iterations",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new pagination tests only cover short final pages; they do not cover the `gotAllRows` exit when the last page is full-sized.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 147,
+            "snippet": "serveByPage(master); // 5 rows, pageSize 2 \u2192 pages of 2, 2, 1"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`MmmTopFilter.spec.ts` does not cover the new notification path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "addNotification",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/__tests__/MmmTopFilter.spec.ts",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'addNotification' (claim: '`MmmTopFilter.spec.ts` does not cover the new notification p')"
+        },
+        {
+          "claim_text": "There is no `ModalHeader` spec covering the new download error handling.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "ModalHeader",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights -g '*spec.ts'",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`availableResultsCount` is used without any finite-value validation before computing the loop guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep",
+            "Read"
+          ],
+          "evidence": {
+            "grep_pattern": "Number\\.isFinite",
+            "grep_scope": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Number\\\\.isFinite' (claim: '`availableResultsCount` is used without any finite-value val')"
+        },
+        {
+          "claim_text": "Passing `debug: error` into notifications logs the raw error object to the console because the notifications store prints any truthy `notification.debug`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/core/src/stores/notifications.ts",
+            "line": 12,
+            "snippet": "console.info(\"\u2139\ufe0f Notification debug:\", notification.debug);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The public `downloadData` action now exposes a `pageSize` parameter.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 43,
+            "snippet": "pageSize: number = DOWNLOAD_PAGE_SIZE,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Current non-test callers do not pass the third `pageSize` argument; only tests use that seam.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "downloadData\\([^\\)]*,[^\\)]*,[^\\)]*\\)",
+            "grep_scope": "packages/advertiser/src/views/Analytics/MmmInsights packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download -g '!**/__tests__/**'",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'downloadData\\\\([^\\\\)]*,[^\\\\)]*,[^\\\\)]*\\\\)' (claim: 'Current non-test callers do not pass the third `pageSize` ar')"
+        },
+        {
+          "claim_text": "The initial `skip`/`take` emitted by download options are immediately overridden inside the pagination loop.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 60,
+            "snippet": "take: pageSize,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The GQL builder still hardcodes `5000` as a fallback page size.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 56,
+            "snippet": "option.take ?? 5000,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The review's architecture-strength statement claiming `useNotificationsStore` and `useI18n` both come from `@mos/core` is correct.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTabComponent/Sources/MediaPartnerDetailsModal/ModalHeader/ModalHeader.vue",
+            "line": 26,
+            "snippet": "import { useI18n } from \"vue-i18n\";"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Importing `DOWNLOAD_PAGE_SIZE` from an `_internal` path violates a documented module-boundary rule in this repo.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The `_internal` path is visible in code, but no repository-local rule or convention was found proving such imports are forbidden."
+        }
+      ]
+    },
+    "claude_ci": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Verified two genuine issues: repeated organic-query work on every page and a generic user-facing error message. The review misses several correctness, contract, and test-gap concerns present in the patch.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Both identified issues have clear next-step recommendations, but the review's broader praise does not add much implementation guidance.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "The one substantive performance issue is reasonably marked MEDIUM and the generic messaging note is reasonably LOW.",
+          "score": 2
+        },
+        "coverage": {
+          "reasoning": "Coverage is narrow: it touches backend efficiency and UX messaging, but misses multiple correctness, API-surface, observability, and test-coverage issues.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some signal, but it is diluted by overpraise of the tests and documentation, including contradicted claims about exact-multiple coverage and doc quality.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The backend-efficiency point does require cross-file reasoning across the GraphQL layer and consumer, but most of the review remains surface-level.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review B does not add any substantive issue that is absent from Review A.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 9,
+      "verification_summary": {
+        "claims_verified": 8,
+        "claims_unverified": 0,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The GraphQL query requests `byOrganicPublisher` on every pagination page, while the frontend only consumes organic results from page 1.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read",
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/api/attr-api/sources/sources-gql/_internal/download-gql.ts",
+            "line": 82,
+            "snippet": "byOrganicPublisher: attribution("
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The notification shown on download failure uses a single generic `failed_download` message.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/MmmTopFilter.vue",
+            "line": 78,
+            "snippet": "text: t(\"mmm_insights.errors.failed_download\"),"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify skip offsets of `0, 2, 4`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 155,
+            "snippet": "expect(skips).toEqual([0, 2, 4]);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify the previously dropped networks are present in the merged export.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 163,
+            "snippet": "DROPPED_NETWORKS.forEach((name) => expect(networks).toContain(name));"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify there is no duplication across page boundaries.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 165,
+            "snippet": "expect(new Set(networks).size).toBe(5);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests verify organic data is only included once.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 168,
+            "snippet": "expect(merged.byOrganicPublisher.results).toHaveLength(1);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The tests cover exact-multiple pagination boundaries.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 147,
+            "snippet": "serveByPage(master); // 5 rows, pageSize 2 \u2192 pages of 2, 2, 1"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test file has strong inline documentation explaining the two concerns being tested.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/__tests__/sources-download.spec.ts",
+            "line": 16,
+            "snippet": "keep single-fetch behavior (their grain can't be offset-paged safely) \u2014 the type-gate"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `+2` buffer in `maxIterations` is clearly documented.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/stores/analytics2/minsights/sources/download/sources-download.ts",
+            "line": 73,
+            "snippet": "// +2 = slack so a final partial page or a slightly stale/under-reported"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Download failures are propagated to the UI through notifications.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/Analytics/MmmInsights/MmmTopFilter/MmmTopFilter.vue",
+            "line": 76,
+            "snippet": "notificationsStore.addNotification({"
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "command_count": 45,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 15,
+      "ungrounded": 3,
+      "grounding_eligible": 18,
+      "grounding_rate": 0.8333333333333334
+    },
+    "claude_ci": {
+      "grounded": 10,
+      "ungrounded": 0,
+      "grounding_eligible": 10,
+      "grounding_rate": 1.0
+    }
+  },
+  "duration_seconds": 215.7342878749987
+}

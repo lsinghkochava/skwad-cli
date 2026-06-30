@@ -1,0 +1,674 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "review_a": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_label": {
+          "type": "string"
+        },
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "issue_detection": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "actionability": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "severity_accuracy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "coverage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "signal_to_noise": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "depth": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "novel_substantive_findings": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                },
+                "justifications": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings",
+                "justifications"
+              ]
+            }
+          },
+          "required": [
+            "issue_detection",
+            "actionability",
+            "severity_accuracy",
+            "coverage",
+            "signal_to_noise",
+            "depth",
+            "novel_substantive_findings"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        },
+        "verification_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claims_verified": {
+              "type": "integer"
+            },
+            "claims_unverified": {
+              "type": "integer"
+            },
+            "claims_contradicted": {
+              "type": "integer"
+            },
+            "claims_non_falsifiable": {
+              "type": "integer"
+            },
+            "verification_rate": {
+              "type": "number"
+            },
+            "tool_calls_observed": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "claims_verified",
+            "claims_unverified",
+            "claims_contradicted",
+            "claims_non_falsifiable",
+            "verification_rate",
+            "tool_calls_observed"
+          ]
+        },
+        "claim_trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "claim_text": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "unverified",
+                  "contradicted",
+                  "non_falsifiable"
+                ]
+              },
+              "tools_used": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer"
+                      },
+                      "snippet": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "line",
+                      "snippet"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "grep_pattern": {
+                        "type": "string"
+                      },
+                      "grep_scope": {
+                        "type": "string"
+                      },
+                      "result": {
+                        "type": "string",
+                        "enum": [
+                          "absent"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grep_pattern",
+                      "grep_scope",
+                      "result"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "claim_text",
+              "outcome",
+              "tools_used",
+              "evidence"
+            ]
+          }
+        }
+      },
+      "required": [
+        "review_label",
+        "criteria",
+        "total",
+        "verification_summary",
+        "claim_trace"
+      ]
+    },
+    "review_b": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_label": {
+          "type": "string"
+        },
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "issue_detection": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "actionability": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "severity_accuracy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "coverage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "signal_to_noise": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score"
+              ]
+            },
+            "depth": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings"
+              ]
+            },
+            "novel_substantive_findings": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "reasoning": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "integer"
+                },
+                "verified_findings": {
+                  "type": "integer"
+                },
+                "unverified_findings": {
+                  "type": "integer"
+                },
+                "contradicted_findings": {
+                  "type": "integer"
+                },
+                "non_falsifiable_findings": {
+                  "type": "integer"
+                },
+                "justifications": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "reasoning",
+                "score",
+                "verified_findings",
+                "unverified_findings",
+                "contradicted_findings",
+                "non_falsifiable_findings",
+                "justifications"
+              ]
+            }
+          },
+          "required": [
+            "issue_detection",
+            "actionability",
+            "severity_accuracy",
+            "coverage",
+            "signal_to_noise",
+            "depth",
+            "novel_substantive_findings"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        },
+        "verification_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claims_verified": {
+              "type": "integer"
+            },
+            "claims_unverified": {
+              "type": "integer"
+            },
+            "claims_contradicted": {
+              "type": "integer"
+            },
+            "claims_non_falsifiable": {
+              "type": "integer"
+            },
+            "verification_rate": {
+              "type": "number"
+            },
+            "tool_calls_observed": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "claims_verified",
+            "claims_unverified",
+            "claims_contradicted",
+            "claims_non_falsifiable",
+            "verification_rate",
+            "tool_calls_observed"
+          ]
+        },
+        "claim_trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "claim_text": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "unverified",
+                  "contradicted",
+                  "non_falsifiable"
+                ]
+              },
+              "tools_used": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer"
+                      },
+                      "snippet": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "line",
+                      "snippet"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "grep_pattern": {
+                        "type": "string"
+                      },
+                      "grep_scope": {
+                        "type": "string"
+                      },
+                      "result": {
+                        "type": "string",
+                        "enum": [
+                          "absent"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grep_pattern",
+                      "grep_scope",
+                      "result"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "claim_text",
+              "outcome",
+              "tools_used",
+              "evidence"
+            ]
+          }
+        }
+      },
+      "required": [
+        "review_label",
+        "criteria",
+        "total",
+        "verification_summary",
+        "claim_trace"
+      ]
+    }
+  },
+  "required": [
+    "review_a",
+    "review_b"
+  ]
+}

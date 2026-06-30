@@ -1,0 +1,255 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "A identifies five genuine issues that are supported by the code: whitespace-only tokens still pass the guard, the new GPIR test omits any install_time assertion, an older test only checks install_id despite exercising the guarded path, the GPIR fixture carries an AttributionMethod value that the builder never reads, and there is a hardcoded Facebook token in the file. One additional scenario description is wrong, and some impact/performance claims are not evidenced.",
+        "Review B surfaces several genuine issues: the whitespace-only token hole, missing whitespace regression coverage, the missing `install_time` assertion in the new GPIR test, the existing silent-spectator test, and a hardcoded access token. It also adds lower-value pre-existing concerns, but the count of real issues is still high.",
+        "Review B identified several genuine issues or gaps: the whitespace-token guard hole, missing struct-level invariant documentation, missing whitespace-test coverage, the missing `install_time` assertion in the new GPIR test, the older test's lack of `attribution_sources` coverage, and the hardcoded Facebook token. It also included one concrete false positive."
+      ],
+      "verified_findings": 17,
+      "unverified_findings": 2,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        3,
+        3,
+        2
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Most concrete findings come with direct fixes: use TrimSpace, add a missing assertion, strengthen an existing test, or document/remove misleading fixture data.",
+        "Most findings come with clear code-level fixes: use `strings.TrimSpace`, add specific assertions/tests, document the struct field, or move the hardcoded token to configuration.",
+        "Most findings include clear fixes: use `strings.TrimSpace`, add explicit assertions/tests, add a field comment, and externalize the token. A few surrounding comments are more observational than prescriptive."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Prioritization is mixed: the whitespace edge case is overstated as a blocking security issue, and some minor test gaps are labeled medium, although the hardcoded token is appropriately severe.",
+        "Prioritization is uneven: the same whitespace issue is described as LOW in one section and later as blocking, and unrelated pre-existing issues compete with in-scope test gaps.",
+        "Severity was uneven. The review correctly treated the hardcoded token as serious, but it overstated the whitespace-token edge case as a merge-blocking HIGH issue and inflated some test gaps."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        2,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The review ranges across correctness, test coverage, security, maintainability, and some architectural concerns. It catches more of the relevant surface area than B, though several peripheral claims are not evidence-backed.",
+        "It spans correctness, tests, security, architecture, and performance, and it traces adjacent code paths beyond the touched lines. Despite some overreach, the breadth is strong.",
+        "The review covered correctness, tests, security, architecture, and some performance considerations, and it found multiple real concerns across those areas."
+      ],
+      "verified_findings": 17,
+      "unverified_findings": 2,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is meaningful signal, but it is diluted by speculative business-impact/performance estimates, an out-of-scope pre-existing secret, and one concrete misstatement about an existing test fixture.",
+        "There is substantial useful analysis, but it is diluted by duplicated sections, several unverified historical/business assertions, and at least one concrete false positive about the new test's assertions.",
+        "There is meaningful signal, but it is diluted by one contradicted finding and several unsupported claims about PR history, production impact, and quantified performance savings."
+      ]
+    },
+    "depth": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The stronger parts reason through control flow in buildFBEventEnrichmentParams, compare test fixtures to runtime behavior, and connect the guard to struct semantics and adjacent code paths. That is solid cross-file reasoning, but not deep architectural analysis throughout.",
+        "The review traces behavior through the changed guard, the fallback path, adjacent tests, struct definitions, and neighboring modules. That is meaningfully deeper than surface commentary, though not fully architectural in the strict sense.",
+        "The review reasoned across multiple files and invariants: the URL-builder guard, handler-derived attribution methods, struct semantics, and test behavior. It was deeper than surface commentary, though some architectural/perf claims were speculative."
+      ],
+      "verified_findings": 17,
+      "unverified_findings": 2,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "A contributes two substantive findings that B does not surface: the new GPIR test misses an install_time assertion, and a pre-existing test only asserts install_id while exercising the same guarded path.",
+        "Compared with Review A, Review B adds multiple substantive verified findings that A did not mention.",
+        "Compared with Review A, Review B added several substantive repo-grounded findings beyond the shared whitespace-token issue."
+      ],
+      "verified_findings": 8,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "The missing install_time assertion is a concrete regression-test gap in the new GPIR case and is not mentioned in B.",
+        "The weak pre-existing InstallID test is a distinct, code-referential coverage issue that B does not identify."
+      ]
+    },
+    "total": 15,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 42,
+      "claims_unverified": 10,
+      "claims_contradicted": 4,
+      "claims_non_falsifiable": 3,
+      "verification_rate": 0.7152941176470589,
+      "tool_calls_observed": 0,
+      "grounded": 42,
+      "ungrounded": 4,
+      "grounding_eligible": 46,
+      "grounding_rate": 0.9130434782608695
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        1,
+        2,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "B surfaces one genuine issue that the code supports: whitespace-only tokens bypass the new guard. Its style-guide note is not evidenced from the repository, and the rest is largely approval commentary.",
+        "Review A identifies one verified production edge case and one verified test-gap around whitespace-only auditing tokens. Its style-guide nit is not verifiable from the repository, and the rest is mostly approval commentary.",
+        "Review A surfaced one concrete, verified issue in the changed logic: whitespace-only auditing tokens still pass the new guard. Its style-guide suggestion was not verifiable from the repo and did not add another confirmed defect."
+      ],
+      "verified_findings": 4,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The TrimSpace recommendation is concrete, and the suggested extra tests are clear. The variable-declaration comment is less actionable because it is not grounded in repo evidence.",
+        "The actionable parts are concrete: use `strings.TrimSpace(...)` and add a whitespace-token test. The style-guide suggestion is specific but unsupported by repo evidence.",
+        "The whitespace finding includes a specific code-level fix (`strings.TrimSpace(...)`), and the style suggestion is also concrete, though not repo-verifiable."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Calling out the whitespace edge case as high priority is plausible, but promoting a style nit to medium priority weakens prioritization.",
+        "The real bug is treated as important, but the review does not prioritize findings especially consistently and gives comparable weight to an unverifiable style nit.",
+        "The review mostly treated the change as low-risk, but it elevated the whitespace edge case to high-priority without evidence that it is blocking in practice."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review touches correctness, testing, performance, and security at a high level, but it produces only one concrete issue and misses the specific test gaps that A found.",
+        "It covers correctness and a related test gap, but misses other concrete test weaknesses and broader concerns that were available in the changed code.",
+        "It touched correctness, style, testing, and performance, but only one genuine issue was concretely established and it missed other repo-visible test and invariant gaps."
+      ],
+      "verified_findings": 4,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        1,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The review is concise and mostly on-topic. The main noise comes from unsupported praise about coverage/standards rather than factual false positives.",
+        "There is more signal than noise, but much of the review is praise and unverifiable business/process commentary rather than findings.",
+        "Most comments were relevant to the diff and there were no verified false positives, but several style/process remarks were unsupported by repo evidence."
+      ]
+    },
+    "depth": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is some behavioral reasoning about the guard and fallback behavior, but it stays near the changed lines and does not develop cross-file or invariant-level analysis.",
+        "The review shows some behavioral reasoning about the empty-token path, but it stays mostly local to the changed condition and does not develop deeper cross-file analysis.",
+        "The review showed some behavioral reasoning about the guard and fallback behavior, but it stayed close to the single condition change and did not develop deeper cross-file invariants."
+      ],
+      "verified_findings": 4,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "B does not add any substantive verified or non-falsifiable finding beyond what A already identified.",
+        "Its substantive findings are duplicated by Review B; it does not add a unique verified issue of its own.",
+        "Its only substantive issue, the whitespace-token guard gap, was also identified in Review B, so it contributed no substantive novel finding."
+      ],
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": []
+    },
+    "total": 8,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 19,
+      "claims_unverified": 7,
+      "claims_contradicted": 0,
+      "claims_non_falsifiable": 5,
+      "verification_rate": 0.6133333333333333,
+      "tool_calls_observed": 0,
+      "grounded": 16,
+      "ungrounded": 3,
+      "grounding_eligible": 19,
+      "grounding_rate": 0.8421052631578947
+    }
+  }
+}

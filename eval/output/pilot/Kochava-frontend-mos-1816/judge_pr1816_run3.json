@@ -1,0 +1,726 @@
+{
+  "run": 3,
+  "ab_assignment": [
+    "claude_ci",
+    "skwad"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A surfaces five verified issues and one non-falsifiable editorial concern, but two of its headline defects are false positives. The verified issues cover the catch-all existing-model error path, stale validation status on invalid input, missing validation loading feedback, weak failure observability, and permissive leading-zero validation.",
+          "score": 3,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "actionability": {
+          "reasoning": "Most real findings include concrete code-level fixes or clear implementation direction, though the UX/loading and comment-clarity notes are less specific.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "It correctly treats the catch-all GET failure as serious, but it labels two incorrect findings (`NaN` posting and the dedupe race) as critical, so prioritization is only partly reliable.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review spans correctness, UX, and observability, but it misses broader scope/test-plan concerns that the other review catches and includes multiple incorrect correctness calls.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "signal_to_noise": {
+          "reasoning": "There is useful signal, but the false-positive critical issues materially reduce trust in the review.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The verified findings show behavioral reasoning about async validation and backend failure handling, but they do not reach deeper architectural or invariant-level analysis.",
+          "score": 1,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review A contributes two substantive issues the other review does not raise: the catch-all existing-model error path and stale validation status on invalid input.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely identifies that `autoEnableSkan` proceeds after any `SkadApi.get` failure, not just a 404, which can mis-handle transient backend failures.",
+            "It uniquely identifies that the blur handlers return on invalid-format IDs without clearing prior validation state, so stale status can persist."
+          ]
+        }
+      },
+      "total": 12,
+      "verification_summary": {
+        "claims_verified": 5,
+        "claims_unverified": 1,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.56,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The SKAN POST can send `apple_app_id: NaN` because `Number(app_store_id)` is not validated before posting.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 237,
+            "snippet": "const hasValidAppleAppID = Number.isFinite(appleAppID) && appleAppID > 0;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The existing-model GET treats every error as if no model exists and still proceeds to the POST path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 256,
+            "snippet": "// 404 = no model = expected for new apps; proceed"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Setting `lastValidatedId` before awaiting the lookup prevents a second blur on a different ID from starting another request.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 120,
+            "snippet": "if (id === lastValidatedId.value) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "When the blur handler sees an invalid-format ID, it returns without clearing the prior validation status.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 119,
+            "snippet": "if (!/^[0-9]{1,15}$/.test(id)) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Step2AppDetails has no loading-state wiring for the async App Store lookup.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "isValidating|loading=",
+            "grep_scope": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "If setting `skan_auto_enable_failed` fails, the code only logs a warning and continues.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 221,
+            "snippet": "console.warn(\"Failed to set skan_auto_enable_failed flag\", patchErr);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The App Store ID regex allows leading zeros.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 119,
+            "snippet": "if (!/^[0-9]{1,15}$/.test(id)) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "GeneralSectionV2 can skip revalidation across app switches because `lastValidatedAppStoreId` is never reset during navigation.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The local ref is never reset in this file, but the component lifecycle during app navigation is not established from the files read."
+        },
+        {
+          "claim_text": "The comment about empty validation status should explain the save-before-blur race more explicitly.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "This is an editorial clarity suggestion rather than a concretely testable behavioral defect."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B identifies five verified issues: the broad non-`s2s` gate, fail-open empty validation status, skipped backend e2e coverage, suppressed PATCH errors, and an unused suppressor statement. Two additional findings are false positives.",
+          "score": 3,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Each real concern comes with an explicit remediation or decision point, ranging from predicate tightening to unskipping tests and removing dead suppressors.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Prioritization is mostly sensible, but calling the intentional empty-status fail-open behavior a critical issue overstates its impact.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review covers correctness, testing, observability, and code hygiene. It still misses the catch-all existing-model error path and stale validation-state issue.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "Most comments are useful and grounded, but two clear false positives keep it from being noise-free.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "The findings connect store gating, UI behavior, and end-to-end verification gaps across multiple files, showing cross-file behavioral reasoning.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review B contributes three substantive issues absent from Review A: the broader-than-strict integration gate, the empty-status fail-open path, and the skipped backend e2e coverage.",
+          "score": 2,
+          "verified_findings": 3,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely flags that `autoEnableSkan` uses `integration_type !== \"s2s\"`, which is broader than an exact SDK-enum gate.",
+            "It uniquely flags that an empty validation status is considered eligible for auto-enable, affecting save-before-blur behavior.",
+            "It uniquely flags that the backend-asserting Playwright tests remain skipped, leaving the HTTP integration path unproven."
+          ]
+        }
+      },
+      "total": 15,
+      "verification_summary": {
+        "claims_verified": 6,
+        "claims_unverified": 1,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.67,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The auto-enable gate is broader than a strict SDK-enum check because it only excludes `s2s`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 240,
+            "snippet": "appData.integration_type !== \"s2s\" &&"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Empty `app_store_validation_status` is treated as eligible for auto-enable.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 235,
+            "snippet": "const validStatuses = [\"Valid\", \"API_Unavailable\", \"\"];"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The backend-asserting SKAN Playwright tests are still `.skip()` placeholders.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "playwright/e2e/tests/skan-auto-enable.spec.ts",
+            "line": 78,
+            "snippet": "test.skip(\"Happy path: Create iOS SDK app w/ id 284882215 \u2192 SKAN auto-enabled\", async ({ page }) => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`handleAutoEnableFailure` suppresses PATCH errors with `console.warn`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 221,
+            "snippet": "console.warn(\"Failed to set skan_auto_enable_failed flag\", patchErr);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no explicit unit test for a non-numeric `app_store_id`.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/__tests__/apps.spec.ts",
+            "line": 391,
+            "snippet": "it(\"does NOT call SkadApi.post when app_store_id is non-numeric (apple_app_id gate)\", async () => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`lookupAppStoreId(appStoreId, location)` lacks a TypeScript type hint on `appStoreId`.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/shared/stores/skad.ts",
+            "line": 204,
+            "snippet": "const lookupAppStoreId = async (appStoreId: string, location: string): Promise<{ status: string }> => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "IntegrationSection.vue still contains an unused `void selectIntegrationType;` suppressor.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/components/SettingsComponents/AppConfigurations/IntegrationSection/IntegrationSection.vue",
+            "line": 79,
+            "snippet": "void selectIntegrationType;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The numeric Apple App ID gate uses `Number.isFinite(...) && > 0` before POSTing to skad-api.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 237,
+            "snippet": "const hasValidAppleAppID = Number.isFinite(appleAppID) && appleAppID > 0;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR fixes a prior `/v1` double-prefix bug on `endpoints.skad.appstore_lookup`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "PR HEAD shows the current `/appstore/lookup` value, but the prior broken endpoint and environment URL suffix are not verifiable from the checked-out files alone."
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "claude_ci": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A surfaces five verified issues and one non-falsifiable editorial concern, but two of its headline defects are false positives. The verified issues cover the catch-all existing-model error path, stale validation status on invalid input, missing validation loading feedback, weak failure observability, and permissive leading-zero validation.",
+          "score": 3,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "actionability": {
+          "reasoning": "Most real findings include concrete code-level fixes or clear implementation direction, though the UX/loading and comment-clarity notes are less specific.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "It correctly treats the catch-all GET failure as serious, but it labels two incorrect findings (`NaN` posting and the dedupe race) as critical, so prioritization is only partly reliable.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review spans correctness, UX, and observability, but it misses broader scope/test-plan concerns that the other review catches and includes multiple incorrect correctness calls.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "signal_to_noise": {
+          "reasoning": "There is useful signal, but the false-positive critical issues materially reduce trust in the review.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The verified findings show behavioral reasoning about async validation and backend failure handling, but they do not reach deeper architectural or invariant-level analysis.",
+          "score": 1,
+          "verified_findings": 5,
+          "unverified_findings": 1,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 1
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review A contributes two substantive issues the other review does not raise: the catch-all existing-model error path and stale validation status on invalid input.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely identifies that `autoEnableSkan` proceeds after any `SkadApi.get` failure, not just a 404, which can mis-handle transient backend failures.",
+            "It uniquely identifies that the blur handlers return on invalid-format IDs without clearing prior validation state, so stale status can persist."
+          ]
+        }
+      },
+      "total": 12,
+      "verification_summary": {
+        "claims_verified": 5,
+        "claims_unverified": 1,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.56,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The SKAN POST can send `apple_app_id: NaN` because `Number(app_store_id)` is not validated before posting.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 237,
+            "snippet": "const hasValidAppleAppID = Number.isFinite(appleAppID) && appleAppID > 0;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The existing-model GET treats every error as if no model exists and still proceeds to the POST path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 256,
+            "snippet": "// 404 = no model = expected for new apps; proceed"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Setting `lastValidatedId` before awaiting the lookup prevents a second blur on a different ID from starting another request.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 120,
+            "snippet": "if (id === lastValidatedId.value) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "When the blur handler sees an invalid-format ID, it returns without clearing the prior validation status.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 119,
+            "snippet": "if (!/^[0-9]{1,15}$/.test(id)) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Step2AppDetails has no loading-state wiring for the async App Store lookup.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "isValidating|loading=",
+            "grep_scope": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "If setting `skan_auto_enable_failed` fails, the code only logs a warning and continues.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 221,
+            "snippet": "console.warn(\"Failed to set skan_auto_enable_failed flag\", patchErr);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The App Store ID regex allows leading zeros.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/AddAppModalV2/Step2AppDetails/Step2AppDetails.vue",
+            "line": 119,
+            "snippet": "if (!/^[0-9]{1,15}$/.test(id)) return;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "GeneralSectionV2 can skip revalidation across app switches because `lastValidatedAppStoreId` is never reset during navigation.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "The local ref is never reset in this file, but the component lifecycle during app navigation is not established from the files read."
+        },
+        {
+          "claim_text": "The comment about empty validation status should explain the save-before-blur race more explicitly.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "This is an editorial clarity suggestion rather than a concretely testable behavioral defect."
+        }
+      ]
+    },
+    "skwad": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B identifies five verified issues: the broad non-`s2s` gate, fail-open empty validation status, skipped backend e2e coverage, suppressed PATCH errors, and an unused suppressor statement. Two additional findings are false positives.",
+          "score": 3,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Each real concern comes with an explicit remediation or decision point, ranging from predicate tightening to unskipping tests and removing dead suppressors.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Prioritization is mostly sensible, but calling the intentional empty-status fail-open behavior a critical issue overstates its impact.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review covers correctness, testing, observability, and code hygiene. It still misses the catch-all existing-model error path and stale validation-state issue.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "Most comments are useful and grounded, but two clear false positives keep it from being noise-free.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "The findings connect store gating, UI behavior, and end-to-end verification gaps across multiple files, showing cross-file behavioral reasoning.",
+          "score": 2,
+          "verified_findings": 5,
+          "unverified_findings": 0,
+          "contradicted_findings": 2,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Review B contributes three substantive issues absent from Review A: the broader-than-strict integration gate, the empty-status fail-open path, and the skipped backend e2e coverage.",
+          "score": 2,
+          "verified_findings": 3,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely flags that `autoEnableSkan` uses `integration_type !== \"s2s\"`, which is broader than an exact SDK-enum gate.",
+            "It uniquely flags that an empty validation status is considered eligible for auto-enable, affecting save-before-blur behavior.",
+            "It uniquely flags that the backend-asserting Playwright tests remain skipped, leaving the HTTP integration path unproven."
+          ]
+        }
+      },
+      "total": 15,
+      "verification_summary": {
+        "claims_verified": 6,
+        "claims_unverified": 1,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.67,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The auto-enable gate is broader than a strict SDK-enum check because it only excludes `s2s`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 240,
+            "snippet": "appData.integration_type !== \"s2s\" &&"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Empty `app_store_validation_status` is treated as eligible for auto-enable.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 235,
+            "snippet": "const validStatuses = [\"Valid\", \"API_Unavailable\", \"\"];"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The backend-asserting SKAN Playwright tests are still `.skip()` placeholders.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "playwright/e2e/tests/skan-auto-enable.spec.ts",
+            "line": 78,
+            "snippet": "test.skip(\"Happy path: Create iOS SDK app w/ id 284882215 \u2192 SKAN auto-enabled\", async ({ page }) => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`handleAutoEnableFailure` suppresses PATCH errors with `console.warn`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 221,
+            "snippet": "console.warn(\"Failed to set skan_auto_enable_failed flag\", patchErr);"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no explicit unit test for a non-numeric `app_store_id`.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/__tests__/apps.spec.ts",
+            "line": 391,
+            "snippet": "it(\"does NOT call SkadApi.post when app_store_id is non-numeric (apple_app_id gate)\", async () => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`lookupAppStoreId(appStoreId, location)` lacks a TypeScript type hint on `appStoreId`.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/shared/stores/skad.ts",
+            "line": 204,
+            "snippet": "const lookupAppStoreId = async (appStoreId: string, location: string): Promise<{ status: string }> => {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "IntegrationSection.vue still contains an unused `void selectIntegrationType;` suppressor.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/AppsV2/components/SettingsComponents/AppConfigurations/IntegrationSection/IntegrationSection.vue",
+            "line": 79,
+            "snippet": "void selectIntegrationType;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The numeric Apple App ID gate uses `Number.isFinite(...) && > 0` before POSTing to skad-api.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "packages/advertiser/src/views/AppsAssets/stores/apps.ts",
+            "line": 237,
+            "snippet": "const hasValidAppleAppID = Number.isFinite(appleAppID) && appleAppID > 0;"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR fixes a prior `/v1` double-prefix bug on `endpoints.skad.appstore_lookup`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": "PR HEAD shows the current `/appstore/lookup` value, but the prior broken endpoint and environment URL suffix are not verifiable from the checked-out files alone."
+        }
+      ]
+    }
+  },
+  "command_count": 46,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 8,
+      "ungrounded": 0,
+      "grounding_eligible": 8,
+      "grounding_rate": 1.0
+    },
+    "claude_ci": {
+      "grounded": 7,
+      "ungrounded": 0,
+      "grounding_eligible": 7,
+      "grounding_rate": 1.0
+    }
+  },
+  "duration_seconds": 220.3234173749952
+}

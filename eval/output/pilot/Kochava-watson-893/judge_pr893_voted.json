@@ -1,0 +1,256 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A identifies one clear behavioral bug in the restricted cache hydration path, plus several real secondary issues around missing tests, zero-value emission, token logging, and type consistency. A few extra findings are speculative, but there are still 4+ genuine issues.",
+        "The review verifies many real issues: restricted-cache read/write gaps for the new fields, missing restricted-path and JSON round-trip test coverage, two allocation/perf concerns, unguarded zero-value emission, timestamp type mismatch, and token-bearing request logging.",
+        "Review B finds several genuine issues: the restricted cache-hydration path omits the new fields, the new 7-field test does not cover that path, the JSON round-trip test was not extended, zero-value sub-fields are emitted unconditionally, request logging exposes sensitive tokens, and it also notes smaller perf and type-safety concerns. Some extra findings are speculative or wrong, but the real issue count is still high."
+      ],
+      "verified_findings": 23,
+      "unverified_findings": 3,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 2
+    },
+    "actionability": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Most findings include concrete code-level fixes or precise follow-up directions, especially the cache hydration fix, test additions, and redaction recommendation.",
+        "Every substantive finding includes a concrete code change, test addition, or explicit coordination step.",
+        "Nearly every finding includes a concrete fix, test addition, or an explicit next action, including code-level examples for the cache path, tests, builders, and validation."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The main restricted-path bug is serious, but several labels are overstated: the review escalates test coverage and speculative compliance concerns to blocker/high levels without code evidence of production failure.",
+        "The restricted-path correctness issue is prioritized appropriately, but the ATT/GDPR gating concern is not supported by the cited code and inflates severity.",
+        "The main restricted-path bug is appropriately treated as serious, but several later labels are inflated or speculative, especially the compliance concern and some blocker framing around test gaps."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The review spans correctness, test coverage, performance, privacy/logging, and maintainability. It covers most relevant concern areas for this PR.",
+        "It spans correctness, tests, performance, security, and maintainability on the touched path, with only a small speculative detour.",
+        "The review spans correctness, test coverage, performance, privacy/security logging, and maintainability. Even discounting speculative items, its breadth is much stronger than Review A's."
+      ],
+      "verified_findings": 23,
+      "unverified_findings": 3,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 2
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        2,
+        1
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The review has strong signal, led by the restricted-path omission, but it also contains speculative root-cause and compliance commentary that is not verified from the repo.",
+        "The blocker analysis is high-value, but one contradicted compliance claim and one unverified external-type root-cause claim add some noise.",
+        "The review has substantial signal, but it is diluted by a contradicted root-cause claim about `ReducedRestrictedClaim`, a contradicted statement that the restricted path has no tests, and several speculative concerns."
+      ]
+    },
+    "depth": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The strongest findings trace behavior across handler pre-enrichment, downstream URL construction, and tests. That cross-file reasoning is solid, though some later sections drift into unsupported speculation.",
+        "The review traces data from cache construction to cache hydration to URL serialization and then into the test suite, showing solid cross-file reasoning.",
+        "Its best finding traces behavior across files: handler cache hydration, request enrichment, and test gaps. That is materially deeper than surface style commentary, though some architectural claims lean on unverified external assumptions."
+      ],
+      "verified_findings": 23,
+      "unverified_findings": 3,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 2
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        2,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A contributes three substantive findings absent from Review B: the restricted cache hydration omission, the missing restricted-path 7-field test coverage, and the stale JSON round-trip contract test.",
+        "It adds four verified substantive issues absent from Review A: the restricted-cache hydration omission, the cache-construction omission, the missing JSON round-trip assertions for new fields, and request logging of tokenized URLs.",
+        "Review B contributes multiple substantive findings not present in Review A, especially the restricted-path correctness gap and missing related test coverage."
+      ],
+      "verified_findings": 11,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "It uniquely traces that `reconcile_handler.go` hydrates `FBAttributionDetails` from cached claims without copying any of the three newly added fields.",
+        "It uniquely shows that `GetReducedRestrictedClaim` also persists only the legacy subset, so the cache-writing side does not preserve the new fields either.",
+        "It uniquely identifies that `TestFBAttributionDetails_JSONRoundTrip` was not extended to cover `AdEngagementTime`, `AdEngagementType`, or `EventID`, leaving the new JSON contract unguarded."
+      ]
+    },
+    "total": 17,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 35,
+      "claims_unverified": 3,
+      "claims_contradicted": 3,
+      "claims_non_falsifiable": 2,
+      "verification_rate": 0.8166555555666667,
+      "tool_calls_observed": 0,
+      "grounded": 35,
+      "ungrounded": 3,
+      "grounding_eligible": 38,
+      "grounding_rate": 0.9210526315789473
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Review B surfaces a couple of real local issues around zero/partial field emission, test gaps, and timestamp type consistency, but it misses the main restricted-path bug entirely.",
+        "Two verified issues are present: the new source fields are emitted whenever `AdID` is set even if the other values are zero or empty, and the timestamp types are inconsistent. The suggested partial-fields test is plausible but not verified from repo evidence.",
+        "Review A identifies two genuine code issues backed by the repository: unconditional emission of zero/empty attribution sub-fields once `AdID` is present, and the timestamp type mismatch between `ClickTime` and `AdEngagementTime`. It does not catch the more important restricted-cache-path gap."
+      ],
+      "verified_findings": 7,
+      "unverified_findings": 2,
+      "contradicted_findings": 1,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        2,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Its concrete findings generally come with usable directions, such as validating core fields and adding a partial-fields test.",
+        "Each finding comes with a concrete guard, type-change, logging snippet, or test addition, so the advice is easy to act on.",
+        "Its findings come with concrete direction, including a guarded condition for `attribution_sources` emission and a clear type-standardization suggestion."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "It overstates the validation concern as critical and still approves the PR, while missing the more serious restricted-path omission. Prioritization is only partly correct.",
+        "Calling the missing-field guard issue Critical is overstated for the evidence shown; the rest of the prioritization is closer to impact.",
+        "The main miss is calling the zero-value emission concern `Critical`; the code shows a real robustness issue, but the review overstates the severity and overlooks a stronger correctness bug elsewhere."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review touches correctness, tests, and a bit of security/perf, but it misses the most consequential cross-file behavior and therefore covers only part of the relevant surface.",
+        "The review touches correctness and testing, with a small maintainability note, but it misses the more important restricted-cache path and contract-test gaps.",
+        "The review covers correctness, tests, and maintainability, but it misses the restricted-path/cache population concern and gives an inaccurate security all-clear."
+      ],
+      "verified_findings": 7,
+      "unverified_findings": 2,
+      "contradicted_findings": 1,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        1,
+        2
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is some value, but the review also includes a contradicted security assertion and over-optimistic approval language that reduce trust.",
+        "There is some useful feedback, but it is padded with broad praise and one contradicted assertion about log safety.",
+        "Most comments are useful, but the review includes a contradicted security assurance and an unsupported compatibility claim, so it is not clean signal throughout."
+      ]
+    },
+    "depth": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Reasoning stays mostly local to one function and test file; it does not trace the restricted cache flow across files.",
+        "Reasoning stays close to the edited function and its unit tests, with limited cross-file tracing.",
+        "The reasoning is mostly single-function and behavioral rather than architectural. It explains why zero/empty values could leak through, but it does not trace the broader request flow."
+      ],
+      "verified_findings": 7,
+      "unverified_findings": 2,
+      "contradicted_findings": 1,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "Its substantive findings overlap Review A's zero-value emission and type-consistency observations, so it adds no distinct substantive issue beyond what A already covered.",
+        "No verified substantive finding is unique relative to Review B; Review B covers the same zero-value/type concerns and more.",
+        "Review A does not surface a substantive issue that Review B misses; its main issue overlaps Review B's zero-value emission concern, and the remaining suggestions are minor."
+      ],
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": []
+    },
+    "total": 8,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 23,
+      "claims_unverified": 3,
+      "claims_contradicted": 3,
+      "claims_non_falsifiable": 3,
+      "verification_rate": 0.7181909090999999,
+      "tool_calls_observed": 0,
+      "grounded": 24,
+      "ungrounded": 2,
+      "grounding_eligible": 26,
+      "grounding_rate": 0.9230769230769231
+    }
+  }
+}

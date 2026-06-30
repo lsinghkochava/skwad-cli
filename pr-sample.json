@@ -1,0 +1,8 @@
+[
+  {
+    "repo_ssh": "git@github.com:Kochava/frontend-mos.git",
+    "prs": [1746, 1744, 1743, 1738, 1717, 1688, 1693]
+  },
+  { "repo_ssh": "git@github.com:Kochava/watson.git", "prs": [883, 882, 880, 879, 878 ] },
+  { "repo_ssh": "git@github.com:Kochava/dash-api.git", "prs": [562, 558, 556, 512, 462] }
+]

@@ -1,0 +1,906 @@
+{
+  "run": 2,
+  "ab_assignment": [
+    "claude_ci",
+    "skwad"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Two verified issues are present: the new source fields are emitted whenever `AdID` is set even if the other values are zero or empty, and the timestamp types are inconsistent. The suggested partial-fields test is plausible but not verified from repo evidence.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Each finding comes with a concrete guard, type-change, logging snippet, or test addition, so the advice is easy to act on.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Calling the missing-field guard issue Critical is overstated for the evidence shown; the rest of the prioritization is closer to impact.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review touches correctness and testing, with a small maintainability note, but it misses the more important restricted-cache path and contract-test gaps.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some useful feedback, but it is padded with broad praise and one contradicted assertion about log safety.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "Reasoning stays close to the edited function and its unit tests, with limited cross-file tracing.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "No verified substantive finding is unique relative to Review B; Review B covers the same zero-value/type concerns and more.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 9,
+      "verification_summary": {
+        "claims_verified": 7,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.7,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "`FBAttributionDetails` includes the three added fields `AdEngagementTime`, `AdEngagementType`, and `EventID` with JSON tags.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 354,
+            "snippet": "AdEngagementTime       int64  `json:\"ad_engagement_time\"`\n\tAdEngagementType       string `json:\"ad_engagement_type\"`\n\tEventID                string `json:\"event_id\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`Test_buildFBEventEnrichmentParams_AllSevenSubFields` asserts all seven `source_*` sub-fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 149,
+            "snippet": "for _, sub := range []string{\n\t\t`\"source_ad_id\":\"ad-7\"`,\n\t\t`\"source_ad_engagement_time\":1709913500`,\n\t\t`\"source_ad_engagement_type\":\"click\"`,\n\t\t`\"source_event_time\":1709913600`,\n\t\t`\"source_event_id\":\"evt-7\"`,\n\t\t`\"source_auditing_token\":\"token-7\"`,\n\t\t`\"source_attribution_method\":\"SRN\"`,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is explicit test coverage for the restricted-cache-miss path in `buildFBEventEnrichmentParams`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 87,
+            "snippet": "func Test_buildFBEventEnrichmentParams_RestrictedCacheMiss_UsesRequestID(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is explicit test coverage for the empty-`AdID` case where `attribution_sources` should be omitted.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 162,
+            "snippet": "func Test_buildFBEventEnrichmentParams_NoAdID_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The implementation only checks `details.AdID != \"\"` before serializing the other source fields, so zero or empty values would still be emitted.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1076,
+            "snippet": "if details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Timestamp types are inconsistent: `ClickTime` is `int` while `AdEngagementTime` is `int64`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 347,
+            "snippet": "AdID                   string `json:\"ad_id\"`\n\tClickTime              int    `json:\"click_time\"`\n\tAuditingToken          string `json:\"auditing_token\"`\n\tAttributionMethod      string `json:\"attribution_method\"`\n\tInstallTime            int64  `json:\"install_time\"`\n\tGoogleInstallReferrer  string `json:\"google_install_referrer\"`\n\tMetaInstallReferrer    string `json:\"meta_install_referrer\"`\n\tAdEngagementTime       int64  `json:\"ad_engagement_time\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The function has graceful JSON-marshal fallback behavior for `attribution_sources`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1088,
+            "snippet": "if attrSourceJSON, err := json.Marshal(attrSource); err == nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "A partial-field-population test is missing.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The review does not identify a specific existing test name or exact missing assertion pattern that can be conclusively proven absent from the repo with the evidence gathered."
+        },
+        {
+          "claim_text": "There is no sensitive data exposure in logs.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 316,
+            "snippet": "log.Logs = append(log.Logs, \"request: \"+requestEndpoint)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "No documentation updates are needed.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a process judgment without a concrete code referent, so it cannot be falsified from repository contents alone."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review verifies many real issues: restricted-cache read/write gaps for the new fields, missing restricted-path and JSON round-trip test coverage, two allocation/perf concerns, unguarded zero-value emission, timestamp type mismatch, and token-bearing request logging.",
+          "score": 3,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Every substantive finding includes a concrete code change, test addition, or explicit coordination step.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The restricted-path correctness issue is prioritized appropriately, but the ATT/GDPR gating concern is not supported by the cited code and inflates severity.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It spans correctness, tests, performance, security, and maintainability on the touched path, with only a small speculative detour.",
+          "score": 3,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "The blocker analysis is high-value, but one contradicted compliance claim and one unverified external-type root-cause claim add some noise.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "The review traces data from cache construction to cache hydration to URL serialization and then into the test suite, showing solid cross-file reasoning.",
+          "score": 2,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It adds four verified substantive issues absent from Review A: the restricted-cache hydration omission, the cache-construction omission, the missing JSON round-trip assertions for new fields, and request logging of tokenized URLs.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely traces that `reconcile_handler.go` hydrates `FBAttributionDetails` from cached claims without copying any of the three newly added fields.",
+            "It uniquely shows that `GetReducedRestrictedClaim` also persists only the legacy subset, so the cache-writing side does not preserve the new fields either.",
+            "It uniquely identifies that `TestFBAttributionDetails_JSONRoundTrip` was not extended to cover `AdEngagementTime`, `AdEngagementType`, or `EventID`, leaving the new JSON contract unguarded.",
+            "It uniquely points out that the code logs the full `requestEndpoint` string while that URL embeds an `access_token` query parameter."
+          ]
+        }
+      },
+      "total": 17,
+      "verification_summary": {
+        "claims_verified": 13,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8666666667,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The cache-hydration assignment in `reconcile_handler.go` omits `AdEngagementTime`, `AdEngagementType`, and `EventID` when building `FBAttributionDetails` from a cached claim.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/handlers/reconcile_handler.go",
+            "line": 204,
+            "snippet": "watsonRequest.FBAttributionDetails = &structs.FBAttributionDetails{\n\t\t\t\tAdID:                  cachedClaim.AdID,\n\t\t\t\tClickTime:             cachedClaim.ClickTime,\n\t\t\t\tAuditingToken:         cachedClaim.AuditingToken,\n\t\t\t\tAttributionMethod:     cachedClaim.AttributionMethod,\n\t\t\t\tInstallTime:           cachedClaim.InstallTime,\n\t\t\t\tGoogleInstallReferrer: cachedClaim.GoogleInstallReferrer,\n\t\t\t\tMetaInstallReferrer:   cachedClaim.MetaInstallReferrer,\n\t\t\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` always serializes `source_ad_engagement_time`, `source_ad_engagement_type`, and `source_event_id` whenever `AdID` is present.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1076,
+            "snippet": "if details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`GetReducedRestrictedClaim` also stores only the legacy attribution subset and does not populate the three newly added fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/handlers/reconcile_handler.go",
+            "line": 365,
+            "snippet": "rc := &restrictedxna.ReducedRestrictedClaim{\n\t\tAdvertiserID:      facebook.GetAdvertiserIDForRequest(watsonResponse.Request.Identifiers),\n\t\tAuditingToken:     claim.GetAuditingToken(),\n\t\tAdID:              claim.GetAdID(),\n\t\tLookBack:          util.SafeInt(claim.GetLookback()),\n\t\tMatchedBy:         string(claim.GetMatchedBy()),\n\t\tMatchedByLevel:    claim.GetMatchedByLevel(),\n\t\tAttributionMethod: determineAttributionMethod(claim),\n\t\tInstallID:         watsonResponse.Request.Identifiers[\"kochava_device_id\"],\n\t\tInstallTime:       watsonResponse.Request.InstallTime,\n\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The external `restrictedxna.ReducedRestrictedClaim` type in v1.2.0 itself lacks the three new fields.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The repo shows the dependency version in `go.mod`/`go.sum`, but the external module's struct definition is not present in this checkout, so the review's claimed root cause cannot be confirmed here."
+        },
+        {
+          "claim_text": "The new `AllSevenSubFields` test directly constructs `FBAttributionDetails`, so it exercises the direct/non-restricted path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 128,
+            "snippet": "request := &structs.WatsonRequest{\n\t\tIsFB:      true,\n\t\tRequestID: \"req-7-fields\",\n\t\tIdentifiers: map[string]string{\n\t\t\t\"kochava_device_id\": \"kdid-7\",\n\t\t},\n\t\tFBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID:              \"ad-7\",\n\t\t\tClickTime:         1709913600,\n\t\t\tAuditingToken:     \"token-7\",\n\t\t\tAttributionMethod: \"SRN\",\n\t\t\tAdEngagementTime:  1709913500,\n\t\t\tAdEngagementType:  \"click\",\n\t\t\tEventID:           \"evt-7\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no restricted-path `buildFBEventEnrichmentParams` test covering seven-field emission from cache-hydrated details.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "Restricted.*AllSeven|AllSeven.*Restricted|buildFBEventEnrichmentParams_Restricted.*Seven|buildFBEventEnrichmentParams_Restricted.*Partial",
+            "grep_scope": "cmd/watson/facebook cmd/watson/handlers",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Restricted.*AllSeven|AllSeven.*Restricted|buildFBEventEnrichmentParams_Restricted.*Seven|buildFBEventEnrichmentParams_Restricted.*Partial' (claim: 'There is no restricted-path `buildFBEventEnrichmentParams` t')"
+        },
+        {
+          "claim_text": "`TestFBAttributionDetails_JSONRoundTrip` does not reference `AdEngagementTime`, `AdEngagementType`, or `EventID`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "AdEngagementTime|AdEngagementType|EventID",
+            "grep_scope": "cmd/watson/handlers/fb_attribution_enrichment_test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The event-enrichment path allocates a `[]map[string]interface{}` and marshals it.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1077,
+            "snippet": "attrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,\n\t\t\t\t},\n\t\t\t}\n\t\t\tif attrSourceJSON, err := json.Marshal(attrSource); err == nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` uses repeated `params +=` string concatenations.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1063,
+            "snippet": "params := \"\"\n\n\tif request.FBAttributionDetails != nil {\n\t\tdetails := request.FBAttributionDetails\n\t\tparams += \"&is_fb=true\"\n\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new source fields are emitted without per-field guards, unlike `InstallTime`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1071,
+            "snippet": "if details.InstallTime > 0 {\n\t\t\tparams += fmt.Sprintf(\"&install_timestamp=%d\", details.InstallTime)\n\t\t}\n\n\t\t// attribution_sources: JSON array with previous FB claim proof\n\t\tif details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Existing fields in the same payload are ATT-gated at line 197, so the new engagement fields should match that gate.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 194,
+            "snippet": "applicationTrackingEnabled := thisRequest.AdTrackingEnabled\n\t\t// handle new limited data usage params to comply with CCPA\n\t\tthisRequest.LimitedDataUsageOpts, thisRequest.ShouldAddDeviceIPHeader = getFBLimitedDataUsage(request)\n\t\tif request.Platform == \"ios\" && request.AppTrackingTransparency.ATT {\n\t\t\tapplicationTrackingEnabled = 0\n\t\t\tif strings.EqualFold(request.AppTrackingTransparency.ATTDetail, \"authorized\") {\n\t\t\t\tapplicationTrackingEnabled = 1\n\t\t\t}\n\t\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The code uses `event_id` for `request.RequestID` while `source_event_id` is populated from `details.EventID`, creating two different event identifiers in the same function.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1068,
+            "snippet": "params += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)\n\n\t\tif details.InstallTime > 0 {\n\t\t\tparams += fmt.Sprintf(\"&install_timestamp=%d\", details.InstallTime)\n\t\t}\n\n\t\t// attribution_sources: JSON array with previous FB claim proof\n\t\tif details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Timestamp types are inconsistent: `ClickTime` is `int` while `AdEngagementTime` is `int64`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 347,
+            "snippet": "AdID                   string `json:\"ad_id\"`\n\tClickTime              int    `json:\"click_time\"`\n\tAuditingToken          string `json:\"auditing_token\"`\n\tAttributionMethod      string `json:\"attribution_method\"`\n\tInstallTime            int64  `json:\"install_time\"`\n\tGoogleInstallReferrer  string `json:\"google_install_referrer\"`\n\tMetaInstallReferrer    string `json:\"meta_install_referrer\"`\n\tAdEngagementTime       int64  `json:\"ad_engagement_time\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The request endpoint string embeds `access_token` in the URL.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 255,
+            "snippet": "\"%s/%d/activities?access_token=%s&event=%s&attribution=%s&advertiser_id=%s&advertiser_tracking_enabled=%d&anon_id=%s&application_tracking_enabled=%d%s%s%s&campaign_ids=%s&extinfo=%s&_logTime=%d&sdk_version=%s\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The full `requestEndpoint` value is appended to logs verbatim.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 316,
+            "snippet": "log.Logs = append(log.Logs, \"request: \"+requestEndpoint)"
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "claude_ci": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Two verified issues are present: the new source fields are emitted whenever `AdID` is set even if the other values are zero or empty, and the timestamp types are inconsistent. The suggested partial-fields test is plausible but not verified from repo evidence.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Each finding comes with a concrete guard, type-change, logging snippet, or test addition, so the advice is easy to act on.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Calling the missing-field guard issue Critical is overstated for the evidence shown; the rest of the prioritization is closer to impact.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "The review touches correctness and testing, with a small maintainability note, but it misses the more important restricted-cache path and contract-test gaps.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is some useful feedback, but it is padded with broad praise and one contradicted assertion about log safety.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "Reasoning stays close to the edited function and its unit tests, with limited cross-file tracing.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "No verified substantive finding is unique relative to Review B; Review B covers the same zero-value/type concerns and more.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 9,
+      "verification_summary": {
+        "claims_verified": 7,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 1,
+        "verification_rate": 0.7,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "`FBAttributionDetails` includes the three added fields `AdEngagementTime`, `AdEngagementType`, and `EventID` with JSON tags.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 354,
+            "snippet": "AdEngagementTime       int64  `json:\"ad_engagement_time\"`\n\tAdEngagementType       string `json:\"ad_engagement_type\"`\n\tEventID                string `json:\"event_id\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`Test_buildFBEventEnrichmentParams_AllSevenSubFields` asserts all seven `source_*` sub-fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 149,
+            "snippet": "for _, sub := range []string{\n\t\t`\"source_ad_id\":\"ad-7\"`,\n\t\t`\"source_ad_engagement_time\":1709913500`,\n\t\t`\"source_ad_engagement_type\":\"click\"`,\n\t\t`\"source_event_time\":1709913600`,\n\t\t`\"source_event_id\":\"evt-7\"`,\n\t\t`\"source_auditing_token\":\"token-7\"`,\n\t\t`\"source_attribution_method\":\"SRN\"`,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is explicit test coverage for the restricted-cache-miss path in `buildFBEventEnrichmentParams`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 87,
+            "snippet": "func Test_buildFBEventEnrichmentParams_RestrictedCacheMiss_UsesRequestID(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is explicit test coverage for the empty-`AdID` case where `attribution_sources` should be omitted.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 162,
+            "snippet": "func Test_buildFBEventEnrichmentParams_NoAdID_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The implementation only checks `details.AdID != \"\"` before serializing the other source fields, so zero or empty values would still be emitted.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1076,
+            "snippet": "if details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Timestamp types are inconsistent: `ClickTime` is `int` while `AdEngagementTime` is `int64`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 347,
+            "snippet": "AdID                   string `json:\"ad_id\"`\n\tClickTime              int    `json:\"click_time\"`\n\tAuditingToken          string `json:\"auditing_token\"`\n\tAttributionMethod      string `json:\"attribution_method\"`\n\tInstallTime            int64  `json:\"install_time\"`\n\tGoogleInstallReferrer  string `json:\"google_install_referrer\"`\n\tMetaInstallReferrer    string `json:\"meta_install_referrer\"`\n\tAdEngagementTime       int64  `json:\"ad_engagement_time\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The function has graceful JSON-marshal fallback behavior for `attribution_sources`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1088,
+            "snippet": "if attrSourceJSON, err := json.Marshal(attrSource); err == nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "A partial-field-population test is missing.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The review does not identify a specific existing test name or exact missing assertion pattern that can be conclusively proven absent from the repo with the evidence gathered."
+        },
+        {
+          "claim_text": "There is no sensitive data exposure in logs.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 316,
+            "snippet": "log.Logs = append(log.Logs, \"request: \"+requestEndpoint)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "No documentation updates are needed.",
+          "outcome": "non_falsifiable",
+          "tools_used": [],
+          "evidence": "This is a process judgment without a concrete code referent, so it cannot be falsified from repository contents alone."
+        }
+      ]
+    },
+    "skwad": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "The review verifies many real issues: restricted-cache read/write gaps for the new fields, missing restricted-path and JSON round-trip test coverage, two allocation/perf concerns, unguarded zero-value emission, timestamp type mismatch, and token-bearing request logging.",
+          "score": 3,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Every substantive finding includes a concrete code change, test addition, or explicit coordination step.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "The restricted-path correctness issue is prioritized appropriately, but the ATT/GDPR gating concern is not supported by the cited code and inflates severity.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It spans correctness, tests, performance, security, and maintainability on the touched path, with only a small speculative detour.",
+          "score": 3,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "The blocker analysis is high-value, but one contradicted compliance claim and one unverified external-type root-cause claim add some noise.",
+          "score": 2
+        },
+        "depth": {
+          "reasoning": "The review traces data from cache construction to cache hydration to URL serialization and then into the test suite, showing solid cross-file reasoning.",
+          "score": 2,
+          "verified_findings": 9,
+          "unverified_findings": 1,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "It adds four verified substantive issues absent from Review A: the restricted-cache hydration omission, the cache-construction omission, the missing JSON round-trip assertions for new fields, and request logging of tokenized URLs.",
+          "score": 3,
+          "verified_findings": 4,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely traces that `reconcile_handler.go` hydrates `FBAttributionDetails` from cached claims without copying any of the three newly added fields.",
+            "It uniquely shows that `GetReducedRestrictedClaim` also persists only the legacy subset, so the cache-writing side does not preserve the new fields either.",
+            "It uniquely identifies that `TestFBAttributionDetails_JSONRoundTrip` was not extended to cover `AdEngagementTime`, `AdEngagementType`, or `EventID`, leaving the new JSON contract unguarded.",
+            "It uniquely points out that the code logs the full `requestEndpoint` string while that URL embeds an `access_token` query parameter."
+          ]
+        }
+      },
+      "total": 17,
+      "verification_summary": {
+        "claims_verified": 13,
+        "claims_unverified": 1,
+        "claims_contradicted": 1,
+        "claims_non_falsifiable": 0,
+        "verification_rate": 0.8666666667,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The cache-hydration assignment in `reconcile_handler.go` omits `AdEngagementTime`, `AdEngagementType`, and `EventID` when building `FBAttributionDetails` from a cached claim.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/handlers/reconcile_handler.go",
+            "line": 204,
+            "snippet": "watsonRequest.FBAttributionDetails = &structs.FBAttributionDetails{\n\t\t\t\tAdID:                  cachedClaim.AdID,\n\t\t\t\tClickTime:             cachedClaim.ClickTime,\n\t\t\t\tAuditingToken:         cachedClaim.AuditingToken,\n\t\t\t\tAttributionMethod:     cachedClaim.AttributionMethod,\n\t\t\t\tInstallTime:           cachedClaim.InstallTime,\n\t\t\t\tGoogleInstallReferrer: cachedClaim.GoogleInstallReferrer,\n\t\t\t\tMetaInstallReferrer:   cachedClaim.MetaInstallReferrer,\n\t\t\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` always serializes `source_ad_engagement_time`, `source_ad_engagement_type`, and `source_event_id` whenever `AdID` is present.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1076,
+            "snippet": "if details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`GetReducedRestrictedClaim` also stores only the legacy attribution subset and does not populate the three newly added fields.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/handlers/reconcile_handler.go",
+            "line": 365,
+            "snippet": "rc := &restrictedxna.ReducedRestrictedClaim{\n\t\tAdvertiserID:      facebook.GetAdvertiserIDForRequest(watsonResponse.Request.Identifiers),\n\t\tAuditingToken:     claim.GetAuditingToken(),\n\t\tAdID:              claim.GetAdID(),\n\t\tLookBack:          util.SafeInt(claim.GetLookback()),\n\t\tMatchedBy:         string(claim.GetMatchedBy()),\n\t\tMatchedByLevel:    claim.GetMatchedByLevel(),\n\t\tAttributionMethod: determineAttributionMethod(claim),\n\t\tInstallID:         watsonResponse.Request.Identifiers[\"kochava_device_id\"],\n\t\tInstallTime:       watsonResponse.Request.InstallTime,\n\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The external `restrictedxna.ReducedRestrictedClaim` type in v1.2.0 itself lacks the three new fields.",
+          "outcome": "unverified",
+          "tools_used": [
+            "Read",
+            "Grep"
+          ],
+          "evidence": "The repo shows the dependency version in `go.mod`/`go.sum`, but the external module's struct definition is not present in this checkout, so the review's claimed root cause cannot be confirmed here."
+        },
+        {
+          "claim_text": "The new `AllSevenSubFields` test directly constructs `FBAttributionDetails`, so it exercises the direct/non-restricted path.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 128,
+            "snippet": "request := &structs.WatsonRequest{\n\t\tIsFB:      true,\n\t\tRequestID: \"req-7-fields\",\n\t\tIdentifiers: map[string]string{\n\t\t\t\"kochava_device_id\": \"kdid-7\",\n\t\t},\n\t\tFBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID:              \"ad-7\",\n\t\t\tClickTime:         1709913600,\n\t\t\tAuditingToken:     \"token-7\",\n\t\t\tAttributionMethod: \"SRN\",\n\t\t\tAdEngagementTime:  1709913500,\n\t\t\tAdEngagementType:  \"click\",\n\t\t\tEventID:           \"evt-7\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no restricted-path `buildFBEventEnrichmentParams` test covering seven-field emission from cache-hydrated details.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "Restricted.*AllSeven|AllSeven.*Restricted|buildFBEventEnrichmentParams_Restricted.*Seven|buildFBEventEnrichmentParams_Restricted.*Partial",
+            "grep_scope": "cmd/watson/facebook cmd/watson/handlers",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Restricted.*AllSeven|AllSeven.*Restricted|buildFBEventEnrichmentParams_Restricted.*Seven|buildFBEventEnrichmentParams_Restricted.*Partial' (claim: 'There is no restricted-path `buildFBEventEnrichmentParams` t')"
+        },
+        {
+          "claim_text": "`TestFBAttributionDetails_JSONRoundTrip` does not reference `AdEngagementTime`, `AdEngagementType`, or `EventID`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Grep"
+          ],
+          "evidence": {
+            "grep_pattern": "AdEngagementTime|AdEngagementType|EventID",
+            "grep_scope": "cmd/watson/handlers/fb_attribution_enrichment_test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The event-enrichment path allocates a `[]map[string]interface{}` and marshals it.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1077,
+            "snippet": "attrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,\n\t\t\t\t\t\"source_auditing_token\":     details.AuditingToken,\n\t\t\t\t\t\"source_attribution_method\": details.AttributionMethod,\n\t\t\t\t},\n\t\t\t}\n\t\t\tif attrSourceJSON, err := json.Marshal(attrSource); err == nil {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` uses repeated `params +=` string concatenations.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1063,
+            "snippet": "params := \"\"\n\n\tif request.FBAttributionDetails != nil {\n\t\tdetails := request.FBAttributionDetails\n\t\tparams += \"&is_fb=true\"\n\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new source fields are emitted without per-field guards, unlike `InstallTime`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1071,
+            "snippet": "if details.InstallTime > 0 {\n\t\t\tparams += fmt.Sprintf(\"&install_timestamp=%d\", details.InstallTime)\n\t\t}\n\n\t\t// attribution_sources: JSON array with previous FB claim proof\n\t\tif details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Existing fields in the same payload are ATT-gated at line 197, so the new engagement fields should match that gate.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 194,
+            "snippet": "applicationTrackingEnabled := thisRequest.AdTrackingEnabled\n\t\t// handle new limited data usage params to comply with CCPA\n\t\tthisRequest.LimitedDataUsageOpts, thisRequest.ShouldAddDeviceIPHeader = getFBLimitedDataUsage(request)\n\t\tif request.Platform == \"ios\" && request.AppTrackingTransparency.ATT {\n\t\t\tapplicationTrackingEnabled = 0\n\t\t\tif strings.EqualFold(request.AppTrackingTransparency.ATTDetail, \"authorized\") {\n\t\t\t\tapplicationTrackingEnabled = 1\n\t\t\t}\n\t\t}"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The code uses `event_id` for `request.RequestID` while `source_event_id` is populated from `details.EventID`, creating two different event identifiers in the same function.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1068,
+            "snippet": "params += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)\n\n\t\tif details.InstallTime > 0 {\n\t\t\tparams += fmt.Sprintf(\"&install_timestamp=%d\", details.InstallTime)\n\t\t}\n\n\t\t// attribution_sources: JSON array with previous FB claim proof\n\t\tif details.AdID != \"\" {\n\t\t\tattrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":              details.AdID,\n\t\t\t\t\t\"source_ad_engagement_time\": details.AdEngagementTime,\n\t\t\t\t\t\"source_ad_engagement_type\": details.AdEngagementType,\n\t\t\t\t\t\"source_event_time\":         details.ClickTime,\n\t\t\t\t\t\"source_event_id\":           details.EventID,"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Timestamp types are inconsistent: `ClickTime` is `int` while `AdEngagementTime` is `int64`.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 347,
+            "snippet": "AdID                   string `json:\"ad_id\"`\n\tClickTime              int    `json:\"click_time\"`\n\tAuditingToken          string `json:\"auditing_token\"`\n\tAttributionMethod      string `json:\"attribution_method\"`\n\tInstallTime            int64  `json:\"install_time\"`\n\tGoogleInstallReferrer  string `json:\"google_install_referrer\"`\n\tMetaInstallReferrer    string `json:\"meta_install_referrer\"`\n\tAdEngagementTime       int64  `json:\"ad_engagement_time\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The request endpoint string embeds `access_token` in the URL.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 255,
+            "snippet": "\"%s/%d/activities?access_token=%s&event=%s&attribution=%s&advertiser_id=%s&advertiser_tracking_enabled=%d&anon_id=%s&application_tracking_enabled=%d%s%s%s&campaign_ids=%s&extinfo=%s&_logTime=%d&sdk_version=%s\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The full `requestEndpoint` value is appended to logs verbatim.",
+          "outcome": "verified",
+          "tools_used": [
+            "Read"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 316,
+            "snippet": "log.Logs = append(log.Logs, \"request: \"+requestEndpoint)"
+          },
+          "grounded": true
+        }
+      ]
+    }
+  },
+  "command_count": 26,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 13,
+      "ungrounded": 1,
+      "grounding_eligible": 14,
+      "grounding_rate": 0.9285714285714286
+    },
+    "claude_ci": {
+      "grounded": 8,
+      "ungrounded": 0,
+      "grounding_eligible": 8,
+      "grounding_rate": 1.0
+    }
+  },
+  "duration_seconds": 206.97527679100313
+}

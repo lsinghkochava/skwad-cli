@@ -1,0 +1,37 @@
+{
+  "classifier_team.json::PR Difficulty Classifier": {
+    "persona_chars": 1120,
+    "persona_runes": 1114,
+    "rendered_prompt_chars": 3060
+  },
+  "judge_team.json::Review Quality Judge": {
+    "persona_chars": 7793,
+    "persona_runes": 7759,
+    "rendered_prompt_chars": 9701
+  },
+  "skwad_review_team.json::Architecture Reviewer": {
+    "persona_chars": 2409,
+    "persona_runes": 2395,
+    "rendered_prompt_chars": 4754
+  },
+  "skwad_review_team.json::Bug Hunter": {
+    "persona_chars": 2382,
+    "persona_runes": 2366,
+    "rendered_prompt_chars": 4298
+  },
+  "skwad_review_team.json::Performance Analyst": {
+    "persona_chars": 2030,
+    "persona_runes": 2014,
+    "rendered_prompt_chars": 3955
+  },
+  "skwad_review_team.json::Review Coordinator": {
+    "persona_chars": 3709,
+    "persona_runes": 3683,
+    "rendered_prompt_chars": 5623
+  },
+  "skwad_review_team.json::Security Sentinel": {
+    "persona_chars": 2418,
+    "persona_runes": 2400,
+    "rendered_prompt_chars": 4339
+  }
+}

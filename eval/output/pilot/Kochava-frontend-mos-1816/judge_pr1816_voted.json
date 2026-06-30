@@ -1,0 +1,258 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A identifies five genuine issues supported by the code: the over-broad non-S2S eligibility gate, empty validation status being treated as eligible, skipped backend e2e coverage, suppressed PATCH failure handling, and the dead `void` suppression statements. Two additional findings are contradicted by the repo.",
+        "Review B finds four genuine issues: empty validation status is eligible, backend E2E cases remain skipped, patch-error handling is suppressed, and the `void` placeholders are dead code cleanup. Two findings are false positives and one important claim depends on unverifiable external spec context.",
+        "Review B identifies five verified issues: the broad non-`s2s` gate, fail-open empty validation status, skipped backend e2e coverage, suppressed PATCH errors, and an unused suppressor statement. Two additional findings are false positives."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 2,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        2,
+        2,
+        3
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Most findings include concrete next steps or replacement code, though some recommendations are conditional rather than directly prescriptive.",
+        "Most findings include a concrete recommendation, though some are more advisory than code-specific because they depend on product or QA decisions.",
+        "Each real concern comes with an explicit remediation or decision point, ranging from predicate tightening to unskipping tests and removing dead suppressors."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Priorities are mostly sensible, but the review overstates at least one correctness concern by labeling it critical and mixes minor hygiene issues into the findings list.",
+        "Some priorities are sensible, but the lead critical scope concern cannot be verified from the code alone and two smaller false positives reduce confidence in prioritization.",
+        "Prioritization is mostly sensible, but calling the intentional empty-status fail-open behavior a critical issue overstates its impact."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The review spans correctness, test completeness, observability, and maintainability, but it misses other important correctness paths such as the broad catch around the existing-model check and stale validation state.",
+        "The review covers correctness, testing, observability, and some cleanup, but it misses the swallowed GET failure path and the stale validation-status bug that Review A identified.",
+        "The review covers correctness, testing, observability, and code hygiene. It still misses the catch-all existing-model error path and stale validation-state issue."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 2,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        1,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "There is substantial useful signal, and the false positives are limited to lower-priority points, but they still reduce trust.",
+        "There is solid signal, but several PR-process assertions are unverified and two concrete findings are wrong, so the review is not noise-free.",
+        "Most comments are useful and grounded, but two clear false positives keep it from being noise-free."
+      ]
+    },
+    "depth": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The stronger findings trace behavior across save flow, validation state, and test coverage rather than stopping at style comments, but the review does not reach deep architectural or invariant-level analysis consistently.",
+        "The review reasons across store logic, UI behavior, and test layers, especially around fail-open behavior and missing end-to-end coverage, but it is not deeply architectural.",
+        "The findings connect store gating, UI behavior, and end-to-end verification gaps across multiple files, showing cross-file behavioral reasoning."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 2,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Compared with Review B, Review A contributes two substantive issues that B does not raise as problems: the over-broad non-S2S gate and allowing empty validation status to pass eligibility.",
+        "Review B contributes two substantive issues not raised as issues in Review A: the empty-string validation-status eligibility path and the fact that backend-asserting Playwright coverage is still skipped.",
+        "Review B contributes three substantive issues absent from Review A: the broader-than-strict integration gate, the empty-status fail-open path, and the skipped backend e2e coverage."
+      ],
+      "verified_findings": 7,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "It uniquely flags that `autoEnableSkan` treats any non-`s2s` integration as eligible, which includes broader states than an explicit SDK allowlist.",
+        "It uniquely flags that `validStatuses` includes the empty string, so apps can pass eligibility before any validation result is recorded."
+      ]
+    },
+    "total": 14,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 26,
+      "claims_unverified": 2,
+      "claims_contradicted": 7,
+      "claims_non_falsifiable": 0,
+      "verification_rate": 0.7231666666666666,
+      "tool_calls_observed": 0,
+      "grounded": 33,
+      "ungrounded": 0,
+      "grounding_eligible": 33,
+      "grounding_rate": 1.0
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review B contains four genuine issues supported by the code: the catch-all existing-model check, stale validation status, lack of validation loading feedback, and suppressed PATCH failure observability. Two findings are contradicted and two more remain unverified.",
+        "Review A identifies several real problems, especially the swallowed existing-model GET failure, stale validation status, missing validation feedback, and the weak failure observability path. Two findings are false positives, but there are still 4+ genuine issues overall.",
+        "Review A surfaces five verified issues and one non-falsifiable editorial concern, but two of its headline defects are false positives. The verified issues cover the catch-all existing-model error path, stale validation status on invalid input, missing validation loading feedback, weak failure observability, and permissive leading-zero validation."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 2
+    },
+    "actionability": {
+      "scores": [
+        2,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Most supported findings come with specific remediation ideas, but some fixes are attached to false-positive findings, which lowers overall usefulness.",
+        "Every issue comes with a concrete fix or clear code-level direction, including predicate changes, catch-branch handling, status clearing, and UI loading suggestions.",
+        "Most real findings include concrete code-level fixes or clear implementation direction, though the UX/loading and comment-clarity notes are less specific."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review labels two contradicted claims as critical, so prioritization is not reliable even though the verified issues are generally in the right range.",
+        "The review correctly treats some runtime behaviors as important, but it labels two contradicted claims as critical, which is a notable prioritization error.",
+        "It correctly treats the catch-all GET failure as serious, but it labels two incorrect findings (`NaN` posting and the dedupe race) as critical, so prioritization is only partly reliable."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The review covers correctness, UX, and observability, but it misses other relevant concerns raised in Review A such as skipped end-to-end coverage and the permissive empty-status eligibility rule.",
+        "The review spans correctness, UX, observability, and tests, but it misses some important concerns that Review B caught, such as the empty-status eligibility path and the skipped backend E2E coverage.",
+        "The review spans correctness, UX, and observability, but it misses broader scope/test-plan concerns that the other review catches and includes multiple incorrect correctness calls."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 2
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is useful signal, but two prominent critical findings are false positives and materially reduce trust.",
+        "There is meaningful signal, but two false positives are prominent and one is framed as critical, which lowers trust in the overall review.",
+        "There is useful signal, but the false-positive critical issues materially reduce trust in the review."
+      ]
+    },
+    "depth": {
+      "scores": [
+        2,
+        2,
+        1
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The verified findings show real behavioral reasoning around control flow and state handling across async validation and save paths, but the review is pulled down by incorrect deeper reasoning on the race-condition and NaN claims.",
+        "The stronger findings use behavioral reasoning across async flows and multiple components, but the incorrect race-condition analysis limits the depth score.",
+        "The verified findings show behavioral reasoning about async validation and backend failure handling, but they do not reach deeper architectural or invariant-level analysis."
+      ],
+      "verified_findings": 14,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 2
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Compared with Review A, Review B contributes two substantive issues A does not raise: the catch-all existing-model check that proceeds after non-404 failures, and the stale validation-status problem in the blur handlers.",
+        "Review A contributes two substantive issues that Review B does not: the swallowed 5xx/network error on the existing-model check, and the stale validation status that is left behind after invalid ID edits.",
+        "Review A contributes two substantive issues the other review does not raise: the catch-all existing-model error path and stale validation status on invalid input."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "It uniquely identifies that the `SkadApi.get` guard treats all errors like 404 and then proceeds to `SkadApi.post`, which can duplicate or overwrite model setup on transient failures.",
+        "It uniquely identifies that invalid or repeated blur paths return without clearing prior validation state, leaving stale `app_store_validation_status` behind."
+      ]
+    },
+    "total": 13,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 20,
+      "claims_unverified": 4,
+      "claims_contradicted": 6,
+      "claims_non_falsifiable": 2,
+      "verification_rate": 0.5977666666666667,
+      "tool_calls_observed": 0,
+      "grounded": 25,
+      "ungrounded": 1,
+      "grounding_eligible": 26,
+      "grounding_rate": 0.9615384615384616
+    }
+  }
+}

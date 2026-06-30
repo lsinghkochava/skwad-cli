@@ -1,0 +1,137 @@
+{
+  "version": "2.0",
+  "scale": {
+    "min": 0,
+    "max": 3,
+    "type": "additive",
+    "total_max": 21
+  },
+  "anchor_discipline": [
+    "Issue Detection counts only. Non-obviousness of findings lives in Depth, not here.",
+    "Depth scores reasoning quality only. Count of issues lives in Issue Detection.",
+    "Novel Findings requires substantive issues only. Judge must write a 1-line justification per counted novel finding. Trivial nitpick padding does not score."
+  ],
+  "criteria": [
+    {
+      "id": "issue_detection",
+      "name": "Issue Detection",
+      "description": "Count of genuine, real issues found. Non-obviousness is NOT scored here — that lives in Depth.",
+      "weight": 1,
+      "anchors": {
+        "0": "No real issues found, or all findings are false positives.",
+        "1": "1 genuine issue identified.",
+        "2": "2-3 genuine issues identified.",
+        "3": "4+ genuine issues identified."
+      }
+    },
+    {
+      "id": "actionability",
+      "name": "Actionability",
+      "description": "How actionable are the review's suggestions?",
+      "weight": 1,
+      "anchors": {
+        "0": "Vague only (e.g. 'this could be better', 'consider improving').",
+        "1": "Some findings have specific suggestions.",
+        "2": "Most findings have code-level fixes or clear direction.",
+        "3": "Every finding has a code-level fix or unambiguous direction."
+      }
+    },
+    {
+      "id": "severity_accuracy",
+      "name": "Severity Accuracy",
+      "description": "Does the review correctly prioritize findings by actual impact?",
+      "weight": 1,
+      "anchors": {
+        "0": "Severity is wrong throughout (nits called critical, or critical issues missed/downplayed).",
+        "1": "Mostly correct prioritization, but at least one notable misorder.",
+        "2": "Correct prioritization across all findings.",
+        "3": "Correct prioritization with explicit labels that accurately map to impact."
+      }
+    },
+    {
+      "id": "coverage",
+      "name": "Coverage",
+      "description": "Breadth — how well does the review span relevant concern areas?",
+      "weight": 1,
+      "anchors": {
+        "0": "Misses obvious security, performance, correctness, or pattern issues.",
+        "1": "Catches the main concerns but misses some relevant areas.",
+        "2": "Catches most relevant concerns across the diff.",
+        "3": "Spans security, performance, correctness, and patterns as applicable to the diff."
+      }
+    },
+    {
+      "id": "signal_to_noise",
+      "name": "Signal-to-Noise",
+      "description": "Is every comment valuable, or does noise dilute the useful findings?",
+      "weight": 1,
+      "anchors": {
+        "0": "Mostly noise, false positives, or irrelevant observations.",
+        "1": "More signal than noise, but meaningful noise present.",
+        "2": "High signal with minor noise.",
+        "3": "Every comment adds value; zero noise."
+      }
+    },
+    {
+      "id": "depth",
+      "name": "Depth",
+      "description": "Reasoning quality only. Count of issues lives in Issue Detection.",
+      "weight": 1,
+      "anchors": {
+        "0": "Surface-level only (style, naming, formatting).",
+        "1": "Some logic or behavioral reasoning present.",
+        "2": "Cross-file or architectural reasoning present.",
+        "3": "Deep architectural reasoning covering invariants, cross-cutting concerns, or systemic risks."
+      }
+    },
+    {
+      "id": "novel_substantive_findings",
+      "name": "Novel & Substantive Findings",
+      "description": "Issues found by this review that are absent from the other review AND are substantive (not trivial nitpicks). Judge must list each counted finding with a 1-line justification.",
+      "weight": 1,
+      "anchors": {
+        "0": "0 substantive novel findings.",
+        "1": "1 substantive novel finding.",
+        "2": "2-3 substantive novel findings.",
+        "3": "4+ substantive novel findings."
+      }
+    }
+  ],
+  "output_schema": {
+    "description": "JSON structure the judge must produce per review.",
+    "per_review": {
+      "review_label": "\"A\" or \"B\"",
+      "criteria": {
+        "issue_detection":            { "reasoning": "string", "score": "integer 0..3", "verified_findings": "integer", "unverified_findings": "integer", "contradicted_findings": "integer", "non_falsifiable_findings": "integer" },
+        "actionability":              { "reasoning": "string", "score": "integer 0..3" },
+        "severity_accuracy":          { "reasoning": "string", "score": "integer 0..3" },
+        "coverage":                   { "reasoning": "string", "score": "integer 0..3", "verified_findings": "integer", "unverified_findings": "integer", "contradicted_findings": "integer", "non_falsifiable_findings": "integer" },
+        "signal_to_noise":            { "reasoning": "string", "score": "integer 0..3" },
+        "depth":                      { "reasoning": "string", "score": "integer 0..3", "verified_findings": "integer", "unverified_findings": "integer", "contradicted_findings": "integer", "non_falsifiable_findings": "integer" },
+        "novel_substantive_findings": { "reasoning": "string", "score": "integer 0..3", "justifications": ["one string per counted novel finding"], "verified_findings": "integer", "unverified_findings": "integer", "contradicted_findings": "integer", "non_falsifiable_findings": "integer" }
+      },
+      "total": "integer 0..21 (sum of 7 scores)"
+    }
+  },
+  "judge": {
+    "runs_per_review": 3,
+    "temperature": 0.3,
+    "ab_assignment": {
+      "run_1": { "A": "skwad", "B": "claude-ci" },
+      "run_2": { "A": "claude-ci", "B": "skwad" },
+      "run_3": "seeded_random"
+    },
+    "vote": "majority (2/3 or 3/3) per criterion per review; no-majority flagged for human review",
+    "confidence": {
+      "high": "3/3 runs agree",
+      "medium": "2/3 runs agree",
+      "low": "no majority — flag for human review"
+    },
+    "inter_rater_reliability": {
+      "metric": "Krippendorff's alpha (ordinal)",
+      "bootstrap_ci": { "method": "resample PRs", "nboot": 2000 },
+      "gate": "alpha lower-CI-bound >= 0.6",
+      "goal": "alpha >= 0.75"
+    }
+  }
+}

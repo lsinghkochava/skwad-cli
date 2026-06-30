@@ -1,0 +1,158 @@
+{
+  "run_id": "96945257-651e-4d8f-88cc-e04d9a92557e",
+  "started_at_utc": "2026-06-22T14:45:17Z",
+  "completed_at_utc": "2026-06-22T15:06:35Z",
+  "methodology_version": 2,
+  "skwad_cli_git_sha": "63311c91cbee9a8760ec2038e1cb4909d9915a80",
+  "models": {
+    "skwad_review_agents": "claude-sonnet-4-6",
+    "claude_ci": "claude-sonnet-4-5-20250929",
+    "judge": "gpt-5.4",
+    "difficulty_classifier": "claude-sonnet-4-20250514",
+    "per_agent": {
+      "skwad_review_agents": {
+        "Performance Analyst": "claude-sonnet-4-6",
+        "Bug Hunter": "claude-sonnet-4-6",
+        "Architecture Reviewer": "claude-sonnet-4-6",
+        "Security Sentinel": "claude-sonnet-4-6",
+        "Review Coordinator": "claude-haiku-4-5"
+      },
+      "judge": {
+        "Judge": "gpt-5.4"
+      },
+      "difficulty_classifier": {
+        "Difficulty Classifier": "claude-sonnet-4-6"
+      }
+    }
+  },
+  "rng_seed": 12345,
+  "prompt_hashes": {
+    "rubric_json_sha256": "1276824250a7c570462200e1ca59586f9d59fbbc824e5d7dfdd29d2c9e2f1dda",
+    "judge_team_json_sha256": "7ef2f9227e4ca0a80f475630ba1484e1b7728cfc6d11e9498248804d471c2b0a",
+    "classifier_team_json_sha256": "a24291da8322c8175d9a440af6ce8352a2365d0028c15364375c12eb2f069b7f",
+    "judge_persona_md_sha256": "c9f2935e0b6cf5393a5b6463d32e41ca6872cdda15e095ea3290282481a0c3fb",
+    "classifier_persona_md_sha256": "ad909606905d9a121a716c4fb5dcc13e9a6f869099979da17aff633bfdc85f88"
+  },
+  "python_versions": {
+    "python": "3.12.6",
+    "scipy": "1.17.1",
+    "numpy": "2.3.3",
+    "krippendorff": "0.8.2"
+  },
+  "os_info": {
+    "uname": "Darwin Mac.lan 25.5.0 Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:06 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6030 arm64 arm",
+    "hostname": "Mac.lan"
+  },
+  "prs": [
+    {
+      "repo": "Kochava/frontend-mos",
+      "pr": 1816,
+      "commit_sha": "8ccdf8605043f5b5d7e35e5e8b7ce28706ca7d9d",
+      "difficulty": "hard"
+    },
+    {
+      "repo": "Kochava/frontend-mos",
+      "pr": 1818,
+      "commit_sha": "4f5bc456843fcf12b7d8e52c92b98336e22fec6d",
+      "difficulty": "hard"
+    },
+    {
+      "repo": "Kochava/watson",
+      "pr": 893,
+      "commit_sha": "67cd3640bae86ef49191e7cc35f1a254bb2449e6",
+      "difficulty": "easy"
+    },
+    {
+      "repo": "Kochava/watson",
+      "pr": 890,
+      "commit_sha": "9fe96f58bea5c34e1a1229da48d60f09ca6e1068",
+      "difficulty": "easy"
+    },
+    {
+      "repo": "Kochava/watson",
+      "pr": 879,
+      "commit_sha": "2730d1c2eab98df79ac99630096510f3cb1d8bdc",
+      "difficulty": "easy"
+    },
+    {
+      "repo": "Kochava/dash-api",
+      "pr": 565,
+      "commit_sha": "b5c5eddf1841fbb1cc8b23a425e81f477556c77e",
+      "difficulty": "hard"
+    },
+    {
+      "repo": "Kochava/dash-api",
+      "pr": 558,
+      "commit_sha": "43e786ac48bab972435bc2211b3c018a4da75f16",
+      "difficulty": "medium"
+    },
+    {
+      "repo": "Kochava/dash-api",
+      "pr": 562,
+      "commit_sha": "844cb370cb1e3b5c6422ad48dc52a79f2809b7b1",
+      "difficulty": "hard"
+    }
+  ],
+  "skipped_prs": [
+    {
+      "repo": "Kochava/frontend-mos",
+      "pr": 1823,
+      "reason": "worktree absent on resume"
+    }
+  ],
+  "pilot_pass": false,
+  "canary_outcomes": [],
+  "confabulation_rejections": 0,
+  "disallowed_tool_rejections": 0,
+  "structural_invalid_rejections": 0,
+  "evidence_binding_rejections": 0,
+  "out_of_worktree_read_quarantines": 0,
+  "out_of_worktree_reads": [],
+  "inter_run_alpha": {
+    "issue_detection": 0.918355566270224,
+    "actionability": 0.6776749308286005,
+    "severity_accuracy": 0.49633827269170583,
+    "coverage": 0.966690290574061,
+    "signal_to_noise": 0.5675374705287975,
+    "depth": 0.8599833938142609,
+    "novel_substantive_findings": 0.9297273688266783,
+    "_ci_lower": {
+      "issue_detection": 0.7185327923178029,
+      "actionability": 0.25431795634920623,
+      "severity_accuracy": 0.046963381251675186,
+      "coverage": 0.8824408592486068,
+      "signal_to_noise": 0.19165305566031002,
+      "depth": 0.6548705364134639,
+      "novel_substantive_findings": 0.7944815739059851
+    }
+  },
+  "total_wallclock_seconds": 1255.2963187500063,
+  "expected_tasks": 24,
+  "max_workers": 4,
+  "bundled_command_events": 1,
+  "max_bundled_subcommands": 2,
+  "low_grounding_runs": [],
+  "pilot_pass_details": {
+    "passed": false,
+    "criterion_results": {
+      "tool_calls_per_run": false,
+      "no_confabulation_rejections": true,
+      "cost_overhead_within_target": true,
+      "inter_run_alpha_passes": false,
+      "no_unexplained_crashes": true,
+      "schema_validates": true,
+      "canaries_caught": null
+    },
+    "reasons": [
+      "tool_calls_per_run: FAIL \u2014 24/24 run(s) had zero tool calls",
+      "no_confabulation_rejections: PASS \u2014 zero confabulation rejections",
+      "cost_overhead_within_target: PASS \u2014 scoring wall-clock 1255.3s within budget 5445.0s (24 tasks \u00f7 4 workers); per-invocation mean 199.5s (reported)",
+      "inter_run_alpha_passes: FAIL \u2014 CI lower bound below gate 0.6: actionability CI-lower=0.25, severity_accuracy CI-lower=0.05, signal_to_noise CI-lower=0.19",
+      "no_unexplained_crashes: PASS \u2014 all 8 PR(s) completed all 3 runs",
+      "schema_validates: PASS \u2014 reporter rendered successfully",
+      "canaries_caught: SKIPPED \u2014 no canaries injected (criterion not applicable)"
+    ],
+    "degenerate_alpha_criteria": [],
+    "ungated_alpha_criteria": []
+  }
+}

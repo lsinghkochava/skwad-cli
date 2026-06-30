@@ -1,0 +1,1098 @@
+{
+  "run": 2,
+  "ab_assignment": [
+    "claude_ci",
+    "skwad"
+  ],
+  "raw_response": {
+    "review_a": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A identifies one verified production edge case and one verified test-gap around whitespace-only auditing tokens. Its style-guide nit is not verifiable from the repository, and the rest is mostly approval commentary.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "The actionable parts are concrete: use `strings.TrimSpace(...)` and add a whitespace-token test. The style-guide suggestion is specific but unsupported by repo evidence.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "The real bug is treated as important, but the review does not prioritize findings especially consistently and gives comparable weight to an unverifiable style nit.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It covers correctness and a related test gap, but misses other concrete test weaknesses and broader concerns that were available in the changed code.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is more signal than noise, but much of the review is praise and unverifiable business/process commentary rather than findings.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review shows some behavioral reasoning about the empty-token path, but it stays mostly local to the changed condition and does not develop deeper cross-file analysis.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Its substantive findings are duplicated by Review B; it does not add a unique verified issue of its own.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 8,
+      "verification_summary": {
+        "claims_verified": 6,
+        "claims_unverified": 2,
+        "claims_contradicted": 0,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.6,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The production change adds `&& details.AuditingToken != \"\"` to the `attribution_sources` guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change is documented with a GPIR-specific comment block explaining why the auditing token can be empty.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1061,
+            "snippet": "// Only send when AuditingToken is non-empty. GPIR-attributed devices"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR adds a dedicated regression test for the GPIR empty-token scenario.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 146,
+            "snippet": "func Test_buildFBEventEnrichmentParams_GPIR_EmptyAuditingToken_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Whitespace-only auditing tokens would still pass the current guard, so trimming would be more robust.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no whitespace-only auditing-token regression test yet.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources' (claim: 'There is no whitespace-only auditing-token regression test y')"
+        },
+        {
+          "claim_text": "The runtime cost of the change is just one extra string comparison.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The fallback behavior matches pre-PR-#839 behavior.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The current checkout shows the new guard and current fallback path, but it does not contain PR #839's prior behavior for direct comparison."
+        },
+        {
+          "claim_text": "`attrSource` should be declared at the top of the block per Kochava's Go style guide.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "A repository search did not locate the cited style-guide file, so the claimed standard could not be checked against code or docs in this repo."
+        },
+        {
+          "claim_text": "No security issues are introduced by this change.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a broad evaluative judgment without a specific falsifiable code referent in the review."
+        },
+        {
+          "claim_text": "The new test coverage is comprehensive.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a subjective completeness judgment rather than a concrete, falsifiable claim about a specific assertion or code path."
+        }
+      ]
+    },
+    "review_b": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B surfaces several genuine issues: the whitespace-only token hole, missing whitespace regression coverage, the missing `install_time` assertion in the new GPIR test, the existing silent-spectator test, and a hardcoded access token. It also adds lower-value pre-existing concerns, but the count of real issues is still high.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Most findings come with clear code-level fixes: use `strings.TrimSpace`, add specific assertions/tests, document the struct field, or move the hardcoded token to configuration.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Prioritization is uneven: the same whitespace issue is described as LOW in one section and later as blocking, and unrelated pre-existing issues compete with in-scope test gaps.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It spans correctness, tests, security, architecture, and performance, and it traces adjacent code paths beyond the touched lines. Despite some overreach, the breadth is strong.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is substantial useful analysis, but it is diluted by duplicated sections, several unverified historical/business assertions, and at least one concrete false positive about the new test's assertions.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review traces behavior through the changed guard, the fallback path, adjacent tests, struct definitions, and neighboring modules. That is meaningfully deeper than surface commentary, though not fully architectural in the strict sense.",
+          "score": 2,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review A, Review B adds multiple substantive verified findings that A did not mention.",
+          "score": 2,
+          "verified_findings": 3,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely identifies that the new GPIR regression test never asserts `install_time=1709800000`, leaving a changed fixture field unverified.",
+            "It uniquely identifies that `Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID` is a silent-spectator test for this bug because it only checks `install_id` and not `attribution_sources`.",
+            "It uniquely flags the hardcoded Facebook access token constant in `reconcile.go`, which is a substantive security problem absent from Review A."
+          ]
+        }
+      },
+      "total": 15,
+      "verification_summary": {
+        "claims_verified": 17,
+        "claims_unverified": 4,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.68,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The change adds `&& details.AuditingToken != \"\"` to the `attribution_sources` serialization guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Facebook requests without `FBAttributionDetails` still follow the fallback `else if request.IsFB` path.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1088,
+            "snippet": "} else if request.IsFB {\n\t\t\t// Device is FB-attributed but no details available (restricted cache expired after 30-day TTL)\n\t\t\tparams += \"&is_fb=true\"\n\t\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR adds a GPIR empty-token regression test.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 146,
+            "snippet": "func Test_buildFBEventEnrichmentParams_GPIR_EmptyAuditingToken_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test fixture sets `AdID`, an empty `AuditingToken`, and `AttributionMethod: \"GPIR\"`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 163,
+            "snippet": "FBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID:              \"123456\",   // present \u2014 GPIR has ad_id from utm_content\n\t\t\tClickTime:         1709900000,\n\t\t\tAuditingToken:     \"\",         // empty \u2014 GPIR never calls Meta's SAN API\n\t\t\tInstallTime:       1709800000,\n\t\t\tAttributionMethod: \"GPIR\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test has four positive assertions for graceful degradation.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 174,
+            "snippet": "assert.Contains(t, params, \"&is_fb=true\",\n\t\t\"is_fb should still be true for GPIR-attributed devices\")\n\tassert.Contains(t, params, \"event_id=req-gpir-event\",\n\t\t\"event_id should still be sent\")\n\tassert.Contains(t, params, \"install_id=kdid-gpir-device\",\n\t\t\"install_id should still be sent\")\n\tassert.NotContains(t, params, \"attribution_sources\",\n\t\t\"attribution_sources must NOT be sent when AuditingToken is empty (GPIR case)\")\n\tassert.NotContains(t, params, \"source_auditing_token\",\n\t\t\"source_auditing_token must never appear with an empty value\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test includes two negative assertions that check the omission of `attribution_sources` and `source_auditing_token`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 180,
+            "snippet": "assert.NotContains(t, params, \"attribution_sources\",\n\t\t\"attribution_sources must NOT be sent when AuditingToken is empty (GPIR case)\")\n\tassert.NotContains(t, params, \"source_auditing_token\",\n\t\t\"source_auditing_token must never appear with an empty value\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`FBAttributionDetails.AuditingToken` lacks a struct-level comment explaining the GPIR empty-string semantic.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 290,
+            "snippet": "// FBAttributionDetails holds previous Facebook attribution data from Control's device details.\n// Used for non-restricted facebook-family modules where Control has cleartext access.\ntype FBAttributionDetails struct {\n\tAdID                  string `json:\"ad_id\"`\n\tClickTime             int    `json:\"click_time\"`\n\tAuditingToken         string `json:\"auditing_token\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID` only asserts `install_id`, so it would not catch regressions in `attribution_sources` behavior.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 42,
+            "snippet": "func Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID(t *testing.T) {\n\trequest := &structs.WatsonRequest{\n\t\tIsFB:      true,\n\t\tRequestID: \"req-id-abc\",\n\t\tIdentifiers: map[string]string{\n\t\t\t\"kochava_device_id\": \"device-kdid-xyz\",\n\t\t},\n\t\tFBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID: \"123\",\n\t\t},\n\t}\n\n\tparams := buildFBEventEnrichmentParams(request)\n\n\tassert.Contains(t, params, \"install_id=device-kdid-xyz\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no analogous auditing-token handling in `cmd/watson/facebookdeeplink/reconcile.go` or under `cmd/facebook-api`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "source_auditing_token|attribution_sources|AuditingToken|auditing_token",
+            "grep_scope": "cmd/watson/facebookdeeplink/reconcile.go cmd/facebook-api",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'source_auditing_token|attribution_sources|AuditingToken|auditing_token' (claim: 'There is no analogous auditing-token handling in `cmd/watson')"
+        },
+        {
+          "claim_text": "The production change adds one extra string comparison.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Skipping the block when the token is empty avoids the slice/map creation, `json.Marshal`, `url.QueryEscape`, and string concatenation inside that block.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1070,
+            "snippet": "attrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":         details.AdID,\n\t\t\t\t\t\"source_event_time\":     details.ClickTime,\n\t\t\t\t\t\"source_auditing_token\": details.AuditingToken,\n\t\t\t\t},\n\t\t\t}\n\t\t\tif attrSourceJSON, err := json.Marshal(attrSource); err == nil {\n\t\t\t\tparams += \"&attribution_sources=\" + url.QueryEscape(string(attrSourceJSON))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` already uses repeated `params +=` concatenation.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1052,
+            "snippet": "params += \"&is_fb=true\"\n\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Whitespace-only tokens are not filtered out by the current guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no whitespace-only auditing-token regression test.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources' (claim: 'There is no whitespace-only auditing-token regression test.')"
+        },
+        {
+          "claim_text": "`reconcile.go` contains a hardcoded Facebook access token constant.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 44,
+            "snippet": "token                    = \"248602981818776|bImoP43x8UgCw1ky-J_-BP83ByA\""
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The code JSON-marshals the attribution source and URL-escapes it before appending it to the request.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1077,
+            "snippet": "if attrSourceJSON, err := json.Marshal(attrSource); err == nil {\n\t\t\t\tparams += \"&attribution_sources=\" + url.QueryEscape(string(attrSourceJSON))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test never asserts `install_time=1709800000`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "install_time=1709800000",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test only verifies absences and not presences.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 174,
+            "snippet": "assert.Contains(t, params, \"&is_fb=true\",\n\t\t\"is_fb should still be true for GPIR-attributed devices\")\n\tassert.Contains(t, params, \"event_id=req-gpir-event\",\n\t\t\"event_id should still be sent\")\n\tassert.Contains(t, params, \"install_id=kdid-gpir-device\",\n\t\t\"install_id should still be sent\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `AttributionMethod: \"GPIR\"` fixture field is not read by `buildFBEventEnrichmentParams`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "AttributionMethod",
+            "grep_scope": "cmd/watson/facebook/reconcile.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "This bug was introduced in PR #839 and the fix restores pre-#839 behavior.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The current checkout does not contain PR #839's prior state, so the historical regression claim cannot be confirmed from repository reads alone."
+        },
+        {
+          "claim_text": "SRN-attributed devices are unaffected because they have both `AdID` and a valid `AuditingToken`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The guard is visible in code, but the review's data-shape claim about all SRN devices is not established anywhere in the checked-out repository."
+        },
+        {
+          "claim_text": "GPIR devices represent 20-30% of Facebook attribution volume.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a business-metrics assertion with no supporting data in the repository."
+        },
+        {
+          "claim_text": "GPIR devices have `AdID` but no `AuditingToken` because Meta's SAN API is never called.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The repository contains comments and test fixtures describing this behavior, but no executable evidence that independently proves the external Meta/GPIR interaction."
+        },
+        {
+          "claim_text": "The fix is at the correct architectural layer.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is an architectural judgment rather than a concrete, directly falsifiable code claim."
+        },
+        {
+          "claim_text": "An empty string in `AuditingToken` is a meaningful sentinel state.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is an interpretive design judgment about semantics, not a directly testable property of the checked-out code."
+        }
+      ]
+    }
+  },
+  "resolved": {
+    "claude_ci": {
+      "review_label": "A",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review A identifies one verified production edge case and one verified test-gap around whitespace-only auditing tokens. Its style-guide nit is not verifiable from the repository, and the rest is mostly approval commentary.",
+          "score": 2,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "The actionable parts are concrete: use `strings.TrimSpace(...)` and add a whitespace-token test. The style-guide suggestion is specific but unsupported by repo evidence.",
+          "score": 2
+        },
+        "severity_accuracy": {
+          "reasoning": "The real bug is treated as important, but the review does not prioritize findings especially consistently and gives comparable weight to an unverifiable style nit.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It covers correctness and a related test gap, but misses other concrete test weaknesses and broader concerns that were available in the changed code.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is more signal than noise, but much of the review is praise and unverifiable business/process commentary rather than findings.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review shows some behavioral reasoning about the empty-token path, but it stays mostly local to the changed condition and does not develop deeper cross-file analysis.",
+          "score": 1,
+          "verified_findings": 2,
+          "unverified_findings": 1,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Its substantive findings are duplicated by Review B; it does not add a unique verified issue of its own.",
+          "score": 0,
+          "verified_findings": 0,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": []
+        }
+      },
+      "total": 8,
+      "verification_summary": {
+        "claims_verified": 6,
+        "claims_unverified": 2,
+        "claims_contradicted": 0,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.6,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The production change adds `&& details.AuditingToken != \"\"` to the `attribution_sources` guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The change is documented with a GPIR-specific comment block explaining why the auditing token can be empty.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1061,
+            "snippet": "// Only send when AuditingToken is non-empty. GPIR-attributed devices"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR adds a dedicated regression test for the GPIR empty-token scenario.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 146,
+            "snippet": "func Test_buildFBEventEnrichmentParams_GPIR_EmptyAuditingToken_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Whitespace-only auditing tokens would still pass the current guard, so trimming would be more robust.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no whitespace-only auditing-token regression test yet.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources' (claim: 'There is no whitespace-only auditing-token regression test y')"
+        },
+        {
+          "claim_text": "The runtime cost of the change is just one extra string comparison.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The fallback behavior matches pre-PR-#839 behavior.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The current checkout shows the new guard and current fallback path, but it does not contain PR #839's prior behavior for direct comparison."
+        },
+        {
+          "claim_text": "`attrSource` should be declared at the top of the block per Kochava's Go style guide.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "A repository search did not locate the cited style-guide file, so the claimed standard could not be checked against code or docs in this repo."
+        },
+        {
+          "claim_text": "No security issues are introduced by this change.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a broad evaluative judgment without a specific falsifiable code referent in the review."
+        },
+        {
+          "claim_text": "The new test coverage is comprehensive.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a subjective completeness judgment rather than a concrete, falsifiable claim about a specific assertion or code path."
+        }
+      ]
+    },
+    "skwad": {
+      "review_label": "B",
+      "criteria": {
+        "issue_detection": {
+          "reasoning": "Review B surfaces several genuine issues: the whitespace-only token hole, missing whitespace regression coverage, the missing `install_time` assertion in the new GPIR test, the existing silent-spectator test, and a hardcoded access token. It also adds lower-value pre-existing concerns, but the count of real issues is still high.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "actionability": {
+          "reasoning": "Most findings come with clear code-level fixes: use `strings.TrimSpace`, add specific assertions/tests, document the struct field, or move the hardcoded token to configuration.",
+          "score": 3
+        },
+        "severity_accuracy": {
+          "reasoning": "Prioritization is uneven: the same whitespace issue is described as LOW in one section and later as blocking, and unrelated pre-existing issues compete with in-scope test gaps.",
+          "score": 1
+        },
+        "coverage": {
+          "reasoning": "It spans correctness, tests, security, architecture, and performance, and it traces adjacent code paths beyond the touched lines. Despite some overreach, the breadth is strong.",
+          "score": 3,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "signal_to_noise": {
+          "reasoning": "There is substantial useful analysis, but it is diluted by duplicated sections, several unverified historical/business assertions, and at least one concrete false positive about the new test's assertions.",
+          "score": 1
+        },
+        "depth": {
+          "reasoning": "The review traces behavior through the changed guard, the fallback path, adjacent tests, struct definitions, and neighboring modules. That is meaningfully deeper than surface commentary, though not fully architectural in the strict sense.",
+          "score": 2,
+          "verified_findings": 6,
+          "unverified_findings": 0,
+          "contradicted_findings": 1,
+          "non_falsifiable_findings": 0
+        },
+        "novel_substantive_findings": {
+          "reasoning": "Compared with Review A, Review B adds multiple substantive verified findings that A did not mention.",
+          "score": 2,
+          "verified_findings": 3,
+          "unverified_findings": 0,
+          "contradicted_findings": 0,
+          "non_falsifiable_findings": 0,
+          "justifications": [
+            "It uniquely identifies that the new GPIR regression test never asserts `install_time=1709800000`, leaving a changed fixture field unverified.",
+            "It uniquely identifies that `Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID` is a silent-spectator test for this bug because it only checks `install_id` and not `attribution_sources`.",
+            "It uniquely flags the hardcoded Facebook access token constant in `reconcile.go`, which is a substantive security problem absent from Review A."
+          ]
+        }
+      },
+      "total": 15,
+      "verification_summary": {
+        "claims_verified": 17,
+        "claims_unverified": 4,
+        "claims_contradicted": 2,
+        "claims_non_falsifiable": 2,
+        "verification_rate": 0.68,
+        "tool_calls_observed": 0
+      },
+      "claim_trace": [
+        {
+          "claim_text": "The change adds `&& details.AuditingToken != \"\"` to the `attribution_sources` serialization guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Facebook requests without `FBAttributionDetails` still follow the fallback `else if request.IsFB` path.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1088,
+            "snippet": "} else if request.IsFB {\n\t\t\t// Device is FB-attributed but no details available (restricted cache expired after 30-day TTL)\n\t\t\tparams += \"&is_fb=true\"\n\t\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The PR adds a GPIR empty-token regression test.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 146,
+            "snippet": "func Test_buildFBEventEnrichmentParams_GPIR_EmptyAuditingToken_NoAttributionSources(t *testing.T) {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test fixture sets `AdID`, an empty `AuditingToken`, and `AttributionMethod: \"GPIR\"`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 163,
+            "snippet": "FBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID:              \"123456\",   // present \u2014 GPIR has ad_id from utm_content\n\t\t\tClickTime:         1709900000,\n\t\t\tAuditingToken:     \"\",         // empty \u2014 GPIR never calls Meta's SAN API\n\t\t\tInstallTime:       1709800000,\n\t\t\tAttributionMethod: \"GPIR\","
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test has four positive assertions for graceful degradation.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 174,
+            "snippet": "assert.Contains(t, params, \"&is_fb=true\",\n\t\t\"is_fb should still be true for GPIR-attributed devices\")\n\tassert.Contains(t, params, \"event_id=req-gpir-event\",\n\t\t\"event_id should still be sent\")\n\tassert.Contains(t, params, \"install_id=kdid-gpir-device\",\n\t\t\"install_id should still be sent\")\n\tassert.NotContains(t, params, \"attribution_sources\",\n\t\t\"attribution_sources must NOT be sent when AuditingToken is empty (GPIR case)\")\n\tassert.NotContains(t, params, \"source_auditing_token\",\n\t\t\"source_auditing_token must never appear with an empty value\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The test includes two negative assertions that check the omission of `attribution_sources` and `source_auditing_token`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 180,
+            "snippet": "assert.NotContains(t, params, \"attribution_sources\",\n\t\t\"attribution_sources must NOT be sent when AuditingToken is empty (GPIR case)\")\n\tassert.NotContains(t, params, \"source_auditing_token\",\n\t\t\"source_auditing_token must never appear with an empty value\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`FBAttributionDetails.AuditingToken` lacks a struct-level comment explaining the GPIR empty-string semantic.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/structs/structs.go",
+            "line": 290,
+            "snippet": "// FBAttributionDetails holds previous Facebook attribution data from Control's device details.\n// Used for non-restricted facebook-family modules where Control has cleartext access.\ntype FBAttributionDetails struct {\n\tAdID                  string `json:\"ad_id\"`\n\tClickTime             int    `json:\"click_time\"`\n\tAuditingToken         string `json:\"auditing_token\"`"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID` only asserts `install_id`, so it would not catch regressions in `attribution_sources` behavior.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 42,
+            "snippet": "func Test_buildFBEventEnrichmentParams_InstallID_UsesDeviceID(t *testing.T) {\n\trequest := &structs.WatsonRequest{\n\t\tIsFB:      true,\n\t\tRequestID: \"req-id-abc\",\n\t\tIdentifiers: map[string]string{\n\t\t\t\"kochava_device_id\": \"device-kdid-xyz\",\n\t\t},\n\t\tFBAttributionDetails: &structs.FBAttributionDetails{\n\t\t\tAdID: \"123\",\n\t\t},\n\t}\n\n\tparams := buildFBEventEnrichmentParams(request)\n\n\tassert.Contains(t, params, \"install_id=device-kdid-xyz\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no analogous auditing-token handling in `cmd/watson/facebookdeeplink/reconcile.go` or under `cmd/facebook-api`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "source_auditing_token|attribution_sources|AuditingToken|auditing_token",
+            "grep_scope": "cmd/watson/facebookdeeplink/reconcile.go cmd/facebook-api",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'source_auditing_token|attribution_sources|AuditingToken|auditing_token' (claim: 'There is no analogous auditing-token handling in `cmd/watson')"
+        },
+        {
+          "claim_text": "The production change adds one extra string comparison.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Skipping the block when the token is empty avoids the slice/map creation, `json.Marshal`, `url.QueryEscape`, and string concatenation inside that block.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1070,
+            "snippet": "attrSource := []map[string]interface{}{\n\t\t\t\t{\n\t\t\t\t\t\"source_ad_id\":         details.AdID,\n\t\t\t\t\t\"source_event_time\":     details.ClickTime,\n\t\t\t\t\t\"source_auditing_token\": details.AuditingToken,\n\t\t\t\t},\n\t\t\t}\n\t\t\tif attrSourceJSON, err := json.Marshal(attrSource); err == nil {\n\t\t\t\tparams += \"&attribution_sources=\" + url.QueryEscape(string(attrSourceJSON))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "`buildFBEventEnrichmentParams` already uses repeated `params +=` concatenation.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1052,
+            "snippet": "params += \"&is_fb=true\"\n\t\tparams += \"&event_id=\" + url.QueryEscape(request.RequestID)\n\t\tparams += \"&install_id=\" + url.QueryEscape(deviceID)"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "Whitespace-only tokens are not filtered out by the current guard.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1069,
+            "snippet": "if details.AdID != \"\" && details.AuditingToken != \"\" {"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "There is no whitespace-only auditing-token regression test.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": false,
+          "grounding_reason": "absence claim's grep_pattern not tied to the claim: 'Test_buildFBEventEnrichmentParams_GPIR_WhitespaceAuditingToken_NoAttributionSources' (claim: 'There is no whitespace-only auditing-token regression test.')"
+        },
+        {
+          "claim_text": "`reconcile.go` contains a hardcoded Facebook access token constant.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 44,
+            "snippet": "token                    = \"248602981818776|bImoP43x8UgCw1ky-J_-BP83ByA\""
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The code JSON-marshals the attribution source and URL-escapes it before appending it to the request.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/reconcile.go",
+            "line": 1077,
+            "snippet": "if attrSourceJSON, err := json.Marshal(attrSource); err == nil {\n\t\t\t\tparams += \"&attribution_sources=\" + url.QueryEscape(string(attrSourceJSON))"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test never asserts `install_time=1709800000`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "install_time=1709800000",
+            "grep_scope": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The new GPIR test only verifies absences and not presences.",
+          "outcome": "contradicted",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "file": "cmd/watson/facebook/fb_event_enrichment_url_test.go",
+            "line": 174,
+            "snippet": "assert.Contains(t, params, \"&is_fb=true\",\n\t\t\"is_fb should still be true for GPIR-attributed devices\")\n\tassert.Contains(t, params, \"event_id=req-gpir-event\",\n\t\t\"event_id should still be sent\")\n\tassert.Contains(t, params, \"install_id=kdid-gpir-device\",\n\t\t\"install_id should still be sent\")"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "The `AttributionMethod: \"GPIR\"` fixture field is not read by `buildFBEventEnrichmentParams`.",
+          "outcome": "verified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": {
+            "grep_pattern": "AttributionMethod",
+            "grep_scope": "cmd/watson/facebook/reconcile.go",
+            "result": "absent"
+          },
+          "grounded": true
+        },
+        {
+          "claim_text": "This bug was introduced in PR #839 and the fix restores pre-#839 behavior.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The current checkout does not contain PR #839's prior state, so the historical regression claim cannot be confirmed from repository reads alone."
+        },
+        {
+          "claim_text": "SRN-attributed devices are unaffected because they have both `AdID` and a valid `AuditingToken`.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The guard is visible in code, but the review's data-shape claim about all SRN devices is not established anywhere in the checked-out repository."
+        },
+        {
+          "claim_text": "GPIR devices represent 20-30% of Facebook attribution volume.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is a business-metrics assertion with no supporting data in the repository."
+        },
+        {
+          "claim_text": "GPIR devices have `AdID` but no `AuditingToken` because Meta's SAN API is never called.",
+          "outcome": "unverified",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "The repository contains comments and test fixtures describing this behavior, but no executable evidence that independently proves the external Meta/GPIR interaction."
+        },
+        {
+          "claim_text": "The fix is at the correct architectural layer.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is an architectural judgment rather than a concrete, directly falsifiable code claim."
+        },
+        {
+          "claim_text": "An empty string in `AuditingToken` is a meaningful sentinel state.",
+          "outcome": "non_falsifiable",
+          "tools_used": [
+            "exec_command"
+          ],
+          "evidence": "This is an interpretive design judgment about semantics, not a directly testable property of the checked-out code."
+        }
+      ]
+    }
+  },
+  "command_count": 26,
+  "out_of_worktree_reads": [],
+  "bundled_command_events": 0,
+  "max_bundled_subcommands": 1,
+  "grounding": {
+    "skwad": {
+      "grounded": 17,
+      "ungrounded": 2,
+      "grounding_eligible": 19,
+      "grounding_rate": 0.8947368421052632
+    },
+    "claude_ci": {
+      "grounded": 5,
+      "ungrounded": 1,
+      "grounding_eligible": 6,
+      "grounding_rate": 0.8333333333333334
+    }
+  },
+  "duration_seconds": 215.36972458400123
+}

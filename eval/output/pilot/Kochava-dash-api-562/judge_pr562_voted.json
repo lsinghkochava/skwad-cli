@@ -1,0 +1,258 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A identifies many genuine issues that are borne out by the code: non-atomic multi-key writes, per-key upsert fanout, incomplete reset deletion, a mismatched test expectation, per-request regex compilation, cache-miss stampedes, an unnecessary Watson call on reset, cold-cache GET latency, returning cached maps by reference, a brittle fixed-size assertion, and duplicated fallback values in the test mock. A few architecture/convention points are more speculative, and one positive claim is contradicted.",
+        "Review B identifies many genuine issues, including the non-atomic save loop, the per-key upsert round trips, orphaned-key deletion gaps, a broken test mock, repeated regex compilation, missing singleflight, redundant Watson dependency on reset, brittle key-count assertions, and fallback-sync maintenance risk. It also raises two architecture concerns that are evaluative but code-grounded.",
+        "Review B identifies many genuine issues by tracing through handlers, DAO behavior, test setup, and cache behavior. Two positive claims are contradicted, but the issue-finding count remains high."
+      ],
+      "verified_findings": 30,
+      "unverified_findings": 5,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 3
+    },
+    "actionability": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Most findings include concrete remediation steps, and the major ones come with code-level direction rather than vague advice.",
+        "The findings consistently provide concrete remediation paths, usually with clear code-level direction or replacement patterns.",
+        "Each major finding comes with a concrete direction or code-level change, including transactional writes, corrected LIKE expectations, static regex reuse, and cache-protection approaches."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review correctly elevates the main correctness and test issues, but it overstates some medium concerns as must-fix/blocking and includes at least one contradicted performance statement, so prioritization is not consistently calibrated.",
+        "The major correctness and performance problems are prioritized appropriately, but several medium/nit architecture points are overstated as pre-merge blockers.",
+        "The most serious correctness problems are prioritized appropriately, but several design/performance concerns are also framed as pre-merge blockers and the review internally contradicts itself on the N+1 question."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The verified findings cover correctness, performance, API/cache behavior, test robustness, and maintainability. It reaches most of the meaningful concern areas exposed by this change.",
+        "The review spans correctness, data integrity, database performance, cache behavior, handler latency, architecture consistency, and test quality; it covers most of the PR's important risk areas.",
+        "It spans correctness, performance, testing, architecture, and API/cache behavior, covering most of the important risk areas exposed by the PR."
+      ],
+      "verified_findings": 30,
+      "unverified_findings": 5,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 3
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Signal is high overall, but not perfect: the review contains one clear false-positive/contradicted statement and a few speculative architecture comments.",
+        "Most comments add real value, but there is some noise from contradicted praise (for example claiming no N+1 pattern) and a couple speculative low-confidence notes.",
+        "The review has strong signal overall, but it includes at least two contradicted statements (`No N+1 query patterns detected` and the cloning/mutation praise), so it is not noise-free."
+      ]
+    },
+    "depth": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The strongest findings trace behavior across handler logic, DAO implementation, delete semantics, caching, and tests. The review reasons about control flow and state transitions rather than staying at a stylistic level.",
+        "Review B traces behavior across handlers, DAO methods, cache usage, and tests. Its strongest findings require cross-file reasoning about control flow and persistence semantics.",
+        "The review does real cross-file reasoning: it follows POST into DAO upserts, ties PUT delete semantics to LIKE-vs-IN behavior, and inspects test mocks and cache-return behavior. That is deep, behavior-oriented analysis."
+      ],
+      "verified_findings": 30,
+      "unverified_findings": 5,
+      "contradicted_findings": 3,
+      "non_falsifiable_findings": 3
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A contributes multiple substantive issues that Review B does not surface, especially around write atomicity, DB fanout, reset semantics, test correctness, cache stampedes, and unnecessary runtime dependency on Watson during reset.",
+        "Compared with Review A, B contributes several substantive unique findings about transactional safety, query behavior, deletion correctness, test correctness, cache stampedes, and unnecessary Watson coupling on reset.",
+        "Review B contributes many substantive findings that Review A does not mention, especially around atomicity, DAO call amplification, delete semantics, test correctness, and cache behavior."
+      ],
+      "verified_findings": 18,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "The partial-upsert inconsistency risk is absent from Review B and is a substantive correctness issue spanning handler and DAO behavior.",
+        "The per-key upsert fanout/N+1 database pattern is absent from Review B and materially affects save-path performance.",
+        "The reset path deleting only enumerated keys while discovery uses a LIKE scan is absent from Review B and is a substantive correctness gap."
+      ]
+    },
+    "total": 18,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 34,
+      "claims_unverified": 5,
+      "claims_contradicted": 5,
+      "claims_non_falsifiable": 3,
+      "verification_rate": 0.7266666666666666,
+      "tool_calls_observed": 0,
+      "grounded": 39,
+      "ungrounded": 1,
+      "grounding_eligible": 40,
+      "grounding_rate": 0.975
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        1,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Only one genuine issue is clearly supported by the code: the fallback defaults must be manually kept in sync with Watson. The review's headline HIGH-severity defect is contradicted by the new sparse-write behavior, and most other comments are recommendations rather than validated defects.",
+        "Review A identifies four genuine issues backed by the code: ignored response-body close errors, missing numeric-value validation before persisting payload data, missing Watson configuration validation, and the manual fallback-sync risk. Its headline HIGH-severity defect is contradicted by the write path, and the empty-value portion of its validation criticism is also contradicted.",
+        "Review A surfaced a few real concerns, but its headline HIGH-severity bug is contradicted by the new empty-value skip logic. The remaining genuine issues are secondary: missing Watson config validation, manual fallback/default drift risk, and lack of numeric payload validation."
+      ],
+      "verified_findings": 8,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        2,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The review gives concrete code snippets and implementation direction, but the most detailed recommendation targets a contradicted bug, which limits practical usefulness.",
+        "Every concrete finding comes with a specific code-level direction or sample fix, even when the underlying prioritization is weak.",
+        "Most findings include concrete code-level remediation, including example patches for defaults, validation, and config handling."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "The central claim is labeled HIGH severity even though the code explicitly skips empty-string writes, so the review's prioritization is not reliable.",
+        "The only explicitly labeled HIGH-severity defect is incorrect because empty values are skipped before persistence, so the review's prioritization is materially wrong.",
+        "The review\u2019s dominant HIGH-severity finding is contradicted by the actual write path, and minor concerns are elevated ahead of the more consequential transactional and delete-path issues that it missed."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        0,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review misses the main correctness, deletion, DB fanout, and test-regression issues in this PR and instead focuses mostly on speculative validation and hygiene concerns.",
+        "The genuine findings touch validation, configuration, resource handling, and fallback maintenance, but the review misses the PR's larger transactional, deletion, cache-stampede, and test-mocking risks.",
+        "It touches correctness, config, and maintainability, but misses the deeper correctness/performance/test issues around transactional writes, delete semantics, and test mismatch."
+      ],
+      "verified_findings": 8,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        0,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "Most of the review's weight goes to a false headline defect and other weakly supported recommendations, leaving relatively little high-value signal.",
+        "There is some real value, but the main defect analysis is a false positive and several supporting claims are either contradicted or unsupported.",
+        "There is some useful signal, but the central false positive materially reduces trust and several surrounding recommendations are driven by that incorrect premise."
+      ]
+    },
+    "depth": {
+      "scores": [
+        0,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The verified portion is shallow maintainability commentary. The deeper behavioral reasoning in the review centers on a claim that the code contradicts.",
+        "The review shows some behavioral reasoning about downstream effects, but its deepest analysis misreads the save path and therefore does not sustain high-depth credit.",
+        "The review attempts behavioral reasoning about the reconciliation flow, but its main trace is wrong because it ignores the explicit empty-string skip in the write path. The surviving findings are comparatively shallow."
+      ],
+      "verified_findings": 8,
+      "unverified_findings": 4,
+      "contradicted_findings": 6,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        2,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The only verified issue is a maintenance/sync risk that Review A already notes; Review B does not add any verified substantive finding absent from Review A.",
+        "Relative to Review B, A contributes two substantive unique points: lack of numeric payload validation and lack of Watson config validation. Its other genuine findings are either already covered by B or too minor to count as substantive novelty.",
+        "Only one substantive issue is both genuine and absent from Review B: the lack of Watson-specific startup/config validation."
+      ],
+      "verified_findings": 3,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "Review A alone points out that Watson URL/timeout values are accepted without any repo-visible validation before client construction."
+      ]
+    },
+    "total": 8,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 15,
+      "claims_unverified": 7,
+      "claims_contradicted": 7,
+      "claims_non_falsifiable": 1,
+      "verification_rate": 0.4517948718,
+      "tool_calls_observed": 0,
+      "grounded": 20,
+      "ungrounded": 2,
+      "grounding_eligible": 22,
+      "grounding_rate": 0.9090909090909091
+    }
+  }
+}

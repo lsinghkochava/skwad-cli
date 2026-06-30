@@ -1,0 +1,52 @@
+[
+  {
+    "id": "contradicted_via_read_max_retries",
+    "target_pr": {"pr": "*"},
+    "inject_into": "skwad",
+    "claim_text": "Bug: MAX_RETRIES in src/utils.py is set to 10, which will hammer the downstream service under failure.",
+    "match_token": "MAX_RETRIES",
+    "expected_outcome": "contradicted",
+    "category": "contradicted_via_read",
+    "rationale": "MAX_RETRIES is 3 in src/utils.py; only a Read of the file reveals the false value (10)."
+  },
+  {
+    "id": "contradicted_via_grep_absent_symbol",
+    "target_pr": {"pr": "*"},
+    "inject_into": "skwad",
+    "claim_text": "Critical: the function processBatchScenarios retains the previous batch's response object on every invocation, leaking memory.",
+    "match_token": "processBatchScenarios",
+    "expected_outcome": "contradicted",
+    "category": "contradicted_via_grep",
+    "rationale": "No symbol named processBatchScenarios exists anywhere in the repo; a Grep returns no matches."
+  },
+  {
+    "id": "contradicted_via_glob_absent_file",
+    "target_pr": {"pr": "*"},
+    "inject_into": "skwad",
+    "claim_text": "The payment processor in src/payment.py does not validate the currency code before charging.",
+    "match_token": "src/payment.py",
+    "expected_outcome": "contradicted",
+    "category": "contradicted_via_glob",
+    "rationale": "There is no file src/payment.py; a Glob for it returns nothing."
+  },
+  {
+    "id": "verified_true_positive_token_ttl",
+    "target_pr": {"pr": "*"},
+    "inject_into": "claude_ci",
+    "claim_text": "validate_token in src/auth.py enforces token expiry by comparing elapsed time against TOKEN_TTL_SECONDS.",
+    "match_token": "validate_token",
+    "expected_outcome": "verified",
+    "category": "verified_true_positive",
+    "rationale": "TRUE claim: validate_token genuinely checks expiry against TOKEN_TTL_SECONDS. Guards against a judge that marks everything contradicted."
+  },
+  {
+    "id": "contradicted_non_obvious_lru_fifo",
+    "target_pr": {"pr": "*"},
+    "inject_into": "claude_ci",
+    "claim_text": "LRUCache.evict in src/cache.py uses FIFO ordering and ignores access recency, so frequently-read keys are evicted prematurely.",
+    "match_token": "LRUCache.evict",
+    "expected_outcome": "contradicted",
+    "category": "contradicted_non_obvious",
+    "rationale": "Surface-plausible (real file, class, method) but false: get() calls move_to_end so eviction is LRU, not FIFO. Only reading the method body refutes it — pattern-matching 'smells fake' cannot."
+  }
+]

@@ -1,0 +1,9 @@
+{"time":"2026-05-20T03:00:00Z","type":"run_started","run_id":"sample-run-001","agent_id":"","agent_name":"","data":null}
+{"time":"2026-05-20T03:00:01Z","type":"agent_spawned","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"Coder","data":null}
+{"time":"2026-05-20T03:00:02Z","type":"tool_call","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"","data":{"agent_id":"a1b2c3d4-0000-0000-0000-000000000001","timestamp_unix_ms":1747706402000,"tool_name":"Read"}}
+{"time":"2026-05-20T03:00:03Z","type":"tool_call","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"","data":{"agent_id":"a1b2c3d4-0000-0000-0000-000000000001","timestamp_unix_ms":1747706403000,"tool_name":"Bash"}}
+{"time":"2026-05-20T03:00:04Z","type":"tool_call","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"","data":{"agent_id":"a1b2c3d4-0000-0000-0000-000000000001","timestamp_unix_ms":1747706404000,"tool_name":"Edit"}}
+{"time":"2026-05-20T03:00:05Z","type":"tool_call","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"","data":{"agent_id":"a1b2c3d4-0000-0000-0000-000000000001","timestamp_unix_ms":1747706405000,"tool_name":"mcp:set-status"}}
+{"time":"2026-05-20T03:00:06Z","type":"tool_call","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"","data":{"agent_id":"a1b2c3d4-0000-0000-0000-000000000001","timestamp_unix_ms":1747706406000,"tool_name":"mcp:send-message"}}
+{"time":"2026-05-20T03:00:07Z","type":"agent_exited","run_id":"sample-run-001","agent_id":"a1b2c3d4-0000-0000-0000-000000000001","agent_name":"Coder","data":0}
+{"time":"2026-05-20T03:00:08Z","type":"run_completed","run_id":"sample-run-001","agent_id":"","agent_name":"","data":null}

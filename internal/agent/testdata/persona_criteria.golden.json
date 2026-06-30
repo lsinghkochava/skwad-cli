@@ -1,0 +1,98 @@
+{
+  "classifier_team.json::PR Difficulty Classifier": {
+    "severity_levels": [],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": [
+      "easy",
+      "hard",
+      "medium"
+    ]
+  },
+  "judge_team.json::Review Quality Judge": {
+    "severity_levels": [],
+    "scoring_dimensions": [
+      "actionability",
+      "coverage",
+      "depth",
+      "issue_detection",
+      "novel_substantive_findings",
+      "severity_accuracy",
+      "signal_to_noise"
+    ],
+    "score_ranges": [
+      "0-3 each",
+      "21-point max"
+    ],
+    "verification_buckets": [
+      "contradicted",
+      "non_falsifiable",
+      "unverified",
+      "verified"
+    ],
+    "difficulty_buckets": []
+  },
+  "skwad_review_team.json::Architecture Reviewer": {
+    "severity_levels": [
+      "HIGH",
+      "LOW",
+      "MEDIUM",
+      "NIT"
+    ],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": []
+  },
+  "skwad_review_team.json::Bug Hunter": {
+    "severity_levels": [
+      "CRITICAL",
+      "HIGH",
+      "MEDIUM"
+    ],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": []
+  },
+  "skwad_review_team.json::Performance Analyst": {
+    "severity_levels": [
+      "CRITICAL",
+      "HIGH",
+      "LOW",
+      "MEDIUM",
+      "NIT"
+    ],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": []
+  },
+  "skwad_review_team.json::Review Coordinator": {
+    "severity_levels": [
+      "CRITICAL",
+      "HIGH",
+      "LOW",
+      "MEDIUM",
+      "NIT"
+    ],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": []
+  },
+  "skwad_review_team.json::Security Sentinel": {
+    "severity_levels": [
+      "CRITICAL",
+      "HIGH",
+      "LOW",
+      "MEDIUM",
+      "NIT"
+    ],
+    "scoring_dimensions": [],
+    "score_ranges": [],
+    "verification_buckets": [],
+    "difficulty_buckets": []
+  }
+}

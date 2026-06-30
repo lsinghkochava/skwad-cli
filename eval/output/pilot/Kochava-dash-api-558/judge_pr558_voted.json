@@ -1,0 +1,256 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A identifies seven genuine issues in the changed code and tests: missing-key postmeta writes, the empty install fixture, missing PUT failure-path coverage, PUT's non-atomic update behavior, the unbounded GetPosts call, client-visible internal terminology, and by-value copying of PartnerData.",
+        "The review identifies several genuine issues: the nil-to-string write behavior in the helper, the fixture/test blind spot around ContextMeta, the missing PUT failure-path test, the remaining non-atomic PUT postmeta path, plus smaller signature and error-message concerns.",
+        "Review B finds multiple genuine issues: the nil-to-\"<nil>\" write path, the empty-fixture test blind spot, the missing PUT failure-path test, the PUT non-atomicity/comment mismatch, the missing query limit, and the response-message disclosure concern."
+      ],
+      "verified_findings": 19,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 1
+    },
+    "actionability": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Nearly every finding includes a concrete code-level fix or a specific test case to add, with example code for the main defects.",
+        "Nearly every issue includes a concrete fix direction, and most include code-level examples or an exact test case to add.",
+        "Each major finding comes with a concrete code-level fix or an unambiguous test/comment change."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        2,
+        1,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The per-finding LOW/MEDIUM/NIT labels are mostly reasonable, but the review overstates some medium test/documentation gaps as merge-blocking 'critical' problems.",
+        "The review generally distinguishes medium vs. low issues, but it overstates the merge-blocking severity by calling the set 'critical' and includes at least one claim whose PR attribution is not established.",
+        "Its explicit MEDIUM/LOW/NIT labels are mostly sensible, though the prose occasionally overstates urgency by calling the set of gaps \"critical.\""
+      ]
+    },
+    "coverage": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The review spans correctness/data consistency, test adequacy, performance, and client-facing error exposure, covering most relevant concern areas in this PR.",
+        "It spans correctness, test coverage, consistency/atomicity, performance, and security-facing messaging, which is broad for this change set.",
+        "The review spans correctness, test adequacy, consistency/atomicity, performance, and a security-facing response-message concern, which is broad coverage for this PR."
+      ],
+      "verified_findings": 19,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 1
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Most comments are valuable, but the review repeats the missing PUT failure-path test in two sections and includes a few pre-change assertions that cannot be verified from PR head.",
+        "Most comments add value, but there is some noise from duplicated PUT-test-gap commentary and from claims whose performance/regression attribution is not fully verified.",
+        "Signal is high, but not perfect: the missing PUT failure-path test is raised twice, and a few side comments depend on historical comparison that is not verified from the repo snapshot."
+      ]
+    },
+    "depth": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "The reasoning goes beyond surface comments: it traces the multi-step POST/PUT flows, connects helper extraction to test blind spots, and cross-checks helper behavior against GetPosts and HandleError implementations.",
+        "The reasoning traces control flow across helpers and handlers, connects tests to the exercised code paths, and explains the PUT/POST asymmetry, but it stops short of deeper architectural analysis.",
+        "The review traces control flow through POST and PUT, follows the data path from missing context keys into persisted postmeta, and connects test fixtures to behavioral blind spots across files."
+      ],
+      "verified_findings": 19,
+      "unverified_findings": 3,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 1
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A contributes multiple substantive findings absent from Review B, especially around missing-key postmeta writes, test blind spots, PUT non-atomicity, and smaller perf/security issues.",
+        "Compared with Review A, this review contributes four substantive findings that A missed: the nil write behavior, the ContextMeta test blind spot, the missing PUT failure-path test, and the remaining PUT non-atomicity.",
+        "Review B contributes several substantive issues not present in Review A, including one correctness bug, two meaningful test gaps, one consistency/documentation gap, and one security/performance concern."
+      ],
+      "verified_findings": 15,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "It alone points out that the new helper stringifies missing context values and can persist placeholder data.",
+        "It alone notices that the newly added install fixture omits ContextMeta, so the extracted loop is never exercised by those tests.",
+        "It alone flags that the new PUT install-guard tests omit the postmeta-failure branch entirely."
+      ]
+    },
+    "total": 18,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 36,
+      "claims_unverified": 7,
+      "claims_contradicted": 0,
+      "claims_non_falsifiable": 4,
+      "verification_rate": 0.7631578947333333,
+      "tool_calls_observed": 0,
+      "grounded": 35,
+      "ungrounded": 2,
+      "grounding_eligible": 37,
+      "grounding_rate": 0.9459459459459459
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        0,
+        0,
+        1
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "Review B does not identify any substantive defect in the patch; its only criticisms are minor improvement suggestions rather than genuine issues.",
+        "The review does not surface any genuine defects in the patch. It mainly approves the change and offers only minor suggestions, while missing the material test and behavior gaps present in the diff.",
+        "Review A identifies one minor, evidence-backed improvement in rollback logging, but it misses the main correctness and test gaps in the change."
+      ],
+      "verified_findings": 1,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The few suggestions it does make are specific, but they are limited to minor logging/visibility ideas and do not address the main behavioral or testing gaps.",
+        "It includes one concrete logging suggestion, but the review is mostly approval-oriented and does not provide actionable defect remediation.",
+        "The rollback-logging suggestion is code-level and specific, but the rest of the review is largely approval-oriented rather than fix-oriented."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        0,
+        0,
+        1
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "The review approves the change and describes coverage/behavior too positively despite missing real correctness and testing concerns, so prioritization is materially off.",
+        "It effectively treats the patch as merge-ready and does not reflect the medium-impact correctness and test gaps that remain.",
+        "It treats the change as merge-ready and does not surface the verified correctness/testing gaps, so prioritization is only partially accurate."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "It misses the main issues in the changed code, especially the missing-key postmeta write, the PUT non-atomicity, and the blind spots in the new tests.",
+        "Because it identifies no genuine issues, it provides no meaningful breadth across correctness, tests, security, or performance concerns.",
+        "Coverage is narrow: it does not catch the missing PUT failure-path test, the empty ContextMeta fixture blind spot, the PUT non-atomicity gap, or the low-severity response-message disclosure concern."
+      ],
+      "verified_findings": 1,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is some valid explanation of the early-validation and POST rollback logic, but much of the review is overconfident praise or unsupported assertions about coverage, security, and behavior.",
+        "There is some useful confirmation of what the patch does, but the review is dominated by praise and includes an overstated claim about test coverage.",
+        "There is some signal in the accurate description of the refactor and one useful suggestion, but the blanket approval and overstatement of test quality reduce trust."
+      ]
+    },
+    "depth": {
+      "scores": [
+        1,
+        0,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review shows some behavioral reasoning about validation and rollback, but it stays shallow and misses the important asymmetric PUT path and test blind spots.",
+        "The review discusses ordering and rollback behavior, but not in service of genuine findings; it does not develop substantive defect analysis.",
+        "The review shows some behavioral reasoning about ordering and rollback, but it does not follow those invariants through PUT or through the new tests deeply enough to catch the important gaps."
+      ],
+      "verified_findings": 1,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "Its minor suggestions are not substantive novel defects relative to Review A.",
+        "It contributes no substantive issues absent from the other review.",
+        "It does not surface any substantive issue that Review B does not already cover."
+      ],
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": []
+    },
+    "total": 3,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 22,
+      "claims_unverified": 7,
+      "claims_contradicted": 6,
+      "claims_non_falsifiable": 4,
+      "verification_rate": 0.5633333333333334,
+      "tool_calls_observed": 0,
+      "grounded": 27,
+      "ungrounded": 1,
+      "grounding_eligible": 28,
+      "grounding_rate": 0.9642857142857143
+    }
+  }
+}

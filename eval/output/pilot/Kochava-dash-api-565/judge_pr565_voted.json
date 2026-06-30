@@ -1,0 +1,255 @@
+{
+  "skwad": {
+    "issue_detection": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Review A surfaces seven genuine issues after verification: the non-agency `AgencyNetworkId` write path, `agency_network_ids=0` returning advertiser rows, missing `RowsAffected` handling, the `-1` vs `0` advertiser-sentinel mismatch, missing agency scope in audit logs, handler tests that never assert the new scope invariant, and silent advertiser fallback on all-invalid ids. It also includes one unverified pre-existing SQL injection concern and one contradicted indexing claim.",
+        "Review B finds several real issues by tracing scope through the handler, database methods, and read path; most of its main findings are grounded and substantive.",
+        "It identifies several genuine issues: the non-agency scope hole, the `-1`/`0` sentinel mismatch, missing `RowsAffected` checking, weak handler tests around the new scope argument, missing agency scope in audit logs, and a pre-existing SQL-construction risk in `GetTriggersWithAgency`."
+      ],
+      "verified_findings": 21,
+      "unverified_findings": 6,
+      "contradicted_findings": 4,
+      "non_falsifiable_findings": 0
+    },
+    "actionability": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "Most findings include concrete fixes such as removing or guarding the non-agency branch, skipping non-positive agency ids, checking `RowsAffected`, widening advertiser lookup semantics, and tightening test expectations.",
+        "Its findings consistently include concrete fixes, often with specific code-level changes or exact guard conditions.",
+        "The review is highly actionable: each substantive finding includes a concrete fix or an unambiguous remediation path."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The highest-severity auth/scope issue is prioritized appropriately, but the review also overstates at least one false performance blocker and treats several medium/low concerns as merge blockers.",
+        "Severity labeling is generally thoughtful, but the review undermines itself by first claiming there are no critical issues while later presenting a verified high-severity handler-scope bug and several blockers.",
+        "Severity labeling is mixed. Most priorities are reasonable, but the review also says 'No Critical Issues' while later surfacing a real ownership gap, and it overstates some follow-ups as blockers."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The review spans security, correctness, observability, tests, and maintainability around the changed scope logic, with only one materially incorrect detour into indexing.",
+        "It covers correctness, security, handler/database interactions, tests, auditability, and performance/schema concerns relevant to this change.",
+        "It spans security, correctness, tests, observability, maintainability, and performance follow-up concerns, with concrete cross-file verification targets."
+      ],
+      "verified_findings": 23,
+      "unverified_findings": 6,
+      "contradicted_findings": 4,
+      "non_falsifiable_findings": 0
+    },
+    "signal_to_noise": {
+      "scores": [
+        2,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Most comments are useful and grounded in the changed code, but the incorrect indexing/performance claim and a speculative SQL-injection follow-up add some noise.",
+        "Most comments add value, but there is one clear false positive about test coverage and some external follow-up claims that cannot be verified from the repo.",
+        "Most comments add value, but there is some noise from repeated treatment of the same non-agency scope issue, the aggressive blocker framing on `agencyID <= 0`, and the incorrect SQLite note."
+      ]
+    },
+    "depth": {
+      "scores": [
+        3,
+        3,
+        3
+      ],
+      "voted": 3,
+      "reasoning_runs": [
+        "The strongest findings trace behavior across handler, database, tests, and legacy sentinel semantics rather than stopping at the visible diff, and they reason about scope isolation and stale-row edge cases coherently.",
+        "The review traces control flow across the POST handler, query scoping, fallback behavior, and schema conventions, showing strong cross-file reasoning about invariants and failure modes.",
+        "The review traces behavior across request parsing, DB scoping, sentinel conventions, test coverage, and a potential read-then-write race, showing strong invariant-level reasoning."
+      ],
+      "verified_findings": 21,
+      "unverified_findings": 6,
+      "contradicted_findings": 4,
+      "non_falsifiable_findings": 0
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        2,
+        3,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Compared with Review B, Review A contributes three substantive verified findings B does not really surface: the explicit `agency_network_ids=0` advertiser-row exposure in `FetchTriggers`, the `GetAppTrigger`/`GetTriggersWithAgency` sentinel mismatch, and the handler-test gap around `agencyNetworkID` assertions.",
+        "Review B contributes multiple concrete issues that Review A did not surface, especially the non-agency handler branch, zero-ID scope bleed, sentinel mismatch, and silent no-op update path.",
+        "It contributes three substantive findings not present in Review A: the `-1`/`0` advertiser-sentinel gap, the silent-success path when `UpdateInstallTriggers` updates zero rows, and the handler-test gap around the new scope parameter."
+      ],
+      "verified_findings": 10,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": [
+        "It identifies a concrete read-path exposure where `GetAgencyTriggers` forwards query ids directly and `FetchTriggers` accepts parsed `0`, allowing advertiser rows through an agency-scoped endpoint.",
+        "It traces an architectural inconsistency between `GetAppTrigger` and `GetTriggersWithAgency` on advertiser sentinels (`0` vs `-1`), which can misroute existing advertiser rows."
+      ]
+    },
+    "total": 17,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 45,
+      "claims_unverified": 6,
+      "claims_contradicted": 5,
+      "claims_non_falsifiable": 0,
+      "verification_rate": 0.8123809523666666,
+      "tool_calls_observed": 0,
+      "grounded": 49,
+      "ungrounded": 2,
+      "grounding_eligible": 51,
+      "grounding_rate": 0.9607843137254902
+    }
+  },
+  "claude_ci": {
+    "issue_detection": {
+      "scores": [
+        2,
+        1,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Review B contains two verified issues and one non-falsifiable concurrency concern: the missing explicit validation/ownership guard on the non-agency `AgencyNetworkId` path, missing agency scope in audit logging, and a race-hardening suggestion to coordinate read/update work. Its most prominent security finding is false, and it misses several concrete scope bugs Review A caught.",
+        "Review A correctly recognizes the scoping fix, but it surfaces only one clearly grounded additional issue; the rest of its concerns are either generic, unverifiable from the repo, or false positives such as the SQL-injection warning.",
+        "It surfaces three real issues: the non-agency branch still accepts a caller-supplied agency scope, there is no non-positive agency-ID validation, and the audit trail omits agency scope. The SQL-injection warning is false, and the remaining comments are mostly generic."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 3,
+      "contradicted_findings": 5,
+      "non_falsifiable_findings": 1
+    },
+    "actionability": {
+      "scores": [
+        1,
+        2,
+        2
+      ],
+      "voted": 2,
+      "reasoning_runs": [
+        "Some recommendations are concrete, such as adding validation or audit logging, but many others are generic (`add context`, `optimize queries`, `stream bodies`) rather than targeted code-level fixes.",
+        "Several recommendations include concrete directions or code sketches, but they are unevenly tied to demonstrated defects.",
+        "Several suggestions are concrete, including validation and audit changes, but some comments stop at generic advice like consistency or optimization."
+      ]
+    },
+    "severity_accuracy": {
+      "scores": [
+        0,
+        1,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "The review labels the change low-risk and approval-worthy despite a remaining scope/authorization problem, while simultaneously flagging a nonexistent SQL-injection issue; the prioritization is not reliable.",
+        "It understands the underlying regression is serious, but its prioritization is weakened by labeling a parameterized query as a security risk and by broad authorization claims that overstate what the code shows.",
+        "Prioritization is poor: it approves the change as low risk, buries the handler-scope concern, and incorrectly calls out SQL injection on a parameterized query."
+      ]
+    },
+    "coverage": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "It touches security, observability, and concurrency, but verified coverage is narrow and it misses several relevant correctness and test-invariant concerns in the actual change set.",
+        "It touches security, correctness, handler flow, and tests, but it misses the most important newly introduced handler-scope problem and several concrete edge cases Review B caught.",
+        "It touches security, correctness, and tests, but misses important concerns such as the `-1`/`0` sentinel split, zero-row update behavior, and weak handler assertions around the new scope argument."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 3,
+      "contradicted_findings": 5,
+      "non_falsifiable_findings": 1
+    },
+    "signal_to_noise": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "There is some useful signal, especially around scope validation and auditability, but false positives and broad generic advice materially reduce review quality.",
+        "There is some useful signal, but generic performance commentary and a direct false positive on SQL injection add noticeable noise.",
+        "There is some useful signal, but the false SQL-injection warning and several generic recommendations add noticeable noise."
+      ]
+    },
+    "depth": {
+      "scores": [
+        1,
+        1,
+        1
+      ],
+      "voted": 1,
+      "reasoning_runs": [
+        "The review shows some logic-level understanding of the handler/database flow, but most recommendations stay at a high level and do not trace concrete cross-file invariants as thoroughly as Review A.",
+        "The review shows some behavioral reasoning about advertiser-versus-agency scoping, but most concerns stop at general best-practice advice rather than tracing concrete invariants through the handler and database layers.",
+        "The review reasons across the handler and DB boundary, but most observations remain checklist-level rather than tracing invariants and edge cases deeply."
+      ],
+      "verified_findings": 6,
+      "unverified_findings": 3,
+      "contradicted_findings": 5,
+      "non_falsifiable_findings": 1
+    },
+    "novel_substantive_findings": {
+      "scores": [
+        0,
+        0,
+        0
+      ],
+      "voted": 0,
+      "reasoning_runs": [
+        "Its substantive valid points overlap with Review A's stronger findings rather than adding distinct new issues.",
+        "Review A does not contribute any substantive issue that Review B did not already cover more concretely.",
+        "Its substantive points are either also present in Review B or too generic to count as novel substantive findings."
+      ],
+      "verified_findings": 0,
+      "unverified_findings": 0,
+      "contradicted_findings": 0,
+      "non_falsifiable_findings": 0,
+      "justifications": []
+    },
+    "total": 7,
+    "n_runs_completed": 3,
+    "n_runs_planned": 3,
+    "verification_summary": {
+      "claims_verified": 23,
+      "claims_unverified": 3,
+      "claims_contradicted": 6,
+      "claims_non_falsifiable": 4,
+      "verification_rate": 0.6521212121333333,
+      "tool_calls_observed": 0,
+      "grounded": 27,
+      "ungrounded": 2,
+      "grounding_eligible": 29,
+      "grounding_rate": 0.9310344827586207
+    }
+  }
+}

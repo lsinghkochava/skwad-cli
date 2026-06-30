@@ -1,0 +1,1019 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Own the Numbers — read your eval report from scratch</title>
+<style>
+  :root{
+    --ground:#E8EDF2; --paper:#FBFCFE; --ink:#15202B; --slate:#5B6B7D;
+    --indigo:#3A4FE0; --indigo-soft:#E2E6FB; --amber:#E8843C; --amber-soft:#FBE8D6;
+    --line:#C9D4DF; --line-soft:#DCE4EC; --green:#1F9D6B; --green-soft:#DBF1E8;
+    --red:#D14545; --red-soft:#F7DEDE;
+    --serif:"Iowan Old Style","Charter",Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background-color:var(--ground);
+    background-image:
+      linear-gradient(var(--line-soft) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+    background-size:28px 28px;
+    color:var(--ink); font-family:var(--sans); line-height:1.62;
+    -webkit-font-smoothing:antialiased; font-size:17px;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:0 22px;}
+  section{padding:54px 0; border-bottom:1px solid var(--line);}
+  section:last-of-type{border-bottom:none;}
+
+  .eyebrow{font-family:var(--mono); text-transform:uppercase; letter-spacing:.18em;
+    font-size:12px; color:var(--indigo); font-weight:600; margin:0 0 12px;}
+  h1{font-family:var(--serif); font-weight:700; font-size:clamp(40px,7vw,76px);
+    line-height:1.02; letter-spacing:-.02em; margin:0 0 18px;}
+  h2{font-family:var(--serif); font-weight:700; font-size:clamp(28px,4.4vw,40px);
+    line-height:1.08; letter-spacing:-.015em; margin:0 0 14px;}
+  h3{font-family:var(--serif); font-weight:700; font-size:23px; margin:30px 0 8px;}
+  p{margin:0 0 16px; max-width:68ch;}
+  .lead{font-size:20px; color:var(--ink);}
+  strong{font-weight:670;}
+  em.t{font-style:normal; color:var(--indigo); font-weight:600;}
+  em.c{font-style:normal; color:var(--amber); font-weight:660;}
+  code{font-family:var(--mono); background:#fff; border:1px solid var(--line-soft);
+    border-radius:5px; padding:1px 6px; font-size:.9em;}
+  a{color:var(--indigo);}
+
+  /* hero */
+  .hero{padding-top:72px;}
+  .hero .vs{font-family:var(--mono); font-size:15px; color:var(--slate);
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 22px;}
+  .chip{font-family:var(--mono); font-size:13px; padding:3px 11px; border-radius:999px;
+    border:1px solid var(--line); background:#fff; font-weight:600;}
+  .chip.t{color:var(--indigo); border-color:var(--indigo); background:var(--indigo-soft);}
+  .chip.c{color:var(--amber); border-color:var(--amber); background:var(--amber-soft);}
+  .toc{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin-top:30px;}
+  .toc a{display:flex; gap:12px; align-items:baseline; text-decoration:none; color:var(--ink);
+    background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:13px 15px;
+    transition:transform .12s ease, border-color .12s ease;}
+  .toc a:hover{transform:translateY(-2px); border-color:var(--indigo);}
+  .toc .n{font-family:var(--mono); color:var(--indigo); font-weight:700; font-size:13px;}
+  .toc .l{font-weight:600; line-height:1.25; font-size:15px;}
+  .toc .l small{display:block; color:var(--slate); font-weight:400; font-size:12.5px;}
+
+  /* generic widget shell */
+  .lab{background:var(--paper); border:1px solid var(--line); border-radius:14px;
+    padding:22px; margin:22px 0; box-shadow:0 1px 0 #fff inset;}
+  .lab h4{font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em; font-size:12px;
+    color:var(--slate); margin:0 0 14px; font-weight:600;}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  button.act{font-family:var(--mono); font-size:13px; font-weight:600; cursor:pointer;
+    background:var(--indigo); color:#fff; border:1px solid var(--indigo); border-radius:8px;
+    padding:9px 15px; transition:filter .12s;}
+  button.act:hover{filter:brightness(1.08);}
+  button.act.ghost{background:#fff; color:var(--indigo);}
+  button.act.ghost:hover{background:var(--indigo-soft); filter:none;}
+  button.act:disabled{opacity:.4; cursor:not-allowed; filter:none;}
+  .hint{font-size:14.5px; color:var(--slate); margin:14px 0 0;}
+  .callout{border-left:3px solid var(--amber); background:var(--amber-soft);
+    padding:12px 16px; border-radius:0 8px 8px 0; margin:18px 0; font-size:15.5px;}
+  .callout.key{border-left-color:var(--indigo); background:var(--indigo-soft);}
+  .callout b{font-weight:680;}
+
+  /* formula block */
+  .formula{font-family:var(--mono); font-size:15px; background:#F1F4F8; padding:13px 16px;
+    border-radius:8px; max-width:none; border:1px solid var(--line-soft); margin:14px 0;}
+
+  /* data tables */
+  table.data{border-collapse:collapse; width:100%; font-family:var(--mono); font-size:14px;}
+  table.data th,table.data td{border:1px solid var(--line-soft); padding:7px 9px; text-align:center;}
+  table.data th{background:#F1F4F8; font-weight:600; color:var(--slate); font-size:12px;
+    text-transform:uppercase; letter-spacing:.04em;}
+  table.data td.lbl{text-align:left; color:var(--slate);}
+  .pos{color:var(--indigo); font-weight:700;}
+  .neg{color:var(--amber); font-weight:700;}
+  .muted{color:var(--slate);}
+  .colhi{background:var(--indigo-soft)!important; transition:background .2s;}
+  .rowfail{background:var(--red-soft)!important;}
+  .scrollx{overflow-x:auto;}
+  .ok{color:var(--green); font-weight:700;}
+  .bad{color:var(--red); font-weight:700;}
+
+  .steptxt{min-height:46px; font-size:15.5px; margin:14px 0 0; padding:12px 14px;
+    background:#F1F4F8; border-radius:8px; border:1px solid var(--line-soft);}
+  .stepdots{display:flex; gap:7px; margin-left:auto;}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--line);}
+  .dot.on{background:var(--indigo);}
+
+  .bignum{font-family:var(--mono); font-weight:700; font-size:30px; color:var(--indigo);}
+  .statline{display:flex; gap:26px; flex-wrap:wrap; margin:6px 0 0; font-family:var(--mono); font-size:14px;}
+  .statline b{display:block; font-size:24px; color:var(--ink);}
+  .statline span{color:var(--slate); font-size:12px; text-transform:uppercase; letter-spacing:.05em;}
+
+  /* cliff grid */
+  #cliffGrid{border-collapse:collapse; font-family:var(--mono); font-size:12px;}
+  #cliffGrid td,#cliffGrid th{width:34px; height:30px; text-align:center; border:1px solid var(--line-soft);}
+  #cliffGrid th{background:#F1F4F8; color:var(--slate); font-weight:600;}
+  .cell-win{background:var(--indigo); color:#fff; font-weight:700;}
+  .cell-loss{background:var(--amber); color:#fff; font-weight:700;}
+  .cell-tie{background:#EAEFF4; color:var(--slate);}
+
+  /* effect meter / number line */
+  .meter{position:relative; height:46px; margin:18px 0 6px; border-radius:8px; overflow:hidden;
+    background:linear-gradient(90deg,#F1F4F8,#fff,#F1F4F8); border:1px solid var(--line);}
+  .meter .band{position:absolute; top:0; bottom:0; border-right:1px dashed var(--line);}
+  .meter .ciband{position:absolute; top:0; bottom:0; background:rgba(58,79,224,0.16);
+    border-left:2px solid var(--indigo); border-right:2px solid var(--indigo);}
+  .meter .zero{position:absolute; top:0; bottom:0; border-right:2px dashed var(--amber);}
+  .meter .needle{position:absolute; top:-4px; bottom:-4px; width:3px; background:var(--indigo);}
+  .meter .needle::after{content:""; position:absolute; top:-6px; left:-5px; border:6px solid transparent;
+    border-top-color:var(--indigo);}
+  .meterlabels{display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--slate);}
+
+  /* slider */
+  input[type=range]{width:100%; accent-color:var(--indigo);}
+  .qval{font-family:var(--mono); font-weight:700; color:var(--indigo);}
+
+  /* fdr list */
+  .fdr{display:flex; flex-direction:column; gap:5px; font-family:var(--mono); font-size:13px;}
+  .fdr .item{display:grid; grid-template-columns:24px 1fr 78px 78px 70px; gap:10px; align-items:center;
+    padding:6px 10px; border-radius:7px; border:1px solid var(--line-soft); background:#fff;}
+  .fdr .item.sig{background:var(--indigo-soft); border-color:var(--indigo);}
+  .fdr .item .nm{font-family:var(--sans); font-weight:600; font-size:13.5px;}
+  .fdr .verdict{text-align:right; font-weight:700;}
+  .fdr .verdict.y{color:var(--indigo);} .fdr .verdict.n{color:var(--slate);}
+  .fdr .thr{color:var(--slate);}
+
+  /* gate badge */
+  .badge{display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-weight:700;
+    padding:8px 14px; border-radius:999px; font-size:14px;}
+  .badge.pass{background:var(--green-soft); color:var(--green); border:1px solid var(--green);}
+  .badge.fail{background:var(--red-soft); color:var(--red); border:1px solid var(--red);}
+
+  .story{background:var(--ink); color:#E8EDF2; border-radius:14px; padding:26px 28px; margin:18px 0;}
+  .story .eyebrow{color:var(--amber);}
+  .story p{font-size:18px; max-width:none; margin:0;}
+  .story .hl{color:#fff; font-weight:680; border-bottom:2px solid var(--amber);}
+
+  .legend{font-family:var(--mono); font-size:12.5px; color:var(--slate); display:flex; gap:18px; flex-wrap:wrap; margin-top:10px;}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+  .sw.t{background:var(--indigo);} .sw.c{background:var(--amber);} .sw.x{background:#EAEFF4;border:1px solid var(--line);}
+
+  .next{font-family:var(--mono); font-size:14px; color:var(--indigo); font-weight:600;
+    margin:20px 0 0; padding-top:14px; border-top:1px dashed var(--line);}
+  .next::before{content:"↳ next  "; color:var(--slate);}
+
+  footer{padding:36px 0 60px; color:var(--slate); font-family:var(--mono); font-size:13px;}
+
+  @media (max-width:560px){
+    body{font-size:16px;}
+    .fdr .item{grid-template-columns:20px 1fr 60px; }
+    .fdr .item .thr,.fdr .item .pp{display:none;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important; animation:none!important;}
+  }
+</style>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero" id="top">
+    <p class="eyebrow">read your own eval report · zero stats assumed</p>
+    <h1>Own the numbers.</h1>
+    <p class="lead">Every statistic in our <em class="t">skwad</em> vs <em class="c">single CI agent</em> review eval — explained from scratch and worked on <strong>our real pilot data</strong>. Start knowing nothing. Finish able to defend every line of the report.</p>
+    <div class="vs">
+      <span class="chip t">skwad</span> claude-sonnet-4-6, multi-agent
+      <span style="opacity:.5">vs</span>
+      <span class="chip c">CI</span> claude-sonnet-4 single agent
+      <span style="opacity:.5">— same 8 PRs, scored by a gpt-5.4 judge</span>
+    </div>
+
+    <div class="callout key" style="margin-top:8px">
+      <b>The one idea that unlocks all of it:</b> these scores are <b>ranks, not magnitudes</b>. A judge rating 3 is better than 2, but the "size" of that gap isn't a real distance you can average on a bell curve. So almost every method here uses the <b>order</b> of values, not their raw size. Hold onto that and most of this clicks.
+    </div>
+
+    <div class="toc">
+      <a href="#s00"><span class="n">00</span><span class="l">The experiment<small>what we compared</small></span></a>
+      <a href="#s01"><span class="n">01</span><span class="l">Scoring &amp; the median vote<small>raw judge → one score</small></span></a>
+      <a href="#s02"><span class="n">02</span><span class="l">Krippendorff's α<small>trust gate, first</small></span></a>
+      <a href="#s03"><span class="n">03</span><span class="l">Wilcoxon signed-rank<small>is skwad better?</small></span></a>
+      <a href="#s04"><span class="n">04</span><span class="l">Cliff's δ<small>how big is the gap?</small></span></a>
+      <a href="#s05"><span class="n">05</span><span class="l">BCa bootstrap CI<small>how sure are we?</small></span></a>
+      <a href="#s06"><span class="n">06</span><span class="l">The verdict rule<small>the AND-gate</small></span></a>
+      <a href="#s07"><span class="n">07</span><span class="l">Benjamini–Hochberg<small>many tests, honest</small></span></a>
+      <a href="#s08"><span class="n">08</span><span class="l">Robustness checks<small>Spearman + bias</small></span></a>
+      <a href="#s09"><span class="n">09</span><span class="l">Plain-language summary<small>what it all means</small></span></a>
+    </div>
+  </section>
+
+  <!-- ===================== 00 EXPERIMENT ===================== -->
+  <section id="s00">
+    <p class="eyebrow">00 — the experiment</p>
+    <h2>What we actually compared</h2>
+    <p><strong>The intuition.</strong> We want to know one thing: <em>do skwad's multi-agent code reviews score higher than a single CI agent's — and can we trust that answer?</em> Everything downstream exists to make that answer defensible.</p>
+    <p><strong>The design.</strong> We took <strong>8 real pull requests</strong>. For each PR, both systems produced a code review. A neutral <em>judge</em> model (<code>gpt-5.4</code>) then scored every review against <strong>7 criteria</strong>, each on a <strong>0–3 scale</strong> (so a perfect review tops out at <strong>21 points</strong>). To remove luck and order-effects, the judge ran <strong>3 counterbalanced, A/B-blinded times</strong> per review — the judge never knew which system was "A" and which was "B." The per-criterion score is the <strong>median of those 3 runs</strong>.</p>
+
+    <div class="lab">
+      <h4>The pilot at a glance — these are the 8 PRs you'll see all the way down</h4>
+      <div class="scrollx">
+        <table class="data">
+          <tr><th>PR</th><th>repo</th><th>difficulty</th></tr>
+          <tr><td class="lbl">#558</td><td class="lbl">dash-api</td><td>Easy</td></tr>
+          <tr><td class="lbl">#562</td><td class="lbl">dash-api</td><td>Easy</td></tr>
+          <tr><td class="lbl">#565</td><td class="lbl">dash-api</td><td>Easy</td></tr>
+          <tr><td class="lbl">#1816</td><td class="lbl">frontend-mos</td><td>Hard</td></tr>
+          <tr><td class="lbl">#1818</td><td class="lbl">frontend-mos</td><td>Medium</td></tr>
+          <tr><td class="lbl">#879</td><td class="lbl">watson</td><td>Hard</td></tr>
+          <tr><td class="lbl">#890</td><td class="lbl">watson</td><td>Easy</td></tr>
+          <tr><td class="lbl">#893</td><td class="lbl">watson</td><td>Hard</td></tr>
+        </table>
+      </div>
+      <div class="legend" style="margin-top:14px">
+        <span><b style="color:var(--indigo)">skwad</b> = claude-sonnet-4-6 (multi-agent)</span>
+        <span><b style="color:var(--amber)">CI</b> = claude-sonnet-4-20250514 (single agent)</span>
+        <span><b>judge</b> = gpt-5.4</span>
+      </div>
+    </div>
+
+    <div class="callout"><b>Reproducibility stamp:</b> pilot run, methodology <b>v2</b>, RNG seed <b>12345</b>, git SHA <b>63311c9</b>. Every number on this page is read from that exact run — nothing is loaded live, it's all baked in.</div>
+
+    <p class="next">turn the judge's raw ratings into one trustworthy score per criterion — the <b>3-run median vote</b>.</p>
+  </section>
+
+  <!-- ===================== 01 SCORING + MEDIAN VOTE ===================== -->
+  <section id="s01">
+    <p class="eyebrow">01 — scoring &amp; the median vote</p>
+    <h2>From three judge runs to one score</h2>
+    <p><strong>The intuition.</strong> The judge scored each review <strong>three times</strong>. Three runs means three slightly different opinions. We need to collapse them into one number per criterion without letting a single weird run hijack the result. The tool for that is the <strong>median</strong> — line the three values up in order and take the middle one. The middle value can't be dragged around by an extreme; that's the whole point.</p>
+    <p><strong>The formula.</strong> Per criterion, <code>score = median(run1, run2, run3)</code>. The code uses <code>statistics.median_low</code> (judge.py:415). A review's total is the sum across all 7 criteria: <code>total = Σ score</code>.</p>
+
+    <div class="lab">
+      <h4>Worked example — skwad on dash-api #558 (total = 18)</h4>
+      <div class="scrollx">
+        <table class="data">
+          <tr><th>criterion</th><th>run 1</th><th>run 2</th><th>run 3</th><th>median →</th></tr>
+          <tr><td class="lbl">Issue Detection</td><td>3</td><td>3</td><td>3</td><td class="pos">3</td></tr>
+          <tr><td class="lbl">Actionability</td><td>3</td><td>3</td><td>3</td><td class="pos">3</td></tr>
+          <tr><td class="lbl">Severity Accuracy</td><td>2</td><td>1</td><td>2</td><td class="pos">2</td></tr>
+          <tr><td class="lbl">Coverage</td><td>3</td><td>3</td><td>3</td><td class="pos">3</td></tr>
+          <tr><td class="lbl">Signal-to-Noise</td><td>2</td><td>2</td><td>2</td><td class="pos">2</td></tr>
+          <tr><td class="lbl">Depth</td><td>2</td><td>2</td><td>2</td><td class="pos">2</td></tr>
+          <tr><td class="lbl">Novel &amp; Substantive</td><td>3</td><td>3</td><td>3</td><td class="pos">3</td></tr>
+          <tr><td class="lbl"><b>total</b></td><td colspan="3" class="muted">3+3+2+3+2+2+3</td><td class="bignum" style="font-size:18px">18</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="lab">
+      <h4>Worked example — skwad on watson #890 (total = 2), and the reason we vote</h4>
+      <div class="scrollx">
+        <table class="data" id="w890Table"></table>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="act" id="voteToggle">Show what the mean would do →</button>
+        <span class="hint" id="voteMode" style="margin:0">Showing the <b>median</b> vote (what we actually use).</span>
+      </div>
+      <div class="callout key" id="voteCallout"></div>
+    </div>
+
+    <p>On <b>Severity Accuracy</b>, the three runs were <code>[0, 2, 0]</code>. One run spiked to a 2; the other two said 0. The <strong>median is 0</strong> — it throws the spike away. The <strong>mean would be 0.67</strong>, quietly importing that noisy run into the score. A single jittery run can't inflate anything when you vote by median.</p>
+    <div class="callout"><b>The "_low" footnote — don't overthink it.</b> With 3 runs (an odd count) the middle value is unambiguous, so <code>median_low</code> behaves like a plain median. The "low" tiebreak only matters when you have an even number of runs and need to pick between two middles. For us it never changes anything.</div>
+
+    <p class="next">before comparing skwad to CI, ask whether those three runs even agreed — the trust gate, <b>Krippendorff's α</b>.</p>
+  </section>
+
+  <!-- ===================== 02 KRIPPENDORFF GATE ===================== -->
+  <section id="s02">
+    <p class="eyebrow">02 — the trust gate, checked first</p>
+    <h2>Krippendorff's α — do the runs agree?</h2>
+    <p><strong>The intuition.</strong> A score is only worth analyzing if the judge is <em>consistent</em>. If the 3 counterbalanced runs disagree wildly, the "score" is just noise wearing a number. So <strong>before</strong> we test whether skwad beats CI, we measure agreement across the 3 runs and gate on it. This sits <em>under</em> everything else.</p>
+    <p><strong>The formula.</strong> <code>α = 1 − (observed disagreement / expected-by-chance disagreement)</code>. <code>α=1</code> is perfect agreement, <code>α=0</code> is chance, <code>α&lt;0</code> is systematic disagreement. We use the <strong>ordinal</strong> version: a 2-vs-3 disagreement barely counts, a 0-vs-3 disagreement counts a lot — distance on the scale is weighted.</p>
+
+    <div class="callout key"><b>The exact gate rule:</b> we do <em>not</em> gate on the point estimate of α. We bootstrap a 95% confidence interval for α and require its <b>lower bound ≥ 0.60</b>. The <em>authoritative</em> gate runs that check on the headline path — <code>compute_inter_run_alpha</code> → <code>krippendorff_alpha_ordinal(run_scores, seed=0)</code> (stats.py:281, <code>n_boot=2000</code>). The §6 table also carries a displayed pass/fail flag (reporter.py:529) computed from a lighter bootstrap — same ≥ 0.60 rule, different resamples; see the caveat below. Gating on the pessimistic end is deliberately conservative — reliability has to hold up even on a bad day. What's "agreeing" here = the 3 counterbalanced judge runs.</p></div>
+
+    <div class="lab">
+      <h4>Our pilot — per criterion. Three fail the gate and are flagged as a caveat.</h4>
+      <div class="scrollx">
+        <table class="data">
+          <tr><th>criterion</th><th>α (point)</th><th>CI lower bound</th><th>gate (≥ 0.60)</th></tr>
+          <tr><td class="lbl">Issue Detection</td><td>0.918</td><td>0.7255</td><td class="ok">✅ pass</td></tr>
+          <tr class="rowfail"><td class="lbl">Actionability</td><td>0.678</td><td>0.3115</td><td class="bad">⚠️ fail</td></tr>
+          <tr class="rowfail"><td class="lbl">Severity Accuracy</td><td>0.496</td><td>0.0505</td><td class="bad">⚠️ fail</td></tr>
+          <tr><td class="lbl">Coverage</td><td>0.967</td><td>0.9119</td><td class="ok">✅ pass</td></tr>
+          <tr class="rowfail"><td class="lbl">Signal-to-Noise</td><td>0.568</td><td>0.1564</td><td class="bad">⚠️ fail</td></tr>
+          <tr><td class="lbl">Depth</td><td>0.860</td><td>0.6396</td><td class="ok">✅ pass</td></tr>
+          <tr><td class="lbl">Novel &amp; Substantive</td><td>0.930</td><td>0.8286</td><td class="ok">✅ pass</td></tr>
+        </table>
+      </div>
+      <p class="hint">Notice <b>Actionability</b>'s point α is 0.678 — looks fine — but its CI lower bound is only 0.3115, so it <b>fails</b>. That's exactly why we gate on the lower bound, not the headline number.</p>
+    </div>
+
+    <p><strong>Where these cells come from.</strong> The α and CI numbers above are <strong>static HTML</strong> — transcribed by hand from Python's <code>research-report.md</code> §6 (produced by <code>reporter.py:_sec6_judge_consistency</code>). Nothing on this page recomputes α in the browser; it mirrors the one baked run.</p>
+    <p><strong>How the number is actually produced.</strong> We don't hand-roll the α arithmetic — it's a single library call, <code>krippendorff.alpha(data_arr, level_of_measurement="ordinal")</code> (stats.py:194, package <code>krippendorff&gt;=0.6.0</code>). The <code>α = 1 − D<sub>o</sub>/D<sub>e</sub></code> machinery lives <em>inside</em> that package; we just hand it a grid and read one number back.</p>
+    <p><strong>What goes in the grid.</strong> The <strong>raters are the 3 judge runs</strong> (<code>run_scores</code> = 3 rows, stats.py:254). The <strong>items (units) are every (PR&nbsp;×&nbsp;system) pair</strong> — skwad's and CI's scores are <em>pooled</em> into one list, so the pilot's 8 PRs give <strong>16 items</strong> per criterion. α is computed <strong>once per criterion</strong> (the 7 rows above): it measures run-to-run <em>consistency of the judge</em>, agnostic to which system was reviewed. It is <em>not</em> per-system and <em>not</em> a single overall number.</p>
+
+    <div class="lab">
+      <h4>Diagram 1 — one α-grid per criterion · raters vs items vs criteria</h4>
+      <div class="scrollx">
+      <svg id="fg1" viewBox="0 0 820 230" style="width:100%;min-width:700px;height:auto" role="img" aria-label="Severity Accuracy grid: the 3 rows are the judge runs (raters); each column is an item, a PR-by-system pair with skwad and CI pooled, 16 total. Alpha is computed down each column, giving one alpha for this criterion. Seven such grids exist, one per criterion.">
+        <style>
+          #fg1 text{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+          #fg1 .an{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#5B6B7D;}
+          #fg1 .v{fill:#15202B;font-size:13px;}
+          #fg1 .hh{fill:#5B6B7D;font-size:10px;}
+          #fg1 .rl{fill:#5B6B7D;font-size:11px;}
+        </style>
+        <defs><marker id="ah1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3A4FE0"/></marker></defs>
+
+        <!-- criterion tabs: 7, one per criterion -->
+        <rect x="120" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="158" y="23" text-anchor="middle">ID</text>
+        <rect x="202" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="240" y="23" text-anchor="middle">Act</text>
+        <rect x="284" y="8" width="76" height="22" rx="5" fill="#3A4FE0" stroke="#3A4FE0"/><text x="322" y="23" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sev</text>
+        <rect x="366" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="404" y="23" text-anchor="middle">Cov</text>
+        <rect x="448" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="486" y="23" text-anchor="middle">S/N</text>
+        <rect x="530" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="568" y="23" text-anchor="middle">Dep</text>
+        <rect x="612" y="8" width="76" height="22" rx="5" fill="#fff" stroke="#C9D4DF"/><text class="hh" x="650" y="23" text-anchor="middle">Nov</text>
+        <text class="an" x="700" y="23" font-size="11">= 7 grids</text>
+        <text x="322" y="42" text-anchor="middle" fill="#3A4FE0" font-size="11">▾ this grid</text>
+
+        <!-- gutter + headers -->
+        <rect x="120" y="48" width="64" height="28" fill="#F1F4F8" stroke="#DCE4EC"/><text class="hh" x="152" y="66" text-anchor="middle">item →</text>
+        <rect x="120" y="76" width="64" height="30" fill="#F1F4F8" stroke="#DCE4EC"/><text class="rl" x="152" y="95" text-anchor="middle">run 1</text>
+        <rect x="120" y="106" width="64" height="30" fill="#F1F4F8" stroke="#DCE4EC"/><text class="rl" x="152" y="125" text-anchor="middle">run 2</text>
+        <rect x="120" y="136" width="64" height="30" fill="#F1F4F8" stroke="#DCE4EC"/><text class="rl" x="152" y="155" text-anchor="middle">run 3</text>
+
+        <rect x="184" y="48" width="74" height="28" fill="#E2E6FB" stroke="#DCE4EC"/><text class="hh" x="221" y="65" text-anchor="middle">558·sk</text>
+        <rect x="258" y="48" width="74" height="28" fill="#FBE8D6" stroke="#DCE4EC"/><text class="hh" x="295" y="65" text-anchor="middle">558·CI</text>
+        <rect x="332" y="48" width="74" height="28" fill="#E2E6FB" stroke="#DCE4EC"/><text class="hh" x="369" y="65" text-anchor="middle">562·sk</text>
+        <rect x="406" y="48" width="74" height="28" fill="#FBE8D6" stroke="#DCE4EC"/><text class="hh" x="443" y="65" text-anchor="middle">1818·CI</text>
+        <rect x="480" y="48" width="74" height="28" fill="#E2E6FB" stroke="#DCE4EC"/><text class="hh" x="517" y="65" text-anchor="middle">890·sk</text>
+        <rect x="554" y="48" width="74" height="28" fill="#FBE8D6" stroke="#DCE4EC"/><text class="hh" x="591" y="65" text-anchor="middle">890·CI</text>
+        <rect x="628" y="48" width="72" height="28" fill="#F1F4F8" stroke="#DCE4EC"/><text class="hh" x="664" y="65" text-anchor="middle">…</text>
+
+        <!-- data area + grid lines -->
+        <rect x="184" y="76" width="516" height="90" fill="#fff" stroke="#DCE4EC"/>
+        <line x1="258" y1="76" x2="258" y2="166" stroke="#DCE4EC"/><line x1="332" y1="76" x2="332" y2="166" stroke="#DCE4EC"/><line x1="406" y1="76" x2="406" y2="166" stroke="#DCE4EC"/><line x1="480" y1="76" x2="480" y2="166" stroke="#DCE4EC"/><line x1="554" y1="76" x2="554" y2="166" stroke="#DCE4EC"/><line x1="628" y1="76" x2="628" y2="166" stroke="#DCE4EC"/>
+        <line x1="184" y1="106" x2="700" y2="106" stroke="#DCE4EC"/><line x1="184" y1="136" x2="700" y2="136" stroke="#DCE4EC"/>
+
+        <!-- run 1 -->
+        <text class="v" x="221" y="95" text-anchor="middle">2</text><text class="v" x="295" y="95" text-anchor="middle">0</text><text class="v" x="369" y="95" text-anchor="middle">1</text><text class="v" x="443" y="95" text-anchor="middle">2</text><text class="v" x="517" y="95" text-anchor="middle">0</text><text class="v" x="591" y="95" text-anchor="middle">0</text><text class="hh" x="664" y="95" text-anchor="middle">…</text>
+        <!-- run 2 (890·sk = 2 is the spike) -->
+        <text class="v" x="221" y="125" text-anchor="middle">1</text><text class="v" x="295" y="125" text-anchor="middle">0</text><text class="v" x="369" y="125" text-anchor="middle">1</text><text class="v" x="443" y="125" text-anchor="middle">3</text><text x="517" y="125" text-anchor="middle" fill="#D14545" font-size="13" font-weight="700">2</text><text class="v" x="591" y="125" text-anchor="middle">1</text><text class="hh" x="664" y="125" text-anchor="middle">…</text>
+        <!-- run 3 -->
+        <text class="v" x="221" y="155" text-anchor="middle">2</text><text class="v" x="295" y="155" text-anchor="middle">1</text><text class="v" x="369" y="155" text-anchor="middle">1</text><text class="v" x="443" y="155" text-anchor="middle">3</text><text class="v" x="517" y="155" text-anchor="middle">0</text><text class="v" x="591" y="155" text-anchor="middle">0</text><text class="hh" x="664" y="155" text-anchor="middle">…</text>
+
+        <!-- highlight the watson#890·skwad column -->
+        <rect x="480" y="48" width="74" height="118" fill="none" stroke="#3A4FE0" stroke-width="2"/>
+        <line x1="486" y1="80" x2="486" y2="160" stroke="#3A4FE0" stroke-width="1.5" marker-end="url(#ah1)"/>
+
+        <!-- "reads down" callout -->
+        <path d="M712,112 L560,112" fill="none" stroke="#C9D4DF" stroke-width="1.2" marker-end="url(#ah1)"/>
+        <text class="an" x="716" y="90" font-size="11.5">α reads DOWN</text>
+        <text class="an" x="716" y="104" font-size="11.5">a column —</text>
+        <text class="an" x="716" y="118" font-size="11.5">do the 3 runs</text>
+        <text class="an" x="716" y="132" font-size="11.5">agree?</text>
+
+        <!-- raters bracket (left) -->
+        <path d="M112,76 H106 V166 H112" fill="none" stroke="#5B6B7D" stroke-width="1.2"/>
+        <text x="100" y="116" text-anchor="end" fill="#3A4FE0" font-size="12" font-weight="700">3 raters</text>
+        <text class="an" x="100" y="131" text-anchor="end" font-size="10.5">the judge runs</text>
+
+        <!-- items bracket (bottom) -->
+        <path d="M184,172 V178 H700 V172" fill="none" stroke="#5B6B7D" stroke-width="1.2"/>
+        <text class="an" x="442" y="194" text-anchor="middle" font-size="11.5">each column = 1 item = (PR × system) · 16 total · skwad + CI pooled</text>
+
+        <!-- result -->
+        <text class="an" x="410" y="218" text-anchor="middle" font-size="13" fill="#15202B">→ one α for this criterion = <tspan fill="#D14545" font-weight="700">0.4963</tspan>  · below the 0.60 gate</text>
+      </svg>
+      </div>
+      <p class="hint"><b>The core "what's what."</b> One grid like this exists <b>per criterion</b> — 7 in all (the tabs up top). Within a criterion the <b>rows are the 3 judge runs</b> (the raters) and each <b>column is one item</b>: a (PR&nbsp;×&nbsp;system) pair, with skwad's and CI's scores <b>pooled</b> into the same 16-column list. α is computed <b>down the columns</b> — do the 3 runs agree? — giving one number for that criterion (here Severity Accuracy = 0.4963).</p>
+    </div>
+    <p><strong>Why "ordinal".</strong> On the 0–3 scale a 2-vs-3 disagreement barely counts while 0-vs-3 counts a lot. The ordinal distance weights disagreements by how far apart they are on the scale, so near-misses don't tank the score the way they would under a nominal (exact-match only) metric.</p>
+
+    <div class="lab">
+      <h4>Diagram 2 — ordinal distance: not all disagreements cost the same</h4>
+      <div class="scrollx">
+      <svg id="fg2" viewBox="0 0 820 214" style="width:100%;min-width:640px;height:auto" role="img" aria-label="A 0 to 3 number line. A 2-versus-3 disagreement spans distance 1 (small penalty); a 0-versus-3 disagreement spans distance 3 (large penalty). watson#890 skwad scored 0,2,0 — a 0-versus-2 gap that counts as a real ordinal disagreement.">
+        <style>
+          #fg2 text{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+          #fg2 .an{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#5B6B7D;}
+        </style>
+
+        <!-- number line 0..3 -->
+        <line x1="110" y1="120" x2="600" y2="120" stroke="#5B6B7D" stroke-width="1.5"/>
+        <line x1="130" y1="113" x2="130" y2="127" stroke="#5B6B7D" stroke-width="1.5"/><text x="130" y="146" text-anchor="middle" font-size="14" fill="#15202B">0</text>
+        <line x1="283" y1="113" x2="283" y2="127" stroke="#5B6B7D" stroke-width="1.5"/><text x="283" y="146" text-anchor="middle" font-size="14" fill="#15202B">1</text>
+        <line x1="437" y1="113" x2="437" y2="127" stroke="#5B6B7D" stroke-width="1.5"/><text x="437" y="146" text-anchor="middle" font-size="14" fill="#15202B">2</text>
+        <line x1="590" y1="113" x2="590" y2="127" stroke="#5B6B7D" stroke-width="1.5"/><text x="590" y="146" text-anchor="middle" font-size="14" fill="#15202B">3</text>
+        <text class="an" x="355" y="164" text-anchor="middle" font-size="11">the 0–3 score scale</text>
+
+        <!-- far-miss 0..3 (heavy) -->
+        <path d="M130,116 Q360,42 590,116" fill="none" stroke="#D14545" stroke-width="4"/>
+        <text x="360" y="32" text-anchor="middle" fill="#D14545" font-size="12.5" font-weight="600">|0 − 3| = 3 · large penalty (far apart)</text>
+        <!-- near-miss 2..3 (light) -->
+        <path d="M437,116 Q513,84 590,116" fill="none" stroke="#1F9D6B" stroke-width="2"/>
+        <text x="513" y="76" text-anchor="middle" fill="#1F9D6B" font-size="11.5" font-weight="600">|2 − 3| = 1 · small</text>
+        <circle cx="130" cy="120" r="3.5" fill="#D14545"/><circle cx="590" cy="120" r="3.5" fill="#D14545"/><circle cx="437" cy="120" r="3.5" fill="#1F9D6B"/>
+
+        <!-- watson#890 tie-in 0..2 (below) -->
+        <path d="M130,124 Q283,180 437,124" fill="none" stroke="#3A4FE0" stroke-width="3"/>
+        <circle cx="130" cy="120" r="3.5" fill="#3A4FE0"/><circle cx="437" cy="120" r="3.5" fill="#3A4FE0"/>
+        <text class="an" x="283" y="200" text-anchor="middle" fill="#3A4FE0" font-size="12">watson#890 · skwad = [0, 2, 0] → a 0-vs-2 gap (Δ2)</text>
+
+        <!-- right note -->
+        <text class="an" x="626" y="78" font-size="11.5">Ordinal: the further apart</text>
+        <text class="an" x="626" y="93" font-size="11.5">on the scale, the bigger</text>
+        <text class="an" x="626" y="108" font-size="11.5">the disagreement penalty.</text>
+        <text class="an" x="626" y="127" font-size="11.5">A nominal metric would</text>
+        <text class="an" x="626" y="142" font-size="11.5">treat 2-vs-3 and 0-vs-3</text>
+        <text class="an" x="626" y="157" font-size="11.5">the same — we don't.</text>
+      </svg>
+      </div>
+      <p class="hint"><b>Why "ordinal".</b> Disagreements are penalized by <b>how far apart</b> they sit on the 0–3 scale. A 2-vs-3 near-miss barely dents α; a 0-vs-3 — or watson#890's 0-vs-2 (Δ2) spike — costs a lot. That weighting is exactly what <code>level_of_measurement="ordinal"</code> turns on (stats.py:194); the precise distance math lives inside the krippendorff package.</p>
+    </div>
+    <p><strong>The confidence interval.</strong> The CI is a <strong>bootstrap</strong>: resample the <em>items</em> (columns) with replacement, recompute α on each resample, and take the 2.5th / 97.5th percentiles (stats.py:196–211). The point α is deterministic; only the interval comes from resampling. The authoritative gate then checks the <strong>lower</strong> bound ≥ 0.60 on the headline path (<code>compute_inter_run_alpha</code> → stats.py:281, <code>seed=0, n_boot=2000</code>); the §6 table additionally shows a displayed pass/fail flag (reporter.py:529) from a lighter <code>n_boot=200</code> bootstrap — same threshold, see the caveat below. Degenerate cases are handled: fewer than 2 items → α is undefined; all-identical scores → treated as perfect agreement (pass).</p>
+    <p><strong>Seven gates, one per criterion — and they stand alone.</strong> There are <strong>7 α's</strong>, one for each criterion (stats.py:252); there is <em>no</em> per-system α and <em>no</em> single overall α. Unlike the quality <em>scores</em> — which are summed across the 7 criteria into the 21-point total (judge.py:443) — the reliability α's are <strong>never combined</strong>: each criterion gets its own independent pass/fail against its own CI-lower ≥ 0.60 (pilot.py:154). The <code>0.60</code> bar is itself a <strong>chosen, relaxed threshold</strong> (<code>ALPHA_GATE = 0.6</code>, pilot.py:27; methodology.md only calls it "acceptable", with no citation) — it sits <em>below</em> Krippendorff's published conventions (≥ 0.667 "tentatively acceptable", ≥ 0.80 "reliable"). The one principled part is <em>where</em> it's applied: to the conservative bootstrap <strong>CI lower bound</strong>, not the point estimate. The per-criterion gates then roll up into a single harness-validity flag — <code>pilot_pass</code> requires every measurable criterion to clear the bar.</p>
+
+    <div class="lab">
+      <h4>Diagram 3 — how the grid becomes one α</h4>
+      <div class="scrollx">
+      <svg id="fg3" viewBox="0 0 820 254" style="width:100%;min-width:660px;height:auto" role="img" aria-label="Flow: the grid of scores yields observed disagreement Do (how much the 3 runs actually differ) and expected disagreement De (how much they would differ by chance), combined as alpha = 1 minus Do over De. When scores barely vary De is tiny so alpha collapses (Severity Accuracy 0.4963); near-identical runs give alpha about 0.9667 (Coverage).">
+        <style>
+          #fg3 text{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+          #fg3 .an{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#5B6B7D;}
+          #fg3 .ti{fill:#15202B;font-size:13px;font-weight:700;}
+        </style>
+        <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5B6B7D"/></marker></defs>
+
+        <!-- grid box -->
+        <rect x="24" y="66" width="152" height="62" rx="8" fill="#fff" stroke="#C9D4DF"/>
+        <text class="ti" x="100" y="92" text-anchor="middle">scores grid</text>
+        <text class="an" x="100" y="110" text-anchor="middle" font-size="11">3 runs × 16 items</text>
+
+        <!-- Do box -->
+        <rect x="232" y="28" width="216" height="56" rx="8" fill="#fff" stroke="#C9D4DF"/>
+        <text class="ti" x="244" y="50">Dₒ — observed</text>
+        <text class="an" x="244" y="66" font-size="11">how much the 3 runs</text>
+        <text class="an" x="244" y="79" font-size="11">actually differ</text>
+
+        <!-- De box -->
+        <rect x="232" y="110" width="216" height="56" rx="8" fill="#fff" stroke="#C9D4DF"/>
+        <text class="ti" x="244" y="132">Dₑ — expected</text>
+        <text class="an" x="244" y="148" font-size="11">how much they'd differ</text>
+        <text class="an" x="244" y="161" font-size="11">by chance (score spread)</text>
+
+        <!-- alpha box -->
+        <rect x="504" y="66" width="190" height="62" rx="8" fill="#E2E6FB" stroke="#3A4FE0" stroke-width="1.5"/>
+        <text x="599" y="103" text-anchor="middle" fill="#3A4FE0" font-size="17" font-weight="700">α = 1 − Dₒ/Dₑ</text>
+
+        <!-- arrows -->
+        <path d="M176,90 Q204,90 230,58" fill="none" stroke="#5B6B7D" stroke-width="1.2" marker-end="url(#ah3)"/>
+        <path d="M176,104 Q204,104 230,138" fill="none" stroke="#5B6B7D" stroke-width="1.2" marker-end="url(#ah3)"/>
+        <path d="M448,58 Q476,72 502,90" fill="none" stroke="#5B6B7D" stroke-width="1.2" marker-end="url(#ah3)"/>
+        <path d="M448,138 Q476,124 502,106" fill="none" stroke="#5B6B7D" stroke-width="1.2" marker-end="url(#ah3)"/>
+
+        <!-- outcome chips -->
+        <rect x="24" y="178" width="372" height="58" rx="8" fill="#F7DEDE" stroke="#D14545"/>
+        <text x="40" y="199" fill="#D14545" font-size="13" font-weight="700">Severity Accuracy</text>
+        <text class="an" x="40" y="215" font-size="11.5">scores barely vary → Dₑ tiny → small Dₒ collapses α →</text>
+        <text x="40" y="230" fill="#D14545" font-size="13" font-weight="700">α = 0.4963 · fails</text>
+
+        <rect x="410" y="178" width="386" height="58" rx="8" fill="#DBF1E8" stroke="#1F9D6B"/>
+        <text x="426" y="199" fill="#1F9D6B" font-size="13" font-weight="700">Coverage</text>
+        <text class="an" x="426" y="215" font-size="11.5">runs near-identical → Dₒ ≈ 0 → wider spread →</text>
+        <text x="426" y="230" fill="#1F9D6B" font-size="13" font-weight="700">α = 0.9667 · passes</text>
+
+        <!-- note -->
+        <text class="an" x="410" y="250" text-anchor="middle" font-size="11">The Dₒ/Dₑ arithmetic itself lives in the krippendorff package — we just read α back.</text>
+      </svg>
+      </div>
+      <p class="hint"><b>α = 1 − Dₒ/Dₑ.</b> Observed disagreement Dₒ is how much the 3 runs actually differ; expected Dₑ is how much they'd differ by chance given the score spread. When scores barely vary, Dₑ shrinks, so even a little Dₒ makes α collapse — that's why Severity Accuracy lands at <b>0.4963</b> while Coverage (near-identical runs, wider spread) sits at <b>0.9667</b>.</p>
+    </div>
+
+    <div class="lab">
+      <h4>Worked example — Severity Accuracy, the criterion that fails (α = 0.4963)</h4>
+      <p style="font-size:14.5px; margin:0 0 12px">Pool all 8 PRs × 2 systems = <b>16 items</b>; the <b>3 judge runs</b> are the raters. This is the <b>real</b> grid the library receives for this one criterion (scores 0–3) — the same data that yields the <code>0.496</code> in the table above:</p>
+      <div class="scrollx">
+        <table class="data">
+          <tr><th>item — PR · system</th><th>run 1</th><th>run 2</th><th>run 3</th><th>runs</th></tr>
+          <tr><td class="lbl">dash-api#558 · <b style="color:var(--indigo)">skwad</b></td><td>2</td><td>1</td><td>2</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">dash-api#558 · <b style="color:var(--amber)">CI</b></td><td>0</td><td>0</td><td>1</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">dash-api#562 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">dash-api#562 · <b style="color:var(--amber)">CI</b></td><td>0</td><td>0</td><td>0</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">dash-api#565 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">dash-api#565 · <b style="color:var(--amber)">CI</b></td><td>0</td><td>1</td><td>0</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">frontend-mos#1816 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">frontend-mos#1816 · <b style="color:var(--amber)">CI</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">frontend-mos#1818 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>0</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">frontend-mos#1818 · <b style="color:var(--amber)">CI</b></td><td>2</td><td>3</td><td>3</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">watson#879 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">watson#879 · <b style="color:var(--amber)">CI</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr class="rowfail"><td class="lbl">watson#890 · <b style="color:var(--indigo)">skwad</b></td><td>0</td><td>2</td><td>0</td><td class="bad">Δ2 ←</td></tr>
+          <tr><td class="lbl">watson#890 · <b style="color:var(--amber)">CI</b></td><td>0</td><td>1</td><td>0</td><td class="muted">±1</td></tr>
+          <tr><td class="lbl">watson#893 · <b style="color:var(--indigo)">skwad</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl">watson#893 · <b style="color:var(--amber)">CI</b></td><td>1</td><td>1</td><td>1</td><td class="ok">✓</td></tr>
+          <tr><td class="lbl"><b>ordinal α over all 16 items</b></td><td colspan="3" class="muted">1 − D<sub>o</sub>/D<sub>e</sub></td><td class="bad" style="font-weight:700">0.4963</td></tr>
+        </table>
+      </div>
+      <p style="font-size:14.5px; margin:14px 0 0"><b>Reading it.</b> 9 of the 16 items have perfectly agreeing runs (the other 7 disagree — 6 by ±1, plus the one Δ2 spike), and the disagreements are mostly ±1 — yet α is only <b>0.4963</b>. The reason is the denominator: the scores barely vary (almost everything is 0 or 1), so the disagreement you'd expect <em>by chance</em> (D<sub>e</sub>) is tiny. Against that small baseline, the few genuine disagreements — above all watson#890 · skwad's <code>[0, 2, 0]</code> spike (the very same triple from §01's median example) — are a large fraction of it. So <code>α = 1 − D<sub>o</sub>/D<sub>e</sub></code> lands near chance, its CI lower bound is just <b>0.0505</b>, and the criterion <b>fails</b> the 0.60 gate.</p>
+      <p style="font-size:14.5px; margin:10px 0 0"><b>The contrast.</b> Run <code>Coverage</code> through the same machine and its 16 items have near-identical runs across a wider score range, giving <b>α = 0.9667</b> (CI lower 0.9119) — a clean pass. Same estimator, same 16-item grid shape; the only difference is how much the three runs actually agreed.</p>
+    </div>
+
+    <div class="lab">
+      <h4>Show me the arithmetic — α by hand on a tiny grid</h4>
+      <p style="font-size:14.5px; margin:0 0 14px">The deepest level: every number, end-to-end, on a tiny <b>3 runs × 4 items</b> grid. The canonical decomposition is <code>α = 1 − Dₒ/Dₑ</code>; the production code calls the <code>krippendorff</code> package (stats.py:194), which implements exactly this. <b>Verified:</b> this grid → library <code>α = 0.838235</code>, matching the hand result below to 4 dp.</p>
+
+      <p style="font-size:14.5px; margin:0 0 6px"><b>Step 1 — the grid.</b> Rows = the 3 judge runs (raters); columns = 4 items; scores 0–3 (ordinal).</p>
+      <div class="scrollx">
+        <table class="data" style="max-width:380px">
+          <tr><th>&nbsp;</th><th>item A</th><th>item B</th><th>item C</th><th>item D</th></tr>
+          <tr><td class="lbl">run 1</td><td>2</td><td>2</td><td>0</td><td>3</td></tr>
+          <tr><td class="lbl">run 2</td><td>2</td><td>3</td><td>0</td><td>3</td></tr>
+          <tr><td class="lbl">run 3</td><td>2</td><td>2</td><td>1</td><td>3</td></tr>
+        </table>
+      </div>
+
+      <p style="font-size:14.5px; margin:14px 0 6px"><b>Step 2 — count each score</b> (the marginals n<sub>c</sub>). Across all 12 values: <code>0</code> appears 2×, <code>1</code> appears 1×, <code>2</code> appears 5×, <code>3</code> appears 4× &nbsp;→&nbsp; <b>n = 12</b>.</p>
+
+      <p style="font-size:14.5px; margin:14px 0 6px"><b>Step 3 — coincidence matrix.</b> Within each item, count every ordered pair of values across the 3 runs, weighted <code>1/(m−1) = 1/2</code> (m = 3 runs). E.g. item A <code>[2,2,2]</code> → three (2,2) pairs → 6/2 = <b>3</b> into o<sub>22</sub>; item C <code>[0,0,1]</code> → 2/2 = <b>1</b> into o<sub>00</sub> and 1 into each of o<sub>01</sub>, o<sub>10</sub>; item B <code>[2,3,2]</code> → +1 to o<sub>22</sub>, o<sub>23</sub>, o<sub>32</sub>; item D <code>[3,3,3]</code> → 3 into o<sub>33</sub>. Row sums = the marginals n<sub>c</sub>:</p>
+      <div class="scrollx">
+        <table class="data" style="max-width:430px">
+          <tr><th>o<sub>ck</sub></th><th>k=0</th><th>k=1</th><th>k=2</th><th>k=3</th><th>n<sub>c</sub></th></tr>
+          <tr><td class="lbl">c=0</td><td>1</td><td>1</td><td>0</td><td>0</td><td class="pos">2</td></tr>
+          <tr><td class="lbl">c=1</td><td>1</td><td>0</td><td>0</td><td>0</td><td class="pos">1</td></tr>
+          <tr><td class="lbl">c=2</td><td>0</td><td>0</td><td>4</td><td>1</td><td class="pos">5</td></tr>
+          <tr><td class="lbl">c=3</td><td>0</td><td>0</td><td>1</td><td>3</td><td class="pos">4</td></tr>
+          <tr><td class="lbl"><b>n</b></td><td colspan="4" class="muted">total pairable values</td><td class="pos">12</td></tr>
+        </table>
+      </div>
+
+      <p style="font-size:14.5px; margin:14px 0 6px"><b>Step 4 — ordinal distances δ²<sub>ck</sub>.</b> This is what makes it <em>ordinal</em>: <code>δ²<sub>ck</sub> = ( Σ<sub>g=c..k</sub> n<sub>g</sub> − (n<sub>c</sub>+n<sub>k</sub>)/2 )²</code> — far-apart values cost more because the run of marginals between them is larger. Worked: <code>δ²<sub>03</sub> = (12 − (2+4)/2)² = (12−3)² = 81</code>; <code>δ²<sub>01</sub> = (3 − 1.5)² = 2.25</code>.</p>
+
+      <p style="font-size:14.5px; margin:14px 0 6px"><b>Step 5 — Dₒ, Dₑ, α.</b> Weight each value-pair by δ². Only two off-diagonal coincidences actually occur (o<sub>01</sub>, o<sub>23</sub>); the expected side uses every pair, weighted by n<sub>c</sub>·n<sub>k</sub>:</p>
+      <div class="scrollx">
+        <table class="data" style="max-width:560px">
+          <tr><th>pair (c,k)</th><th>δ²<sub>ck</sub></th><th>o<sub>ck</sub></th><th>o·δ²</th><th>n<sub>c</sub>·n<sub>k</sub></th><th>n<sub>c</sub>n<sub>k</sub>·δ²</th></tr>
+          <tr><td class="lbl">(0,1)</td><td>2.25</td><td>1</td><td class="pos">2.25</td><td>2</td><td>4.5</td></tr>
+          <tr><td class="lbl">(0,2)</td><td>20.25</td><td>0</td><td>0</td><td>10</td><td>202.5</td></tr>
+          <tr><td class="lbl">(0,3)</td><td>81</td><td>0</td><td>0</td><td>8</td><td>648</td></tr>
+          <tr><td class="lbl">(1,2)</td><td>9</td><td>0</td><td>0</td><td>5</td><td>45</td></tr>
+          <tr><td class="lbl">(1,3)</td><td>56.25</td><td>0</td><td>0</td><td>4</td><td>225</td></tr>
+          <tr><td class="lbl">(2,3)</td><td>20.25</td><td>1</td><td class="pos">20.25</td><td>20</td><td>405</td></tr>
+          <tr><td class="lbl"><b>Σ</b></td><td class="muted">—</td><td class="muted">—</td><td class="pos"><b>22.5</b></td><td class="muted">—</td><td><b>1530</b></td></tr>
+        </table>
+      </div>
+      <div class="formula" style="margin-top:14px; white-space:pre-line; line-height:1.9">Dₒ = (2 · Σ o·δ²) / n = (2 · 22.5) / 12 = 45/12 = <b>3.7500</b>
+Dₑ = (2 · Σ n<sub>c</sub>n<sub>k</sub>·δ²) / (n(n−1)) = (2 · 1530) / (12·11) = 3060/132 = <b>23.1818</b>
+α = 1 − Dₒ/Dₑ = 1 − 3.7500/23.1818 = <b style="color:var(--green)">0.8382</b></div>
+      <p class="hint">The factor 2 is just because the coincidence matrix counts each value-pair in both orders; it cancels in the ratio, so equivalently <code>α = 1 − (n−1)·22.5/1530 = 1 − 11·22.5/1530 = 0.8382</code>. Library check on this exact grid: <code>krippendorff.alpha(grid, level_of_measurement="ordinal") = 0.838235</code> ✓.</p>
+
+      <div class="callout key" style="margin-top:18px"><b>Part B — the same machine on the real Severity Accuracy grid.</b> Now the full <b>3 runs × 16 items</b> (the grid shown earlier, incl. watson#890·skwad <code>[0,2,0]</code>). We don't hand-expand all 16 columns — it's the identical pipeline (coincidence matrix → Dₒ, Dₑ → α = 1 − Dₒ/Dₑ). Its <b>48 scores are lopsided</b>: <code>0</code>×12, <code>1</code>×30, <code>2</code>×4, <code>3</code>×2 — <b>42 of 48 are 0 or 1</b>. So <code>Dₑ = 290.04</code> stays modest, the real run-to-run disagreements give <code>Dₒ = 146.08</code>, and <code>α = 1 − 146.08/290.04 = </code><b class="bad">0.4963</b> (library-verified, matches the §6 table). That's <em>why</em> it's low: with scores barely varying, even a handful of genuine disagreements — above all the [0,2,0] Δ2 spike — is a large slice of the small expected disagreement. Same story as Diagram 3 and the worked example.</div>
+    </div>
+
+    <div class="callout"><b>Honest caveat — the displayed CI uses a different bootstrap than the gate.</b> The point α is deterministic, so it's identical everywhere. But the CI bounds in the table above were computed with <code>n_boot=200, seed=42</code> (reporter.py:525), whereas the methodology text and the actual gate path use <code>n_boot=2000, seed=0</code>. So the bound you <em>see</em> and the bound the gate <em>compares against</em> come from two different bootstrap calls — close, but not the same resamples. We state this rather than paper over it.</div>
+
+    <div class="callout"><b>Honest teaching point:</b> 3 criteria (Actionability, Severity Accuracy, Signal-to-Noise) are too noisy across the runs to fully trust, so they're <b>flagged (⚠️) as a reliability caveat</b> and they count against the harness-validity check (<code>pilot_pass</code>). They are <b>not dropped</b> from the headline, though — the Wilcoxon / Cliff's δ / verdict all run on the full 7-criterion, 21-point total. The flag says "read these three with caution," not "we removed them." (We don't use Cohen's κ here — κ only handles 2 raters and unordered categories; α handles any number of runs, missing values, and ordinal scales.)</div>
+
+    <p class="next">trust established on the criteria that survived — now the primary question: is skwad actually better? <b>Wilcoxon signed-rank</b>.</p>
+  </section>
+
+  <!-- ===================== 03 WILCOXON ===================== -->
+  <section id="s03">
+    <p class="eyebrow">03 — the primary test · "is skwad better?"</p>
+    <h2>The Wilcoxon signed-rank test</h2>
+    <p><strong>The intuition.</strong> Our design is <em>paired</em>: each PR gets both a skwad total and a CI total, side by side. Look at the <strong>differences</strong> (skwad − CI). If the two systems were really equal, those differences would scatter randomly around zero — some positive, some negative. If skwad is genuinely better, they pile up on the positive side. Wilcoxon measures exactly how lopsided that pile is, using only the <strong>ranks</strong> of the differences (not their raw sizes — robust to outliers and fine on small/ordinal data).</p>
+    <p><strong>The formula.</strong> <code>wilcoxon(diffs, zero_method="wilcox", alternative="two-sided")</code> with no continuity correction (stats.py:55). Rank the absolute differences, sum the ranks of the positive ones (W⁺) and the negative ones (W⁻); the statistic is the smaller pile.</p>
+
+    <div class="lab">
+      <h4>Worked on our 8 PR totals — step through it</h4>
+      <div class="scrollx">
+        <table class="data" id="wxTable"></table>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button class="act ghost" id="wxPrev">‹ Back</button>
+        <button class="act" id="wxNext">Next step ›</button>
+        <div class="stepdots" id="wxDots"></div>
+      </div>
+      <div class="steptxt" id="wxStep"></div>
+      <div class="statline" style="margin-top:16px">
+        <div><b id="wxWp">—</b><span>W⁺ (ranks where skwad ahead)</span></div>
+        <div><b id="wxWn">—</b><span>W⁻ (ranks where CI ahead)</span></div>
+        <div><b id="wxW">—</b><span>statistic = min(W⁺, W⁻)</span></div>
+        <div><b id="wxP">—</b><span>two-sided p-value</span></div>
+      </div>
+    </div>
+
+    <div class="callout key"><b>Reading our result:</b> all 8 differences are positive — skwad won every single PR — so W⁻ = 0, W⁺ = 36, the statistic is <b>0.0</b>, and the exact two-sided <b>p = 0.0078</b>. If the systems were truly equal, getting all 8 PRs leaning the same way is about as extreme as 8 coin flips all landing heads.</div>
+    <div class="callout"><b>One honest nuance:</b> the absolute differences contain ties (two 10s, two 1s), which usually forces an <em>approximate</em> p-value. Here it doesn't — and not by luck. All 8 differences share the <b>same sign</b>, so the one-sided probability of "all 8 lean one way" is exactly <code>(1/2)⁸ = 1/256 ≈ 0.0039</code>. A two-sided test also counts the equally-extreme mirror image — "all 8 lean the other way" — doubling it to <code>2/256 = 0.0078125</code>. The tie-affected magnitudes never enter either tail, so the exact value is <b>rigorously valid</b>, not a coincidence of scipy's <code>auto</code> mode. We report it as 0.0078.</div>
+    <p><strong>The trap to memorize:</strong> <code>p &lt; 0.05</code> does <em>not</em> mean "95% chance skwad is better." It means "if there were no difference, data this extreme would show up under 5% of the time." It's a statement about the data under the null — not the probability our hypothesis is true.</p>
+
+    <p class="next">p says <em>whether</em> there's a difference. now measure <em>how big</em> — <b>Cliff's δ</b>.</p>
+  </section>
+
+  <!-- ===================== 04 CLIFF ===================== -->
+  <section id="s04">
+    <p class="eyebrow">04 — effect size · "how big is it?"</p>
+    <h2>Cliff's delta (δ)</h2>
+    <p><strong>The intuition.</strong> A p-value never tells you the <em>size</em> of an effect — only whether one exists. Cliff's δ measures size by pure dominance: line up every skwad score against every CI score and ask how often skwad <em class="t">wins</em> minus how often it <em class="c">loses</em>.</p>
+    <p class="formula">δ = P(skwad &gt; CI) − P(skwad &lt; CI) = (wins − losses) / total &nbsp;→&nbsp; ranges from −1 to +1</p>
+
+    <div class="lab">
+      <h4>Every skwad total vs every CI total — the 8×8 dominance grid</h4>
+      <div class="scrollx" style="margin:6px 0 16px"><table id="cliffGrid"></table></div>
+      <div class="legend">
+        <span><span class="sw t"></span>skwad wins (W)</span>
+        <span><span class="sw c"></span>CI wins (L)</span>
+        <span><span class="sw x"></span>tie (=)</span>
+      </div>
+      <div class="statline" style="margin-top:14px">
+        <div><b id="clWins">—</b><span>matchups skwad wins</span></div>
+        <div><b id="clLoss">—</b><span>matchups skwad loses</span></div>
+        <div><b id="clTies">—</b><span>matchup ties</span></div>
+        <div><b id="clDelta" class="bignum" style="font-size:24px">—</b><span>δ = (wins − losses) / 64</span></div>
+      </div>
+      <div class="meter" id="clMeter">
+        <div class="needle" id="clNeedle" style="left:50%"></div>
+      </div>
+      <div class="meterlabels"><span>−1 CI dominates</span><span>0</span><span>+1 skwad dominates</span></div>
+      <p class="hint" id="clMag">—</p>
+    </div>
+    <div class="callout"><b>Magnitude thresholds (Romano et&nbsp;al.):</b> |δ| &lt; 0.147 negligible · &lt; 0.33 small · &lt; 0.474 medium · ≥ 0.474 <b>large</b>. Our <b>δ = 0.7812</b> = 50/64 net wins — comfortably <b>large</b>.</div>
+    <p><strong>Why δ and not Cohen's d?</strong> Cohen's d is built from means and standard deviations — parametric. Cliff's δ is built from ordering, so it matches our rank-based Wilcoxon and our ordinal scores. Don't mix a parametric effect size with a non-parametric test.</p>
+
+    <p class="next">we have a size — now bound our confidence in it. <b>BCa bootstrap confidence interval</b>.</p>
+  </section>
+
+  <!-- ===================== 05 BCa ===================== -->
+  <section id="s05">
+    <p class="eyebrow">05 — confidence · "how sure are we?"</p>
+    <h2>The BCa bootstrap interval</h2>
+    <p><strong>The intuition.</strong> δ = 0.7812 is a single guess from one sample of 8 PRs. A <strong>confidence interval</strong> gives the range of plausible truths. But how do you get a range from <em>one</em> dataset? You <strong>fake having many</strong>: resample your PRs <em>with replacement</em> (some appear twice, some not at all), recompute δ, and repeat thousands of times. That cloud of δ's is an empirical picture of the uncertainty.</p>
+    <p><strong>The formula.</strong> <code>bootstrap(..., method="BCa", n_resamples=2000, confidence_level=0.95)</code> (stats.py:145). Crucially this is <strong>not</strong> the plain percentile bootstrap. BCa = <strong>Bias-Corrected and accelerated</strong> — it makes two corrections <em>before</em> choosing which percentiles to read off:</p>
+    <p>
+      &nbsp;&nbsp;• <strong>Bias correction (z₀):</strong> if the bootstrap cloud isn't centered on the observed δ, shift to compensate.<br>
+      &nbsp;&nbsp;• <strong>Acceleration (a):</strong> correct for skew — when the statistic's spread changes with the true value (measured by leaving each PR out one at a time, the "jackknife").
+    </p>
+
+    <div class="lab">
+      <h4>Our BCa 95% interval for δ</h4>
+      <div class="meter" id="bcaMeter">
+        <div class="ciband" id="bcaBand"></div>
+        <div class="zero" id="bcaZero"></div>
+        <div class="needle" id="bcaNeedle"></div>
+      </div>
+      <div class="meterlabels"><span>−1</span><span>0</span><span>+1</span></div>
+      <div class="statline" style="margin-top:14px">
+        <div><b style="color:var(--indigo)">0.5000</b><span>BCa lower bound</span></div>
+        <div><b style="color:var(--indigo)">1.0000</b><span>BCa upper bound</span></div>
+        <div><b>0.7812</b><span>observed δ</span></div>
+      </div>
+      <p class="hint">The shaded band is the 95% interval <code>[0.5000, 1.0000]</code>. The amber dashed line is 0.</p>
+    </div>
+
+    <div class="callout key"><b>The money link:</b> the interval <code>[0.5000, 1.0000]</code> <b>excludes 0</b> entirely — which corroborates the significant Wilcoxon result. Test <i>and</i> effect size <i>and</i> interval all point the same way: the skwad advantage is real and large.</div>
+    <p>One detail: the upper bound sits exactly at <strong>1.00</strong> because δ mathematically maxes out at 1 — it's the ceiling of the scale, not a coincidence. (Note we did <em>not</em> just read off the 2.5/97.5 percentiles; BCa adjusts those endpoints via z₀ and the jackknife acceleration first.)</p>
+
+    <p class="next">test, size, and interval are in. how do we combine them into a single yes/no? <b>the verdict rule</b>.</p>
+  </section>
+
+  <!-- ===================== 06 VERDICT ===================== -->
+  <section id="s06">
+    <p class="eyebrow">06 — the verdict rule</p>
+    <h2>The AND-gate for "skwad wins"</h2>
+    <p><strong>The intuition.</strong> Significance alone isn't enough (a trivial effect can be significant), and a big effect alone isn't enough (it could be noise). The report demands <em>both</em>. The hypothesis "skwad is better" (H1) is supported only if the result is statistically significant <strong>and</strong> the effect is at least medium-sized.</p>
+    <p><strong>The formula</strong> (reporter.py:672): <code>H1 supported  ⟺  p &lt; 0.05  AND  |δ| ≥ 0.33</code></p>
+
+    <div class="lab">
+      <h4>Plug in our numbers</h4>
+      <div class="statline" style="align-items:flex-end">
+        <div><b style="color:var(--green)">p = 0.0078</b><span>&lt; 0.05 ?</span></div>
+        <div><span class="badge pass">✓ significant</span></div>
+      </div>
+      <div style="text-align:center; font-family:var(--mono); font-size:22px; color:var(--slate); margin:14px 0">AND</div>
+      <div class="statline" style="align-items:flex-end">
+        <div><b style="color:var(--green)">|δ| = 0.78</b><span>≥ 0.33 ?</span></div>
+        <div><span class="badge pass">✓ large effect</span></div>
+      </div>
+      <div class="callout key" style="margin-bottom:0; margin-top:20px; text-align:center; font-size:17px">
+        <b>Both gates pass → H1 supported: skwad reviews are significantly and substantially better than the single CI agent.</b>
+      </div>
+    </div>
+    <p>If either gate had failed — say a strong δ but p = 0.20, or p = 0.001 but δ = 0.10 — the verdict would be "not supported." Requiring both is what stops us from over-claiming.</p>
+
+    <p class="next">the headline verdict is settled. now the careful part: we ran many <em>extra</em> tests — how do we keep them honest? <b>Benjamini–Hochberg FDR</b>.</p>
+  </section>
+
+  <!-- ===================== 07 FDR ===================== -->
+  <section id="s07">
+    <p class="eyebrow">07 — many tests, kept honest</p>
+    <h2>Benjamini–Hochberg FDR</h2>
+    <p><strong>The intuition.</strong> After the headline, we dig in: run a separate test on each of the 7 criteria, plus the Easy and Hard difficulty buckets — <strong>9 tests</strong>. The danger: every test at 5% has a 5% false-alarm rate <em>even when nothing is real</em>. Run 9 and the chance of <em>at least one</em> false positive is large. BH controls the <strong>false-discovery proportion</strong> — of the findings you flag, on average ≤ q of them are false.</p>
+    <p><strong>The formula</strong> (stats.py:315): <code>false_discovery_control(method="bh")</code> at q = 0.05. It's a <em>step-up</em> procedure: sort the p-values, and compare each to a rank-scaled threshold. It is <b>not</b> Bonferroni — we do <em>not</em> just multiply each p by m.</p>
+    <div class="callout"><b>Why m = 9, not 10?</b> 7 criteria + Easy + Hard. The <b>Medium</b> bucket is dropped: only <b>N = 1</b> PR landed there, and the test code requires len ≥ 2 (reporter.py:579). Silently it would look like we tested 10 things — we didn't.</div>
+
+    <div class="lab">
+      <h4>Our 9 exploratory tests. Drag q and watch which survive.</h4>
+      <div class="row" style="margin:6px 0 14px">
+        <span style="font-family:var(--mono);font-size:13px">q (allowed false-discovery rate): <span class="qval" id="qShow">0.05</span></span>
+        <input type="range" id="qSlider" min="1" max="20" value="5" style="max-width:320px">
+      </div>
+      <div class="fdr" id="fdrList"></div>
+      <div class="statline" style="margin-top:16px">
+        <div><b id="naiveCount">—</b><span>"significant" if you ignore the problem (raw p &lt; q)</span></div>
+        <div><b id="bhCount" style="color:var(--indigo)">—</b><span>survive BH at this q</span></div>
+      </div>
+    </div>
+
+    <div class="callout key"><b>Teaching gold, on our real data:</b> at the standard <b>q = 0.05</b>, four criteria have raw p = 0.0312 (they look significant) — but <b>none</b> of the 9 survive BH correction (the smallest adjusted p is 0.0703). That's the multiple-comparisons honesty lesson in one screen. The headline verdict in §06 still stands — these per-criterion tests are <b>exploratory</b>, hypothesis-generating, not the pre-registered headline.</div>
+    <p><strong>Why BH and not Bonferroni?</strong> Bonferroni controls the chance of <em>any</em> false positive (FWER) — safe but brutal, it hides real effects. BH controls the expected <em>proportion</em> of false discoveries among your hits — more power, the right tool for screening.</p>
+
+    <p class="next">two more sanity checks before we summarize — are the criteria redundant, and did blinding work? <b>robustness checks</b>.</p>
+  </section>
+
+  <!-- ===================== 08 ROBUSTNESS ===================== -->
+  <section id="s08">
+    <p class="eyebrow">08 — robustness side-checks</p>
+    <h2>Are the criteria redundant? Did blinding work?</h2>
+
+    <h3>(a) Spearman inter-criterion correlation</h3>
+    <p><strong>The intuition.</strong> If two criteria always move together, they're measuring the same thing and one is redundant. Spearman correlation measures <em>monotonic</em> agreement between the <strong>ranks</strong> of two criteria (it asks "when one goes up, does the other tend to go up?" — about ranks, not a straight line) (reporter.py:500, <code>scipy.spearmanr</code>). We compute it for all 7×7 criterion pairs.</p>
+    <div class="lab">
+      <h4>The two ends of the spectrum, from our 7×7 matrix</h4>
+      <div class="statline" style="align-items:flex-end">
+        <div><b style="color:var(--amber)">0.95</b><span>Issue Detection ↔ Coverage</span></div>
+        <div class="muted" style="align-self:center">near-redundant — they rank PRs almost identically</div>
+      </div>
+      <div class="statline" style="align-items:flex-end; margin-top:14px">
+        <div><b style="color:var(--indigo)">0.41</b><span>Signal-to-Noise ↔ Novel &amp; Substantive</span></div>
+        <div class="muted" style="align-self:center">most independent — they capture genuinely different things</div>
+      </div>
+    </div>
+
+    <h3>(b) Position-bias check</h3>
+    <p><strong>The intuition.</strong> The judge saw reviews in slots A and B. If it secretly favored whichever review sat in slot A, our blinding failed. We run a Wilcoxon on slot-A vs slot-B scores, once per system (reporter.py:599). We <em>want</em> these to be non-significant — no detectable slot preference.</p>
+    <div class="lab">
+      <h4>Slot-A vs slot-B — both should be &gt; 0.05</h4>
+      <div class="statline" style="align-items:flex-end">
+        <div><b style="color:var(--green)">p = 0.7656</b><span>skwad: slot A vs B</span></div>
+        <div><b style="color:var(--green)">p = 0.0938</b><span>CI: slot A vs B</span></div>
+        <div><span class="badge pass">✓ no significant slot bias</span></div>
+      </div>
+      <p class="hint">Both p-values are above 0.05, so neither system's score depends on which slot it landed in. Blinding worked.</p>
+    </div>
+
+    <p class="next">everything checks out. say it in plain English — <b>the summary</b>.</p>
+  </section>
+
+  <!-- ===================== 09 SUMMARY ===================== -->
+  <section id="s09">
+    <p class="eyebrow">09 — plain-language summary</p>
+    <h2>What it all means</h2>
+    <p><strong>The intuition.</strong> Strip away the machinery. After checking the scores were trustworthy, testing the difference, sizing it, and bounding our confidence, here's the bottom line in numbers anyone can read (reporter.py:441).</p>
+
+    <div class="lab">
+      <h4>The headline numbers</h4>
+      <div class="statline" style="align-items:flex-end">
+        <div><b style="color:var(--indigo)">14.625</b><span>skwad mean total (SD 5.29)</span></div>
+        <div><b style="color:var(--amber)">7.625</b><span>CI mean total (SD 4.21)</span></div>
+      </div>
+      <div class="statline" style="align-items:flex-end; margin-top:14px">
+        <div><b>8 – 0</b><span>PRs won by skwad, 0 ties</span></div>
+        <div><b style="color:var(--indigo)">70.9%</b><span>skwad verification rate</span></div>
+        <div><b style="color:var(--amber)">60.2%</b><span>CI verification rate</span></div>
+      </div>
+      <p class="hint">Verification rates are v2-runs-only (reporter.py:476) — the share of flagged issues that actually checked out.</p>
+    </div>
+
+    <div class="story">
+      <p class="eyebrow">the one paragraph to say in the room</p>
+      <p>"First we confirmed the judge was consistent — four of seven criteria cleared our <span class="hl">Krippendorff's α</span> trust gate on the CI lower bound; the noisy three are flagged as a caveat, not dropped. skwad won <span class="hl">all 8 PRs</span> on the full 21-point total: a paired <span class="hl">Wilcoxon</span> gives p = 0.0078, a <span class="hl">Cliff's δ</span> of 0.78 (large), and a <span class="hl">BCa 95% CI of [0.50, 1.00]</span> that excludes zero. Both verdict gates pass, so the win is real <em>and</em> substantial. Per-criterion follow-ups, corrected with <span class="hl">Benjamini–Hochberg</span>, didn't survive at q = 0.05 — so we flag those as exploratory, not headline. Means: <span class="hl">14.6 vs 7.6</span> out of 21."</p>
+    </div>
+
+    <div class="callout"><b>Two things to sanity-check in our setup, not the textbook:</b><br>
+      1. The data is genuinely <b>paired</b> — the same 8 PRs through both systems — which is what licenses the signed-rank test.<br>
+      2. Differences are computed <b>skwad − CI</b>, so a positive δ means skwad wins. Flipping that sign is the one truly embarrassing mistake.</div>
+  </section>
+
+  <footer class="wrap">
+    built for the skwad-vs-CI review eval · pilot v2 · seed 12345 · git 63311c9 · <a href="#top">back to top ↑</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var fmt = function(x,d){ d = d==null?2:d; return (x>=0?"+":"") + x.toFixed(d); };
+  var fix = function(x,d){ d = d==null?2:d; return x.toFixed(d); };
+
+  /* ---------- 01 median vote — watson #890 ---------- */
+  (function(){
+    // criterion, three runs, median (ground truth)
+    var rows = [
+      {nm:"Issue Detection",   runs:[0,0,0], med:0},
+      {nm:"Actionability",     runs:[0,0,0], med:0},
+      {nm:"Severity Accuracy", runs:[0,2,0], med:0, spike:true},
+      {nm:"Coverage",          runs:[0,0,0], med:0},
+      {nm:"Signal-to-Noise",   runs:[1,1,1], med:1},
+      {nm:"Depth",             runs:[1,1,1], med:1},
+      {nm:"Novel & Substantive",runs:[0,0,0],med:0}
+    ];
+    var table = document.getElementById("w890Table");
+    var btn = document.getElementById("voteToggle");
+    var modeLbl = document.getElementById("voteMode");
+    var callout = document.getElementById("voteCallout");
+    var showMean = false;
+    function meanOf(a){ return a.reduce(function(x,y){return x+y;},0)/a.length; }
+    function render(){
+      var html = "<tr><th>criterion</th><th>run 1</th><th>run 2</th><th>run 3</th><th>"+(showMean?"mean":"median →")+"</th></tr>";
+      rows.forEach(function(r){
+        var cls = r.spike ? "neg" : "pos";
+        var val = showMean ? fix(meanOf(r.runs),2) : r.med;
+        html += "<tr"+(r.spike?" style='background:var(--amber-soft)'":"")+"><td class='lbl'>"+r.nm+"</td>"
+          +"<td>"+r.runs[0]+"</td><td>"+r.runs[1]+"</td><td>"+r.runs[2]+"</td>"
+          +"<td class='"+cls+"'>"+val+"</td></tr>";
+      });
+      var total = rows.reduce(function(a,r){ return a + (showMean?meanOf(r.runs):r.med); },0);
+      html += "<tr><td class='lbl'><b>total</b></td><td colspan='3' class='muted'>sum of the right column</td>"
+        +"<td class='bignum' style='font-size:18px'>"+(showMean?fix(total,2):total)+"</td></tr>";
+      table.innerHTML = html;
+      if(showMean){
+        btn.textContent = "← Back to the median vote";
+        modeLbl.innerHTML = "Showing the <b>mean</b> (what we deliberately avoid).";
+        callout.innerHTML = "<b>See the leak?</b> With the <b>mean</b>, Severity Accuracy becomes 0.67 — the single spiked run sneaks into the score, and the total drifts to 2.67. The noisy run got a vote it didn't earn.";
+      } else {
+        btn.textContent = "Show what the mean would do →";
+        modeLbl.innerHTML = "Showing the <b>median</b> vote (what we actually use).";
+        callout.innerHTML = "<b>The robustness moment:</b> Severity Accuracy ran <code>[0, 2, 0]</code>. The <b>median is 0</b> — the lone spike is discarded — and the total stays an honest <b>2</b>. Flip the button to watch the mean get fooled.";
+      }
+    }
+    btn.onclick = function(){ showMean = !showMean; render(); };
+    render();
+  })();
+
+  /* ---------- 03 wilcoxon — real PR totals ---------- */
+  (function(){
+    var tasks = [
+      {id:"dash-api#558",s:18,c:3},
+      {id:"dash-api#562",s:18,c:8},
+      {id:"dash-api#565",s:17,c:7},
+      {id:"frontend-mos#1816",s:14,c:13},
+      {id:"frontend-mos#1818",s:16,c:13},
+      {id:"watson#879",s:15,c:8},
+      {id:"watson#890",s:2,c:1},
+      {id:"watson#893",s:17,c:8}
+    ];
+    tasks.forEach(function(t){ t.d = t.s - t.c; t.abs = Math.abs(t.d); });
+    var nonzero = tasks.filter(function(t){ return t.d!==0; });
+    var sortedAbs = nonzero.map(function(t){return t.abs;}).slice().sort(function(a,b){return a-b;});
+    function avgRank(v){
+      var positions=[];
+      sortedAbs.forEach(function(x,i){ if(x===v) positions.push(i+1); });
+      var sum = positions.reduce(function(a,b){return a+b;},0);
+      return sum/positions.length;
+    }
+    nonzero.forEach(function(t){ t.rank = avgRank(t.abs); });
+    var Wp = nonzero.filter(function(t){return t.d>0;}).reduce(function(a,t){return a+t.rank;},0);
+    var Wn = nonzero.filter(function(t){return t.d<0;}).reduce(function(a,t){return a+t.rank;},0);
+    var P_EXACT = 0.0078; // ground truth: scipy 1.17.1 exact two-sided
+
+    var steps = [
+      {col:["s","c"], txt:"Each PR has a skwad total and a CI total, side by side — paired, same PR through both systems."},
+      {col:["d"], txt:"Subtract: d = skwad − CI. Every single one is positive — skwad won all 8 PRs."},
+      {col:["d"], txt:"Drop any PR where d = 0 — it carries no information. Here there are none, so all 8 stay in."},
+      {col:["rank"], txt:"Take |d|, ignore the sign, rank the sizes smallest → largest. Tied sizes (two 10s, two 1s) share the average rank."},
+      {col:["rank"], txt:"Add the ranks on each side: W⁺ for skwad's wins, W⁻ for CI's. With all 8 positive, W⁻ = 0."},
+      {col:[], txt:"statistic = min(W⁺, W⁻) = 0. The exact two-sided p = 0.0078 — all 8 leaning one way is as extreme as it gets."}
+    ];
+    var step = 0;
+    var table = document.getElementById("wxTable");
+    var stepTxt = document.getElementById("wxStep");
+    var dots = document.getElementById("wxDots");
+
+    function render(){
+      var hi = steps[step].col;
+      function th(key,label){ return "<th class='"+(hi.indexOf(key)>=0?"colhi":"")+"'>"+label+"</th>"; }
+      var html = "<tr><th>PR</th>"+th("s","skwad")+th("c","CI")+th("d","d = s−c")+"<th>|d|</th>"+th("rank","rank")+"<th>side</th></tr>";
+      var revealRank = step>=3, revealD = step>=1;
+      tasks.forEach(function(t){
+        var dCell = revealD ? "<span class='"+(t.d>0?"pos":"neg")+"'>"+fmt(t.d,0)+"</span>" : "·";
+        var absCell = revealD ? t.abs : "·";
+        var rankCell = revealRank ? fix(t.rank,1) : "·";
+        var side = revealRank ? (t.d>0?"<span class='pos'>W⁺</span>":"<span class='neg'>W⁻</span>") : "·";
+        html += "<tr><td class='lbl'>"+t.id+"</td>"
+          +"<td class='"+(hi.indexOf('s')>=0?'colhi':'')+"'>"+t.s+"</td>"
+          +"<td class='"+(hi.indexOf('c')>=0?'colhi':'')+"'>"+t.c+"</td>"
+          +"<td class='"+(hi.indexOf('d')>=0?'colhi':'')+"'>"+dCell+"</td>"
+          +"<td>"+absCell+"</td>"
+          +"<td class='"+(hi.indexOf('rank')>=0?'colhi':'')+"'>"+rankCell+"</td>"
+          +"<td>"+side+"</td></tr>";
+      });
+      table.innerHTML = html;
+      stepTxt.textContent = steps[step].txt;
+      document.getElementById("wxWp").textContent = step>=4 ? fix(Wp,1) : "—";
+      document.getElementById("wxWn").textContent = step>=4 ? fix(Wn,1) : "—";
+      document.getElementById("wxW").textContent  = step>=5 ? fix(Math.min(Wp,Wn),1) : "—";
+      document.getElementById("wxP").textContent  = step>=5 ? fix(P_EXACT,4) : "—";
+      dots.innerHTML = steps.map(function(_,i){ return "<span class='dot "+(i===step?"on":"")+"'></span>"; }).join("");
+      document.getElementById("wxPrev").disabled = step===0;
+      document.getElementById("wxNext").disabled = step===steps.length-1;
+    }
+    document.getElementById("wxNext").onclick = function(){ if(step<steps.length-1){step++; render();} };
+    document.getElementById("wxPrev").onclick = function(){ if(step>0){step--; render();} };
+    render();
+  })();
+
+  /* ---------- 04 cliff's delta — real 8x8 grid ---------- */
+  (function(){
+    var skwad = [18,18,17,14,16,15,2,17];
+    var ci    = [3,8,7,13,13,8,1,8];
+    var grid = document.getElementById("cliffGrid");
+    var wins=0,loss=0,ties=0;
+    var html = "<tr><th></th>";
+    ci.forEach(function(c){ html += "<th>"+c+"</th>"; });
+    html += "</tr>";
+    skwad.forEach(function(s){
+      html += "<tr><th>"+s+"</th>";
+      ci.forEach(function(c){
+        var cls,sym;
+        if(s>c){cls="cell-win";sym="W";wins++;}
+        else if(s<c){cls="cell-loss";sym="L";loss++;}
+        else{cls="cell-tie";sym="=";ties++;}
+        html += "<td class='"+cls+"'>"+sym+"</td>";
+      });
+      html += "</tr>";
+    });
+    grid.innerHTML = html;
+    var total = skwad.length*ci.length; // 64
+    var delta = (wins-loss)/total;      // 50/64 = 0.78125
+    var DELTA_GT = "0.7812";            // ground-truth value from the pilot (hardcoded, not recomputed)
+    document.getElementById("clWins").textContent = wins;
+    document.getElementById("clLoss").textContent = loss;
+    document.getElementById("clTies").textContent = ties;
+    document.getElementById("clDelta").textContent = DELTA_GT;
+    document.getElementById("clNeedle").style.left = ((delta+1)/2*100)+"%";
+    var a = Math.abs(delta), mag;
+    if(a<0.147) mag="negligible"; else if(a<0.33) mag="small"; else if(a<0.474) mag="medium"; else mag="large";
+    document.getElementById("clMag").innerHTML = "Each of the 8 skwad totals is compared against each of the 8 CI totals — that's <b>"+total+" head-to-head matchups</b> (not 8 PRs). skwad wins "+wins+" of them and loses "+loss+". Net = "+wins+" − "+loss+" = "+(wins-loss)+" → δ = <b>"+DELTA_GT+"</b>, a <b>"+mag+"</b> effect. skwad dominates.";
+    // threshold bands
+    var meter = document.getElementById("clMeter");
+    [0.147,0.33,0.474].forEach(function(t){
+      [-t,t].forEach(function(v){
+        var b=document.createElement("div"); b.className="band"; b.style.left=((v+1)/2*100)+"%"; meter.appendChild(b);
+      });
+    });
+  })();
+
+  /* ---------- 05 BCa interval — static real CI [0.5, 1.0] ---------- */
+  (function(){
+    function pct(v){ return ((v+1)/2*100); } // map [-1,1] -> [0,100]
+    var lo=0.5, hi=1.0, d=0.78125;
+    var band = document.getElementById("bcaBand");
+    band.style.left = pct(lo)+"%";
+    band.style.width = (pct(hi)-pct(lo))+"%";
+    document.getElementById("bcaZero").style.left = pct(0)+"%";
+    document.getElementById("bcaNeedle").style.left = pct(d)+"%";
+  })();
+
+  /* ---------- 07 BH-FDR — real 9 tests ---------- */
+  (function(){
+    // raw p and BH-adjusted p are ground truth from the pilot (criterion order)
+    var data = [
+      {nm:"Issue Detection", p:0.0312, adj:0.0703},
+      {nm:"Actionability",   p:0.1875, adj:0.2812},
+      {nm:"Severity Accuracy", p:0.7500, adj:0.7500},
+      {nm:"Coverage",        p:0.0312, adj:0.0703},
+      {nm:"Signal-to-Noise", p:0.2891, adj:0.3252},
+      {nm:"Depth",           p:0.0312, adj:0.0703},
+      {nm:"Novel & Substantive", p:0.0312, adj:0.0703},
+      {nm:"Easy (difficulty)", p:0.2500, adj:0.3214},
+      {nm:"Hard (difficulty)", p:0.1250, adj:0.2250}
+    ];
+    // display sorted by raw p ascending
+    var sorted = data.slice().sort(function(a,b){ return a.p-b.p; });
+    var list=document.getElementById("fdrList");
+    var slider=document.getElementById("qSlider");
+    function render(){
+      var q=parseInt(slider.value,10)/100;
+      document.getElementById("qShow").textContent=fix(q,2);
+      var survive=0, naive=0;
+      list.innerHTML="";
+      sorted.forEach(function(d,i){
+        var sig = d.adj <= q;       // BH: adjusted p <= q
+        if(sig) survive++;
+        if(d.p < q) naive++;
+        var row=document.createElement("div");
+        row.className="item"+(sig?" sig":"");
+        row.innerHTML="<span class='thr'>#"+(i+1)+"</span>"
+          +"<span class='nm'>"+d.nm+"</span>"
+          +"<span class='pp'>raw "+fix(d.p,4)+"</span>"
+          +"<span class='thr'>adj "+fix(d.adj,4)+"</span>"
+          +"<span class='verdict "+(sig?"y":"n")+"'>"+(sig?"KEEP":"drop")+"</span>";
+        list.appendChild(row);
+      });
+      document.getElementById("naiveCount").textContent=naive;
+      document.getElementById("bhCount").textContent=survive;
+    }
+    slider.oninput=render;
+    render();
+  })();
+
+})();
+</script>
